@@ -1094,3 +1094,243 @@ textarea {
     margin-top: 35px;
   }
 }
+
+/* Homepage: distinct layouts built on the existing navy and teal identity. */
+.home-problem {
+  border-block: 1px solid var(--border);
+  background: #fafcfc;
+  padding: 60px 0;
+}
+.problem-layout {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  gap: 80px;
+}
+.problem-layout h2 {
+  max-width: 390px;
+}
+.problem-layout > div > p.muted {
+  margin-top: 22px;
+  max-width: 420px;
+  font-size: 14px;
+}
+.problem-list {
+  margin: 0;
+}
+.problem-list > div {
+  padding: 17px 0;
+  border-bottom: 1px solid var(--border);
+}
+.problem-list > div:first-child {
+  padding-top: 0;
+}
+.problem-list > div:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.problem-list dt {
+  font-weight: 600;
+}
+.problem-list dd {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.passport-section .section-heading h2 {
+  max-width: 680px;
+}
+.passport-layout {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  gap: 60px;
+  align-items: center;
+}
+.passport-records > p {
+  font-size: 14px;
+  margin-bottom: 30px;
+}
+.passport-records article {
+  display: flex;
+  gap: 16px;
+  padding: 20px 0;
+}
+.passport-records article > svg {
+  flex-shrink: 0;
+  color: var(--accent);
+  margin-top: 2px;
+}
+.passport-records h3 {
+  font-size: 17px;
+  letter-spacing: -0.025em;
+}
+.passport-records h3 .tag {
+  display: table;
+  margin-top: 8px;
+  letter-spacing: 0.04em;
+  font-size: 9px;
+}
+.passport-records article p {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 9px;
+}
+.passport-example {
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px #142a360a;
+  background: #fff;
+  min-width: 0;
+}
+.passport-example .preview-top {
+  flex-wrap: wrap;
+}
+.passport-example .preview-person h3 {
+  font-size: 23px;
+}
+.passport-example .preview-person .muted {
+  display: block;
+}
+.record-label {
+  display: block;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+.passport-evidence,
+.passport-recognition {
+  display: flex;
+  align-items: start;
+  gap: 13px;
+  border-top: 1px solid var(--border);
+  padding-top: 22px;
+  margin-top: 22px;
+}
+.passport-evidence > svg,
+.passport-recognition > svg {
+  color: var(--accent);
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.passport-example h3 {
+  font-size: 16px;
+}
+.passport-evidence p,
+.passport-recognition p {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 8px;
+}
+.evidence-caption {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+  font-size: 11px;
+  margin-top: 13px;
+}
+.passport-example-note {
+  font-size: 10px;
+  color: var(--muted);
+  background: var(--surface);
+  padding: 10px 12px;
+  border-radius: 5px;
+  margin-top: 24px;
+}
+.home-challenges-compact .section-heading {
+  margin-bottom: 18px;
+}
+.home-challenges-compact .section-heading h2 {
+  font-size: 25px;
+}
+.home-challenges-compact > p.muted {
+  font-size: 13px;
+}
+.home-proof {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  gap: 60px;
+  padding-bottom: 65px;
+}
+.home-proof > div > p.muted {
+  margin-top: 16px;
+  font-size: 14px;
+}
+.proof-explanation ol {
+  padding-left: 23px;
+  margin: 0 0 20px;
+}
+.proof-explanation li {
+  padding-left: 7px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+.proof-explanation li::marker {
+  color: var(--accent);
+  font-weight: 700;
+}
+.proof-explanation p {
+  font-size: 12px;
+  color: var(--muted);
+  border-left: 2px solid var(--border);
+  padding-left: 17px;
+}
+.home-final {
+  border-top: 1px solid var(--border);
+  padding: 45px 0 65px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 35px;
+}
+.home-final h2 {
+  font-size: 27px;
+  max-width: 480px;
+}
+.home-final p.muted {
+  margin-top: 14px;
+  font-size: 13px;
+}
+.home-final .button-row {
+  flex-shrink: 0;
+}
+@media (max-width: 1000px) {
+  .problem-layout,
+  .passport-layout,
+  .home-proof {
+    gap: 30px;
+  }
+  .home-final {
+    align-items: start;
+    flex-direction: column;
+  }
+}
+@media (max-width: 760px) {
+  .home-problem {
+    padding: 40px 0;
+  }
+  .problem-layout,
+  .passport-layout,
+  .home-proof {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+  }
+  .problem-layout h2,
+  .home-proof h2 {
+    font-size: 28px;
+  }
+  .passport-example {
+    padding: 20px;
+  }
+  .passport-records article {
+    padding: 16px 0;
+  }
+  .home-proof {
+    padding-bottom: 40px;
+  }
+  .home-final {
+    padding: 35px 0 45px;
+  }
+}
