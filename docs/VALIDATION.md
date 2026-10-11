@@ -34,3 +34,11 @@ Fixed cloud proxy use in the Node startup commands, the truncated devnet genesis
 The browser suite previously cleared public variables only at startup, which is insufficient after a credentialed Next.js build. It now creates its own blank-credential `.next-e2e` build and checks the demo notice before signup. This does not alter the live application's data source. All ten desktop/mobile tests passed after isolation was corrected. Eight unit tests and the actual local PostgreSQL approval/access-control integration passed. Production compilation, TypeScript, lint, and formatting checks passed.
 
 Live rendered checks: landing, How It Works, signup, and signin load; both portals redirect signed-out visitors to signin. Explore Challenges and public passports accurately report the missing database; they are not operational yet. The real account-to-approval-to-wallet flow remains blocked until the hosted schema is initialized and the dashboard redirect/mail settings are confirmed.
+
+## Post-migration deployment readiness
+
+The founder reported successfully applying the complete migration in Supabase SQL Editor. A fresh read-only doctor run passes: all six variables present, auth and server key accepted, email signup enabled (confirmation required), all ten application tables accessible, all three workflow RPCs exposed, and both RPC endpoints confirmed as devnet. The configured origin remains local; Vercel needs its own production variables and final HTTPS origin.
+
+TypeScript, lint, formatting, eight unit tests, production build, and the isolated PostgreSQL approval/access-control integration pass. A configured production server renders landing, How It Works, Explore Challenges, signup, and signin without demo data or page errors; both private portals redirect signed-out visitors to signin. Hosted policies/trigger definitions cannot be read through the supplied REST API keys and must be checked in SQL Editor. Email delivery, real account operations, wallet signing, onchain broadcast, and Vercel deployment remain unverified. No hosted accounts, database writes, or transactions were created during these checks.
+
+The post-migration rerun also passes all ten isolated desktop/mobile browser tests. These test demo UI only. Real configured production pages were separately checked against Supabase without demonstration fallback.

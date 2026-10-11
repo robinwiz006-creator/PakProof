@@ -6,7 +6,7 @@ These steps use the existing application and migration. No project rebuild or ne
 
 - All six application variables are present. The Supabase public key can reach authentication settings; the service-role key can access the admin API. No credential values were printed.
 - Email/password signup is enabled. Email confirmation is required. SMTP delivery and the dashboard redirect allowlist cannot be established from the public settings endpoint.
-- All ten application tables return `PGRST205` (missing from the exposed schema). The three workflow RPCs are not exposed. This strongly indicates the initial migration has not been applied; the SQL inventory below distinguishes absence from an API exposure/cache issue.
+- The founder applied the initial migration manually and reported success. A subsequent read-only doctor run confirms all ten tables return HTTP 200 and all three workflow RPCs are exposed. Do not reapply the initial migration. Hosted RLS policies and trigger definitions require the SQL Editor check in DEPLOYMENT.md; REST schema checks cannot inspect those catalogs.
 - No existing auth users were returned by the read-only admin listing.
 - Both configured RPC endpoints respond with the complete Solana devnet genesis identifier. No transaction has been sent.
 - The configured application origin is `http://localhost:3000`. That is a local-development URL, not a public demo deployment.
@@ -61,4 +61,8 @@ This proves a record commitment. It does not certify company identity or prove t
 
 ## Remaining limitations
 
-The application has not yet completed a hosted signup → submission → approval → wallet transaction run. Applying the missing schema is the immediate prerequisite. The existing local SQL test validates database logic in an isolated test database; the browser demo suite explicitly tests the pre-existing read-only demo mode in a separate process. Neither substitutes for the hosted real-user walkthrough.
+The application has not yet completed a hosted signup → submission → approval → wallet transaction run. The schema is now exposed; public deployment, dashboard auth settings, and the real two-account walkthrough remain to be completed. The existing local SQL test validates database logic in an isolated test database; the browser demo suite explicitly tests the pre-existing read-only demo mode in a separate process. Neither substitutes for the hosted real-user walkthrough.
+
+## Deployment after migration
+
+Follow [DEPLOYMENT.md](DEPLOYMENT.md) for GitHub merging, Vercel settings, the read-only hosted RLS check, and the real two-account devnet walkthrough. The earlier migration sections are retained for reference; do not rerun the migration now that it succeeded.
