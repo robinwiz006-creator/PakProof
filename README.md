@@ -2,6 +2,8 @@
 
 A digital skill passport for emerging talent, with a company workspace for practical challenges and evidence-based reviews. Built with Next.js App Router, TypeScript, Tailwind CSS, Supabase, and Solana devnet.
 
+For a safe checklist to activate the existing implementation, see [Get the MVP operational](docs/GO-LIVE.md). Run `npm run doctor` for read-only service checks.
+
 ## What you can use now
 
 - Responsive landing page, How It Works, searchable challenge browser and details.
@@ -67,7 +69,7 @@ npm run test
 npm run build
 npm run test:db       # Requires Docker; isolated PostgreSQL, no hosted credentials
 npx playwright install chromium
-npm run test:e2e      # Requires build first; demo-only production server on port 3100
+npm run test:e2e      # Isolated demo build and production server on port 3100
 ```
 
 If Chromium is already installed, use:
@@ -76,7 +78,7 @@ If Chromium is already installed, use:
 PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/chromium npm run test:e2e
 ```
 
-The browser suite deliberately launches with blank Supabase variables, independent of a developer’s live accounts. It validates demo interactions and responsive layouts, not a hosted authentication or wallet transaction. The SQL suite creates test auth roles in an ephemeral local PostgreSQL container, applies the actual migration, and checks the approval flow and denied operations. It does not emulate Supabase email delivery or its API gateway.
+The browser suite builds and launches with blank Supabase variables in its own ignored `.next-e2e` directory, independent of a developer’s live accounts. Public variables are captured at build time, so blanking only the startup environment is insufficient. It validates demo interactions and responsive layouts, not a hosted authentication or wallet transaction. The SQL suite creates test auth roles in an ephemeral local PostgreSQL container, applies the actual migration, and checks the approval flow and denied operations. It does not emulate Supabase email delivery or its API gateway.
 
 ## Deploy to Vercel
 

@@ -64,6 +64,16 @@ export async function signUp(form: FormData) {
     "/sign-up",
   );
   const db = await supabase();
+  // Refuse signup before profiles exist, rather than creating an unusable account.
+  const { error: schemaError } = await db
+    .from("profiles")
+    .select("id")
+    .limit(0);
+  if (schemaError)
+    go(
+      "/sign-up",
+      "Account setup is not ready yet. Please contact the platform administrator.",
+    );
   const { data, error } = await db.auth.signUp({
     email: values.email,
     password: values.password,

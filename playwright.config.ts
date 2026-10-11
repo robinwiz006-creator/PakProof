@@ -20,13 +20,15 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "npm run start -- --hostname 0.0.0.0 --port 3100",
+    command: "npm run build && npm run start -- --hostname 0.0.0.0 --port 3100",
     url: "http://127.0.0.1:3100",
     reuseExistingServer: false,
     env: {
+      PROOFPAK_E2E: "1",
+      SUPABASE_SERVICE_ROLE_KEY: "",
       NEXT_PUBLIC_SUPABASE_URL: "",
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "",
     },
-    timeout: 60000,
+    timeout: 120000,
   },
 });

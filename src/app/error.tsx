@@ -1,9 +1,9 @@
 "use client";
 export default function ErrorPage({
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  retry: () => void;
 }) {
   return (
     <div className="container page">
@@ -12,7 +12,7 @@ export default function ErrorPage({
         Check your connection. If you’re setting up ProofPak, confirm the
         Supabase configuration and apply the database migration.
       </p>
-      <button className="button section-spacer" onClick={reset}>
+      <button className="button section-spacer" onClick={retry}>
         Try again
       </button>
     </div>

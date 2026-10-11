@@ -10,10 +10,17 @@ import {
 } from "lucide-react";
 import { ButtonLink, ChallengeCard, Tags } from "@/components/ui";
 import { challenges } from "@/lib/data";
+import type { Challenge } from "@/lib/types";
 import { isConfigured } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 export default async function Home() {
-  const featured = await challenges();
+  let featured: Challenge[] = [];
+  let challengesUnavailable = false;
+  try {
+    featured = await challenges();
+  } catch {
+    challengesUnavailable = true;
+  }
   return (
     <>
       <section className="hero container">
@@ -147,7 +154,12 @@ export default async function Home() {
         {!isConfigured() && (
           <p className="demo-label">Example briefs · Demonstration companies</p>
         )}
-        {!featured.length && (
+        {challengesUnavailable && (
+          <div className="notice" role="status">
+            Challenges are temporarily unavailable. Please try again later.
+          </div>
+        )}
+        {!challengesUnavailable && !featured.length && (
           <p className="muted">
             New challenges will appear here as companies publish their briefs.
           </p>

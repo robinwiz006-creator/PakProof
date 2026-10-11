@@ -3,15 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "dev": "node --use-env-proxy node_modules/next/dist/bin/next dev",
+    "build": "node --use-env-proxy node_modules/next/dist/bin/next build",
+    "start": "node --use-env-proxy node_modules/next/dist/bin/next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
     "test:db": "bash scripts/test-database.sh",
     "test:e2e": "playwright test",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"*.{ts,json,mjs}\""
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"*.{ts,json,mjs}\"",
+    "doctor": "node --use-env-proxy scripts/check-services.mjs"
   },
   "dependencies": {
     "@solana/kit": "^8.4.0",

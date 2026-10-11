@@ -80,6 +80,9 @@ test("all demo portals render without runtime errors or horizontal overflow", as
     const response = await page.goto(path);
     expect(response?.status(), path).toBe(200);
     await expect(page.locator("h1")).toBeVisible();
+    if (path.startsWith("/portal/") || path.startsWith("/talent/")) {
+      await expect(page.getByText(/Demonstration data/)).toBeVisible();
+    }
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth,
@@ -108,6 +111,9 @@ test("unconfigured signup returns a clear error rather than a fake account", asy
   page,
 }) => {
   await page.goto("/sign-up");
+  await expect(
+    page.getByText(/Account creation requires Supabase/),
+  ).toBeVisible();
   await page.getByLabel("Your full name").fill("Test Candidate");
   await page.getByLabel("Email address").fill("candidate@example.com");
   await page.getByLabel("Password", { exact: true }).fill("test-password-123");

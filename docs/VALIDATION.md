@@ -22,3 +22,15 @@ No transaction signature has been fabricated or recorded as evidence of a live t
 ## User prerequisites
 
 Provide the Supabase URL/publishable key and server-only service-role key securely in environment settings; apply the migration to a fresh project; configure auth redirects; review/save the network additions and publish the environment. Then follow `docs/DEMO.md` with two accounts and a wallet holding devnet SOL. Verify a finalized transaction and its live matching record before calling the entire MVP demo complete.
+
+## Operational follow-up
+
+The existing `4aae9df` implementation was retained. Runtime checks now establish that all six variables are present, Supabase keys are usable, email signup is enabled with confirmation required, and both configured RPCs reach the real devnet genesis hash. Values and user records were not printed.
+
+The hosted API reports all ten application tables and the three workflow functions missing. A read-only SQL inventory and safe, numbered migration/auth/wallet instructions are in `docs/GO-LIVE.md`. No hosted migration was executed. The account listing returned no users; no test account or blockchain transaction was created.
+
+Fixed cloud proxy use in the Node startup commands, the truncated devnet genesis constant, a PostgreSQL test startup race, error-page retry behavior, and the landing page's failure when the challenge query is unavailable. Signup now refuses to create an account when the profile schema is unavailable; that guard was verified in the browser against the live configured environment.
+
+The browser suite previously cleared public variables only at startup, which is insufficient after a credentialed Next.js build. It now creates its own blank-credential `.next-e2e` build and checks the demo notice before signup. This does not alter the live application's data source. All ten desktop/mobile tests passed after isolation was corrected. Eight unit tests and the actual local PostgreSQL approval/access-control integration passed. Production compilation, TypeScript, lint, and formatting checks passed.
+
+Live rendered checks: landing, How It Works, signup, and signin load; both portals redirect signed-out visitors to signin. Explore Challenges and public passports accurately report the missing database; they are not operational yet. The real account-to-approval-to-wallet flow remains blocked until the hosted schema is initialized and the dashboard redirect/mail settings are confirmed.

@@ -4,10 +4,16 @@ cd "$(dirname "$0")/.."
 container="proofpak-db-test-${RANDOM}"
 trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
 docker run -d --name "$container" -e POSTGRES_PASSWORD=local-test-only postgres:17-alpine >/dev/null
+ready=false
 for attempt in {1..30}; do
- if docker exec "$container" pg_isready -U postgres >/dev/null 2>&1; then break; fi
+ if docker exec "$container" pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; then ready=true; break; fi
  sleep 1
 done
+if [[ "$ready" != true ]]; then
+ echo "PostgreSQL did not become ready on TCP port 5432" >&2
+ docker logs --tail 20 "$container" >&2
+ exit 1
+fi
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < tests/database-bootstrap.sql
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < supabase/migrations/202610110001_initial.sql
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < tests/database.sql

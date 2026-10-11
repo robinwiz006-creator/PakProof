@@ -179,3 +179,12 @@ test("current Solana SDK serializes and signs a real memo transaction", async ()
   assert.equal(decoded.feePayer?.toBase58(), signer.publicKey.toBase58());
   assert.ok(decoded.signature);
 });
+
+test("devnet guard uses the complete public cluster genesis identifier", async () => {
+  const { DEVNET_GENESIS } = await import("../src/lib/proof");
+  assert.equal(DEVNET_GENESIS, "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG");
+  assert.notEqual(
+    DEVNET_GENESIS,
+    "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+  );
+});
