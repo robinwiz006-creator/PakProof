@@ -1,11 +1,20 @@
 import Link from "next/link";
+import {
+  MilestonePayment,
+  PaymentRecovery,
+} from "@/components/milestone-payment";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { isConfigured, supabase } from "@/lib/supabase/server";
 import { PageHeading, Tags } from "@/components/ui";
 import { Field, SubmitButton } from "@/components/forms";
 import { projectData, milestoneData } from "@/lib/paid-data";
-import { tokenAmount, type PaidOffer } from "@/lib/payments";
+import {
+  tokenAmount,
+  paymentStatusLabel,
+  type PaymentAttempt,
+  type PaidOffer,
+} from "@/lib/payments";
 import {
   publishPaidProject,
   applyPaidProject,
@@ -13,6 +22,7 @@ import {
   respondPaidOffer,
   submitPaidMilestone,
   reviewPaidMilestone,
+  authorizePayout,
 } from "@/lib/paid-actions";
 export const dynamic = "force-dynamic";
 export default async function PaidProjectPage({
@@ -90,6 +100,53 @@ export default async function PaidProjectPage({
         )
         .order("created_at")
     : { data: [] };
+  const { data: org } = isCompany
+    ? await db
+        .from("organizations")
+        .select("id")
+        .eq("company_id", p.company_id)
+        .maybeSingle()
+    : { data: null };
+  const { data: wallets } = user
+    ? await db
+        .from("wallet_connections")
+        .select("id,wallet_address,purpose,organization_id")
+        .eq("user_id", user.id)
+        .is("disconnected_at", null)
+    : { data: [] };
+  const payerWallets = (wallets ?? []).filter(
+    (w) => w.purpose === "company_payer" && w.organization_id === org?.id,
+  );
+  const accountWallets = (wallets ?? []).filter((w) => w.purpose === "account");
+  const { data: payout } =
+    isWorker || isCompany
+      ? await db
+          .from("paid_payout_authorizations")
+          .select("wallet_address")
+          .eq("id", data.payout_authorization_id)
+          .maybeSingle()
+      : { data: null };
+  const { data: intents } =
+    isWorker || isCompany
+      ? await db
+          .from("payment_intents")
+          .select("*,payment_attempts(*)")
+          .in(
+            "milestone_id",
+            ms.map((m) => m.id),
+          )
+          .order("created_at", { ascending: false })
+      : { data: [] };
+  const { data: receipts } =
+    isWorker || isCompany
+      ? await db
+          .from("payment_receipts")
+          .select("milestone_id,signature")
+          .in(
+            "milestone_id",
+            ms.map((m) => m.id),
+          )
+      : { data: [] };
   return (
     <div className="container page">
       <PageHeading
@@ -103,6 +160,9 @@ export default async function PaidProjectPage({
         </Link>
         <Link className="text-link" href="/wallet">
           Wallet ownership
+        </Link>
+        <Link className="text-link" href="/payments">
+          Payment history
         </Link>
         <Link className="text-link" href="/portal/talent/passport">
           My passport
@@ -246,12 +306,55 @@ export default async function PaidProjectPage({
           )}
         </section>
       )}
+      {(isWorker || isCompany) && payout && (
+        <p className="notice section-spacer hash">
+          Authorized payout wallet: {payout.wallet_address}
+        </p>
+      )}
+      {isWorker && p.status === "active" && (
+        <section className="panel section-spacer">
+          <h2>Authorize your payout wallet</h2>
+          <p className="muted">
+            Select your ownership-verified account wallet. Prepared payments
+            keep their destination and block wallet replacement until resolved.
+          </p>
+          {accountWallets.length ? (
+            <form action={authorizePayout}>
+              <input type="hidden" name="project_id" value={id} />
+              <label className="field">
+                My verified payout wallet
+                <select name="connection_id">
+                  {accountWallets.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.wallet_address}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <SubmitButton>Authorize this destination</SubmitButton>
+            </form>
+          ) : (
+            <Link className="text-link" href="/wallet">
+              First link an account wallet ↗
+            </Link>
+          )}
+        </section>
+      )}
       <section className="section-spacer">
         <h2>Milestones</h2>
         {ms.map((m) => {
           const submission = (submissions ?? []).find(
             (s) => s.id === m.current_submission_id,
           );
+          const intent = (intents ?? []).find(
+            (i) =>
+              i.milestone_id === m.id &&
+              !["failed", "cancelled"].includes(i.status),
+          );
+          const receipt = (receipts ?? []).find((r) => r.milestone_id === m.id);
+          const attempt = (intent?.payment_attempts ?? []).find(
+            (a: PaymentAttempt) => !["failed", "cancelled"].includes(a.status),
+          ) as PaymentAttempt | undefined;
           return (
             <article className="panel section-spacer" key={m.id}>
               <p className="eyebrow">Milestone {m.position}</p>
@@ -344,10 +447,47 @@ export default async function PaidProjectPage({
                     </form>
                   )}
                   {m.work_status === "approved" && (
-                    <p className="notice section-spacer">
-                      Work approved · payment due. Approval does not mark the
-                      milestone paid.
-                    </p>
+                    <>
+                      <p className="notice section-spacer">
+                        Work approved ·{" "}
+                        {receipt
+                          ? "Paid after finalized settlement"
+                          : "payment due"}
+                        . Approval is separate from payment.
+                      </p>
+                      <p className="tag">
+                        Payment:{" "}
+                        {receipt
+                          ? "Paid"
+                          : intent
+                            ? paymentStatusLabel(intent.status)
+                            : "Not paid"}
+                      </p>
+                      {attempt?.status_note && (
+                        <p className="muted section-spacer">
+                          {attempt.status_note}
+                        </p>
+                      )}
+                      {intent && (
+                        <PaymentRecovery
+                          attempt={attempt ?? null}
+                          intentId={intent.id}
+                          canCancel={
+                            member?.role === "owner" &&
+                            intent.status === "prepared"
+                          }
+                          canResume={intent.payer_user_id === user?.id}
+                        />
+                      )}
+                      {!receipt &&
+                        member?.role === "owner" &&
+                        (!intent || intent.status === "prepared") && (
+                          <MilestonePayment
+                            milestoneId={m.id}
+                            payerWallets={payerWallets}
+                          />
+                        )}
+                    </>
                   )}
                 </>
               )}

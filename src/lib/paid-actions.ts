@@ -208,3 +208,16 @@ export async function reviewPaidMilestone(form: FormData) {
       : "Revision requested. The worker can submit an updated version.",
   );
 }
+export async function authorizePayout(form: FormData) {
+  const v = parse(
+    z.object({ project_id: z.uuid(), connection_id: z.uuid() }),
+    form,
+    "/paid-projects",
+  );
+  await mutate(
+    "authorize_project_payout",
+    { p_project: v.project_id, p_connection: v.connection_id },
+    `/paid-projects/${v.project_id}`,
+    "Payout wallet explicitly authorized for future milestones. Prepared payments retain their original destination.",
+  );
+}

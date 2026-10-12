@@ -72,3 +72,53 @@ export type PaidOffer = {
     }[];
   };
 };
+export type PaymentIntent = {
+  id: string;
+  milestone_id: string;
+  offer_id: string;
+  approval_id: string;
+  terms_hash: string;
+  amount_units: string;
+  payer_user_id: string;
+  payer_connection_id: string;
+  payer_wallet: string;
+  source_account: string;
+  payout_authorization_id: string;
+  recipient_connection_id: string;
+  recipient_wallet: string;
+  destination_account: string;
+  nonce: string;
+  network: string;
+  mint: string;
+  token_program: string;
+  decimals: number;
+  status: string;
+};
+export type PaymentAttempt = {
+  id: string;
+  intent_id: string;
+  template_base64: string;
+  blockhash: string;
+  last_valid_block_height: string;
+  signature: string | null;
+  signed_base64: string | null;
+  status: string;
+  status_note: string;
+  created_at: string;
+};
+export function paymentStatusLabel(status: string) {
+  return (
+    (
+      {
+        prepared: "Not sent",
+        signed: "Pending / outcome unknown",
+        registered: "Pending / outcome unknown",
+        pending: "Pending",
+        paid: "Paid",
+        failed: "Failed",
+        needs_review: "Needs review",
+        cancelled: "Cancelled",
+      } as Record<string, string>
+    )[status] ?? "Payment due"
+  );
+}
