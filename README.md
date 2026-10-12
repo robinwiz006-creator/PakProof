@@ -1,6 +1,8 @@
-# ProofPak + SkillBoard
+# ProofPak
 
 A digital skill passport for emerging talent, with a company workspace for practical challenges and evidence-based reviews. Built with Next.js App Router, TypeScript, Tailwind CSS, Supabase, and Solana devnet.
+
+For the passport-first release, follow [Phase 1 implementation and manual upgrade](docs/PHASE-1-PASSPORT.md) before merging or deploying. Existing databases need the additive migration only; do not rerun the initial migration.
 
 For a safe checklist to activate the existing implementation, see [Get the MVP operational](docs/GO-LIVE.md). Run `npm run doctor` for read-only service checks.
 
@@ -8,7 +10,7 @@ For a safe checklist to activate the existing implementation, see [Get the MVP o
 
 - Responsive landing page, How It Works, searchable challenge browser and details.
 - Talent dashboard, editable/private-by-default profile, project evidence links, submissions and feedback, skill passport, unique public profile URL.
-- SkillBoard company profile, challenge publishing/closing, submission review, improvement requests, approval, candidate directory, and dashboard counts.
+- ProofPak company workspace company profile, challenge publishing/closing, submission review, improvement requests, approval, candidate directory, and dashboard counts.
 - Atomic database approval creates an immutable achievement. A separate Wallet Standard flow supports Phantom and Solflare to sign a real Solana devnet memo transaction. The server verifies the finalized transaction before storing a proof. The verification page recomputes the record hash and checks the live chain.
 - Labeled demo content when Supabase is not configured. Demo content is read-only and contains **no company-approved achievements or fake blockchain transactions**.
 
