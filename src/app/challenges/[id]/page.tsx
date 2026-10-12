@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { challenge } from "@/lib/data";
-import { isConfigured } from "@/lib/supabase/server";
+import { isConfigured, supabase } from "@/lib/supabase/server";
 import { PageHeading, Tags, DemoNotice, ButtonLink } from "@/components/ui";
 import { Field, SubmitButton } from "@/components/forms";
 import { submitWork } from "@/lib/actions";
@@ -12,6 +12,8 @@ export default async function ChallengeDetail({
   const { id } = await params;
   const c = await challenge(id);
   if (!c) notFound();
+  const db = isConfigured() ? await supabase() : null;
+  const user = db ? (await db.auth.getUser()).data.user : null;
   const closed =
     c.status !== "published" ||
     new Date(c.deadline + "T23:59:59Z") < new Date();
@@ -44,6 +46,18 @@ export default async function ChallengeDetail({
                 <div className="section-spacer">
                   <ButtonLink href="/sign-up">Create your account</ButtonLink>
                 </div>
+              </>
+            ) : !user ? (
+              <>
+                <p className="muted">
+                  Sign in before submitting so your work is saved to your
+                  account.
+                </p>
+                <ButtonLink
+                  href={`/sign-in?next=${encodeURIComponent(`/challenges/${c.id}#submit`)}`}
+                >
+                  Sign in to submit
+                </ButtonLink>
               </>
             ) : closed ? (
               <p className="muted">

@@ -132,7 +132,7 @@ export default async function Home() {
               <dt>Practical ability is hard to assess</dt>
               <dd>
                 Help companies review evidence and recognize work through
-                SkillBoard challenges.
+                ProofPak for companies challenges.
               </dd>
             </div>
           </dl>
@@ -171,8 +171,9 @@ export default async function Home() {
               <div>
                 <h3>Company-approved achievements</h3>
                 <p>
-                  Issued when a company approves your SkillBoard submission.
-                  These are clearly separated from work you add yourself.
+                  Issued when a company approves your ProofPak for companies
+                  submission. These are clearly separated from work you add
+                  yourself.
                 </p>
               </div>
             </article>
@@ -250,7 +251,7 @@ export default async function Home() {
       <section className="container section">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">THE SKILLBOARD CHALLENGE PROCESS</p>
+            <p className="eyebrow">OPTIONAL COMPANY CHALLENGES</p>
             <h2>From a practical brief to company recognition.</h2>
           </div>
           <p className="muted">
@@ -321,15 +322,15 @@ export default async function Home() {
       </section>
       <section className="container company-band">
         <div>
-          <p className="eyebrow">MEET SKILLBOARD</p>
+          <p className="eyebrow">MEET PROOFPAK COMPANY</p>
           <h2>
             Discover the person
             <br />
             behind the résumé.
           </h2>
           <p>
-            SkillBoard is the company side of ProofPak. Discover candidates
-            through the evidence behind their work.
+            ProofPak for companies is the company side of ProofPak. Discover
+            candidates through the evidence behind their work.
           </p>
           <ButtonLink href="/sign-up?role=company">
             Start with a challenge

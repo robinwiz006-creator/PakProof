@@ -35,6 +35,7 @@ export const companySchema = z.object({
 export const projectSchema = z
   .object({
     title: z.string().trim().min(3).max(160),
+    skills: z.string().max(500).default(""),
     description: z.string().trim().min(20).max(3000),
     github_url: optionalUrl,
     demo_url: optionalUrl,

@@ -97,11 +97,15 @@ test("demo passport never claims a company or blockchain achievement", async ({
 }) => {
   await page.goto("/talent/ayesha-khan");
   await expect(
-    page.getByText(/No company-approved achievements have been issued/),
+    page.getByText(/Projects and skills are added by the individual/),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Campus expense tracker" }),
   ).toBeVisible();
+  await expect(page.locator('a[href^="/verify/"]')).toHaveCount(0);
+  await expect(page.getByText("Onchain verified", { exact: true })).toHaveCount(
+    0,
+  );
   await page.goto("/verify/not-a-real-achievement");
   await expect(
     page.getByRole("heading", { name: "This page isn’t available." }),
@@ -123,4 +127,59 @@ test("unconfigured signup returns a clear error rather than a fake account", asy
   await expect(page.getByRole("status")).toContainText(
     "Connect Supabase before creating an account.",
   );
+});
+test("passport-first onboarding, preview and recovery routes work at small mobile widths", async ({
+  page,
+}) => {
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto("/portal/talent");
+    await expect(
+      page.getByRole("heading", { name: "Your passport progress" }),
+    ).toBeVisible();
+    await expect(page.locator(".passport-checklist li")).toHaveCount(6);
+    await page.goto("/portal/talent/preview");
+    await expect(
+      page.getByText("PRIVATE PREVIEW · ONLY YOU CAN SEE THIS PAGE"),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Campus expense tracker" }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.goto("/portal/talent/achievements");
+    await expect(
+      page.getByText(/Company-approved facts cannot be edited/),
+    ).toBeVisible();
+    await page.goto("/forgot-password");
+    await page.getByLabel("Email address").fill("nobody@example.com");
+    await page.getByRole("button", { name: "Send reset link" }).click();
+    await expect(page.getByRole("status")).toContainText(
+      "Account recovery requires Supabase",
+    );
+    await page.goto("/resend-confirmation");
+    await expect(
+      page.getByRole("button", { name: "Resend confirmation" }),
+    ).toBeVisible();
+  }
+});
+test("proof API refuses unauthenticated preparation and cross-origin writes", async ({
+  request,
+}) => {
+  const id = "00000000-0000-4000-8000-000000000001";
+  const get = await request.get(`/api/proofs?achievement=${id}`);
+  expect(get.status()).toBe(403);
+  const post = await request.post("/api/proofs", {
+    headers: { origin: "https://untrusted.example" },
+    data: {
+      achievementId: id,
+      signature: "x".repeat(88),
+      issuerWallet: "x".repeat(44),
+      claimVersion: 2,
+    },
+  });
+  expect(post.status()).toBe(403);
 });

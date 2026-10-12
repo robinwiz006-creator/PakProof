@@ -1,14 +1,20 @@
-# ProofPak + SkillBoard
+# ProofPak
 
 A digital skill passport for emerging talent, with a company workspace for practical challenges and evidence-based reviews. Built with Next.js App Router, TypeScript, Tailwind CSS, Supabase, and Solana devnet.
 
+For the passport-first release, follow [Phase 1 implementation and manual upgrade](docs/PHASE-1-PASSPORT.md) before merging or deploying. Existing databases need the additive migration only; do not rerun the initial migration.
+
 For a safe checklist to activate the existing implementation, see [Get the MVP operational](docs/GO-LIVE.md). Run `npm run doctor` for read-only service checks.
+
+## Credentials and optional wallets on this branch
+
+See [credentials/wallet delivery and manual setup](docs/CREDENTIALS-WALLETS-DELIVERY.md). This branch adds authorized organizations, direct credentials, recipient consent, private degree verification requests, v3 devnet proofs, and signed wallet ownership. The three new migrations are **unapplied** by this task. Paid projects and USDC settlement remain unfinished; wallet linking does not enable payments. No new feature is claimed tested in production.
 
 ## What you can use now
 
 - Responsive landing page, How It Works, searchable challenge browser and details.
 - Talent dashboard, editable/private-by-default profile, project evidence links, submissions and feedback, skill passport, unique public profile URL.
-- SkillBoard company profile, challenge publishing/closing, submission review, improvement requests, approval, candidate directory, and dashboard counts.
+- ProofPak company workspace company profile, challenge publishing/closing, submission review, improvement requests, approval, candidate directory, and dashboard counts.
 - Atomic database approval creates an immutable achievement. A separate Wallet Standard flow supports Phantom and Solflare to sign a real Solana devnet memo transaction. The server verifies the finalized transaction before storing a proof. The verification page recomputes the record hash and checks the live chain.
 - Labeled demo content when Supabase is not configured. Demo content is read-only and contains **no company-approved achievements or fake blockchain transactions**.
 
@@ -114,3 +120,7 @@ This task does not push or merge automatically. If the cloud UI creates a pull r
 Project and supporting-document evidence uses external URLs; direct Supabase Storage uploads are deferred. There is no messaging, recruitment pipeline, recommendations, multi-company selector, membership invitation UI, project edit screen, or password-reset screen. Company profile editing is owner-only, while reviewers can publish and review challenges. The portal uses the first company for its profile/create screen and all existing memberships for review visibility; use one company per account for the demo. No live seed creates fabricated achievements: use the walkthrough to produce authentic test records and label the test company/profile as demonstration data.
 
 Company identity vetting, wallet identity binding, production abuse/rate-limit controls, account recovery, and a durable production-chain policy should precede a public launch. This is a hackathon MVP, not a completed production trust system.
+
+## Phase 1 passport foundation
+
+The passport-first branch requires the additive `202610120001_passport_foundation.sql` migration before deployment. Do not rerun the initial migration or merge before reviewing the manual upgrade procedure. See [Phase 1 implementation and release guide](docs/PHASE-1-PASSPORT.md) for user journeys, v1/v2 compatibility, security tests, and exact Supabase/Vercel actions.

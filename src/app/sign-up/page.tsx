@@ -13,7 +13,7 @@ export default async function SignUp({
       <p className="eyebrow">START WITH WHAT YOU CAN DO</p>
       <h1>Create your account.</h1>
       <p className="muted">
-        Build your passport or discover talent through SkillBoard.
+        Build your passport or discover talent through ProofPak for companies.
       </p>
       {!isConfigured() && (
         <div className="notice section-spacer">
@@ -34,7 +34,9 @@ export default async function SignUp({
             defaultValue={role === "company" ? "company" : "talent"}
           >
             <option value="talent">Build my skill passport</option>
-            <option value="company">Find talent with SkillBoard</option>
+            <option value="company">
+              Find talent with ProofPak for companies
+            </option>
           </select>
         </label>
         <Field

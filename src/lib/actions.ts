@@ -2,6 +2,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { safeReturnPath } from "./passport";
 import { supabase, isConfigured } from "./supabase/server";
 import {
   profileSchema,
@@ -104,8 +105,10 @@ export async function signIn(form: FormData) {
       "/sign-in",
       "Sign in failed. Check your email and password, and confirm your email if required.",
     );
+  const next = safeReturnPath(String(form.get("next") ?? ""));
   redirect(
-    `/portal/${data.user?.user_metadata.preferred_role === "company" ? "company" : "talent"}`,
+    next ??
+      `/portal/${data.user?.user_metadata.preferred_role === "company" ? "company" : "talent"}`,
   );
 }
 export async function signOut() {
@@ -150,9 +153,11 @@ export async function addProject(form: FormData) {
   const { db, user } = await context();
   const path = "/portal/talent/projects";
   const values = validate(projectSchema, raw(form), path);
-  const { error } = await db
-    .from("projects")
-    .insert({ ...values, talent_id: user.id });
+  const { error } = await db.from("projects").insert({
+    ...values,
+    skills: skillsList(values.skills),
+    talent_id: user.id,
+  });
   databaseError(path, error);
   revalidatePath("/", "layout");
   go(path, "Project added.");
@@ -229,4 +234,153 @@ export async function reviewSubmission(form: FormData) {
       ? "Submission approved. The achievement is issued; its Solana proof is pending."
       : "Feedback sent. The candidate can revise and resubmit.",
   );
+}
+
+export type ProjectFormState = {
+  error: string;
+  values?: Record<string, string>;
+};
+export async function saveProject(
+  _previous: ProjectFormState,
+  form: FormData,
+): Promise<ProjectFormState> {
+  const { db, user } = await context();
+  const values = Object.fromEntries(
+    [...form.entries()].filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
+  );
+  const parsed = projectSchema.safeParse(values);
+  if (!parsed.success) return { error: parsed.error.issues[0].message, values };
+  const id = form.get("project_id");
+  const data = { ...parsed.data, skills: skillsList(parsed.data.skills) };
+  const result = id
+    ? await db
+        .from("projects")
+        .update(data)
+        .eq("id", id)
+        .eq("talent_id", user.id)
+        .select("id")
+        .maybeSingle()
+    : await db
+        .from("projects")
+        .insert({ ...data, talent_id: user.id })
+        .select("id")
+        .single();
+  if (result.error || !result.data)
+    return {
+      error:
+        "Could not save this project. Check the links and that you own it, then try again.",
+      values,
+    };
+  revalidatePath("/", "layout");
+  go("/portal/talent/projects", id ? "Project updated." : "Project added.");
+}
+export async function previewPassport() {
+  const { db, user } = await context();
+  const { error } = await db
+    .from("profiles")
+    .update({ passport_previewed_at: new Date().toISOString() })
+    .eq("id", user.id);
+  databaseError("/portal/talent/passport", error);
+  revalidatePath("/", "layout");
+  redirect("/portal/talent/preview");
+}
+export async function saveAchievementSharing(form: FormData) {
+  const { db, user } = await context();
+  const id = validate(
+    z.string().uuid(),
+    form.get("achievement_id"),
+    "/portal/talent/achievements",
+  );
+  const project = String(form.get("project_id") ?? "");
+  if (project)
+    validate(z.string().uuid(), project, "/portal/talent/achievements");
+  const { data: a } = await db
+    .from("achievements")
+    .select("id")
+    .eq("id", id)
+    .eq("talent_id", user.id)
+    .maybeSingle();
+  if (!a)
+    go(
+      "/portal/talent/achievements",
+      "You can only share your own achievements.",
+    );
+  const { error } = await db.from("achievement_sharing").upsert({
+    achievement_id: id,
+    share_evidence: form.get("share_evidence") === "on",
+    project_id: project || null,
+  });
+  databaseError("/portal/talent/achievements", error);
+  revalidatePath("/", "layout");
+  go(
+    "/portal/talent/achievements",
+    "Sharing choices saved. Approved facts are unchanged.",
+  );
+}
+export async function sendReset(form: FormData) {
+  if (!isConfigured())
+    go("/forgot-password", "Account recovery requires Supabase.");
+  const email = validate(
+    z.string().email(),
+    form.get("email"),
+    "/forgot-password",
+  );
+  const db = await supabase();
+  const { error } = await db.auth.resetPasswordForEmail(email, {
+    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?purpose=recovery`,
+  });
+  if (error)
+    go(
+      "/forgot-password",
+      "Could not send a reset email right now. Wait and try again.",
+    );
+  go(
+    "/forgot-password",
+    "If that email has an account, a password reset link will be sent. Check your inbox and spam folder.",
+  );
+}
+export async function resendConfirmation(form: FormData) {
+  if (!isConfigured())
+    go("/resend-confirmation", "Email confirmation requires Supabase.");
+  const email = validate(
+    z.string().email(),
+    form.get("email"),
+    "/resend-confirmation",
+  );
+  const db = await supabase();
+  const { error } = await db.auth.resend({
+    type: "signup",
+    email,
+    options: {
+      emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`,
+    },
+  });
+  if (error)
+    go(
+      "/resend-confirmation",
+      "Could not send a confirmation email right now. Wait and try again.",
+    );
+  go(
+    "/resend-confirmation",
+    "If confirmation is needed, a new link will be sent. Check your inbox and spam folder.",
+  );
+}
+export async function resetPassword(form: FormData) {
+  const { db } = await context();
+  const password = validate(
+    z.string().min(10),
+    form.get("password"),
+    "/reset-password",
+  );
+  if (password !== form.get("confirm_password"))
+    go("/reset-password", "The passwords must match.");
+  const { error } = await db.auth.updateUser({ password });
+  if (error)
+    go(
+      "/reset-password",
+      "Could not update your password. Request a new reset link and try again.",
+    );
+  go("/portal/talent/settings", "Password updated.");
 }

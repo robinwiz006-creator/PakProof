@@ -1,4 +1,9 @@
+import { SkillPicker } from "@/components/skill-picker";
 import Link from "next/link";
+import { passportSteps } from "@/lib/passport";
+import { ProjectEditor } from "@/components/project-editor";
+import { RemoveProject, SharePassport } from "@/components/passport-actions";
+import { PassportView, EvidenceLinks } from "@/components/passport-view";
 import { notFound, redirect } from "next/navigation";
 import { PortalNav } from "@/components/portal-nav";
 import {
@@ -17,8 +22,8 @@ import { isConfigured, supabase } from "@/lib/supabase/server";
 import {
   saveProfile,
   saveCompany,
-  addProject,
-  deleteProject,
+  previewPassport,
+  saveAchievementSharing,
   createChallenge,
   closeChallenge,
   reviewSubmission,
@@ -40,7 +45,10 @@ const titles: Record<string, string> = {
   "talent:projects": "Show what you’ve built.",
   "talent:browse": "Find your next challenge.",
   "talent:submissions": "Keep your work moving.",
-  "talent:passport": "Your skill passport.",
+  "talent:passport": "My skill passport.",
+  "talent:preview": "Preview my passport.",
+  "talent:achievements": "My achievements.",
+  "talent:settings": "Account settings.",
   "company:": "A clearer view of emerging talent.",
   "company:profile": "Introduce your company.",
   "company:create": "Publish a practical challenge.",
@@ -99,7 +107,9 @@ export default async function Portal({
         .order("created_at", { ascending: false }),
       db
         .from("achievements")
-        .select("*,companies(name),blockchain_proofs(*)")
+        .select(
+          "*,companies(name),blockchain_proofs(*),achievement_claims(*),achievement_evidence(*),achievement_sharing(*)",
+        )
         .eq("talent_id", user.id)
         .order("issued_at", { ascending: false }),
     ]);
@@ -121,7 +131,9 @@ export default async function Portal({
           .order("created_at", { ascending: false }),
         db
           .from("achievements")
-          .select("*,companies(name),blockchain_proofs(*)")
+          .select(
+            "*,companies(name),blockchain_proofs(*),achievement_claims(*),achievement_evidence(*),achievement_sharing(*)",
+          )
           .in("company_id", membershipIds)
           .order("issued_at", { ascending: false }),
       ]);
@@ -151,6 +163,9 @@ export default async function Portal({
     }
   }
   const canWrite = live;
+  const nextPassportStep = passportSteps(profile, projects).find(
+    (step) => !step.done,
+  );
   const approved = submissions.filter((s) => s.status === "approved");
   return (
     <div className="portal">
@@ -164,7 +179,7 @@ export default async function Portal({
           description={
             role === "company"
               ? "Practical challenges. Thoughtful reviews. Talent you can get to know."
-              : `Welcome${live ? `, ${profile.full_name.split(" ")[0]}` : " to the demo"}. Build a portfolio that speaks for itself.`
+              : `Welcome${live ? `, ${profile.full_name.split(" ")[0]}` : " to the demo"}. Create your passport at your own pace. Challenges are optional.`
           }
           action={
             live ? (
@@ -185,6 +200,35 @@ export default async function Portal({
           <div className="message" role="status">
             {message}
           </div>
+        )}
+        {role === "talent" && (section === "" || section === "passport") && (
+          <section className="panel">
+            <h2>Your passport progress</h2>
+            <p className="muted">
+              {passportSteps(profile, projects).filter((s) => s.done).length} of
+              6 steps complete · {profile.is_public ? "Public" : "Private"}.
+              Optional details can be added later.
+            </p>
+            <ol className="passport-checklist">
+              {passportSteps(profile, projects).map((step) => (
+                <li key={step.label}>
+                  <span
+                    aria-label={step.done ? "Complete" : "Not yet complete"}
+                  >
+                    {step.done ? "✓" : "○"}
+                  </span>
+                  {step.label === "Preview your passport" && live ? (
+                    <form action={previewPassport}>
+                      <button className="text-link">{step.label}</button>
+                    </form>
+                  ) : (
+                    <Link href={step.href}>{step.label}</Link>
+                  )}
+                </li>
+              ))}
+            </ol>
+            {profile.is_public && <SharePassport slug={profile.slug} />}
+          </section>
         )}
         {section === "" && (
           <>
@@ -224,34 +268,34 @@ export default async function Portal({
                   ? company
                     ? "Give talent a meaningful brief."
                     : "Start with your company profile."
-                  : "Small projects build a stronger story."}
+                  : "Build a passport you can share."}
               </h2>
               <p className="muted">
                 {role === "company"
                   ? "Make the work, evaluation criteria, and deliverables clear. Review each submission with useful feedback."
-                  : "Add evidence to your profile, then find a challenge that matches the skills you want to demonstrate."}
+                  : "Add your skills, projects, and evidence. Preview your passport, then publish when you are ready. You do not need a company challenge."}
               </p>
               <div className="button-row section-spacer">
                 <ButtonLink
                   href={
                     role === "company"
                       ? `/portal/company/${company ? "create" : "profile"}`
-                      : "/portal/talent/browse"
+                      : (nextPassportStep?.href ?? "/portal/talent/passport")
                   }
                 >
                   {role === "company"
                     ? company
                       ? "Create a challenge"
                       : "Create company profile"
-                    : "Explore challenges"}
+                    : (nextPassportStep?.label ?? "Open my passport")}
                 </ButtonLink>
                 <ButtonLink
                   secondary
-                  href={`/portal/${role}/${role === "company" ? "reviews" : "profile"}`}
+                  href={`/portal/${role}/${role === "company" ? "reviews" : "passport"}`}
                 >
                   {role === "company"
                     ? "Review submissions"
-                    : "Edit my profile"}
+                    : "Open my passport"}
                 </ButtonLink>
               </div>
             </section>
@@ -262,8 +306,8 @@ export default async function Portal({
                   candidates
                 </h3>
                 <p className="muted">
-                  Achievements appear after approval. Add an onchain proof from
-                  the review workspace.
+                  Achievements appear after approval. Next: record an approved
+                  achievement on Solana from the review workspace.
                 </p>
               </section>
             ) : (
@@ -331,12 +375,7 @@ export default async function Portal({
                 value={profile.bio}
                 maxLength={2000}
               />
-              <Field
-                label="Skills"
-                name="skills"
-                value={profile.skills.join(", ")}
-                hint="Separate skills with commas."
-              />
+              <SkillPicker value={profile.skills.join(", ")} />
               <label className="checkbox">
                 <input
                   type="checkbox"
@@ -345,6 +384,11 @@ export default async function Portal({
                 />
                 Publish my profile, projects, and achievements
               </label>
+              <p className="muted">
+                Approved submission evidence stays private unless you choose to
+                share it in My Achievements. Company reviewers can see your
+                profile and submitted work, but not unrelated private projects.
+              </p>
               {canWrite ? (
                 <SubmitButton>Save profile</SubmitButton>
               ) : (
@@ -411,57 +455,44 @@ export default async function Portal({
           <>
             <section className="panel">
               <h2>Add a project</h2>
-              <form className="form" action={addProject}>
-                <Field
-                  label="Project title"
-                  name="title"
-                  required
-                  minLength={3}
-                  maxLength={160}
-                />
-                <Field
-                  label="What you built and why"
-                  name="description"
-                  type="textarea"
-                  required
-                  minLength={20}
-                />
-                <div className="form-grid">
-                  <Field label="GitHub link" name="github_url" type="url" />
-                  <Field label="Demo link" name="demo_url" type="url" />
-                </div>
-                <Field
-                  label="Supporting evidence URL"
-                  name="evidence_url"
-                  type="url"
-                  hint="Link to a document, notebook, or case study you are comfortable sharing. Add at least one link."
-                />
-                {canWrite ? (
-                  <SubmitButton>Add project</SubmitButton>
-                ) : (
-                  <p className="muted">
-                    Sign in with Supabase connected to save project evidence.
-                  </p>
-                )}
-              </form>
+              {canWrite ? (
+                <ProjectEditor />
+              ) : (
+                <p className="muted">
+                  Connect Supabase and sign in to add or edit projects. The
+                  examples below are read-only.
+                </p>
+              )}
             </section>
-            {projects.map((p) => (
-              <section className="panel" key={p.id}>
-                <h3>{p.title}</h3>
-                <p className="muted">{p.description}</p>
+            {projects.map((project) => (
+              <section className="panel" key={project.id}>
+                <h3>{project.title}</h3>
+                <p className="muted">{project.description}</p>
+                <Tags values={project.skills ?? []} />
+                <EvidenceLinks project={project} />
                 {canWrite && (
-                  <form className="section-spacer" action={deleteProject}>
-                    <input type="hidden" name="project_id" value={p.id} />
-                    <button className="text-link" type="submit">
-                      Remove project
-                    </button>
-                  </form>
+                  <>
+                    <details className="section-spacer">
+                      <summary>Edit project</summary>
+                      <ProjectEditor project={project} />
+                    </details>
+                    <div className="section-spacer">
+                      <RemoveProject id={project.id} />
+                    </div>
+                  </>
                 )}
+                <Link
+                  className="text-link section-spacer"
+                  href={`/portal/talent/preview#project-${project.id}`}
+                >
+                  Preview on my passport ↗
+                </Link>
               </section>
             ))}
             {!projects.length && (
-              <Empty title="Your first project starts here">
-                Show something you’ve built, including what you learned.
+              <Empty title="Start with something you’ve built">
+                A class project, a personal tool, or freelance work can all
+                belong in your passport.
               </Empty>
             )}
           </>
@@ -489,6 +520,15 @@ export default async function Portal({
                       <p>{r.feedback}</p>
                     </div>
                   ))}
+                {s.status === "approved" && (
+                  <Link
+                    className="text-link section-spacer"
+                    href="/portal/talent/achievements"
+                  >
+                    Your achievement is in your passport. Manage evidence
+                    sharing ↗
+                  </Link>
+                )}
                 {s.status === "needs_improvement" && (
                   <Link
                     className="text-link section-spacer"
@@ -507,40 +547,109 @@ export default async function Portal({
             )}
           </>
         )}
-        {role === "talent" && section === "passport" && (
-          <>
-            <section className="panel">
-              <h2>{profile.full_name}</h2>
-              <p className="muted">{profile.headline}</p>
-              <div className="section-spacer">
-                <Tags values={profile.skills} />
+        {role === "talent" &&
+          (section === "passport" || section === "preview") && (
+            <>
+              <div className="button-row section-spacer">
+                <ButtonLink href="/portal/talent/profile">
+                  {profile.is_public ? "Manage visibility" : "Publish passport"}
+                </ButtonLink>
+                <ButtonLink secondary href="/portal/talent/projects">
+                  Add or edit projects
+                </ButtonLink>
               </div>
-              {profile.is_public ? (
-                <Link
-                  className="text-link section-spacer"
-                  href={`/talent/${profile.slug}`}
-                >
-                  Open shareable passport ↗
-                </Link>
-              ) : (
-                <Link
-                  className="text-link section-spacer"
-                  href="/portal/talent/profile"
-                >
-                  Publish your profile to share it ↗
-                </Link>
-              )}
-            </section>
+              {section === "preview" &&
+                live &&
+                !profile.passport_previewed_at && (
+                  <form className="section-spacer" action={previewPassport}>
+                    <SubmitButton>Mark preview complete</SubmitButton>
+                  </form>
+                )}
+              <section className="section-spacer">
+                <PassportView
+                  profile={profile}
+                  projects={projects}
+                  achievements={achievements}
+                  preview
+                />
+              </section>
+            </>
+          )}
+        {role === "talent" && section === "achievements" && (
+          <>
+            <p className="notice">
+              Company-approved facts cannot be edited. You control whether
+              approved evidence is shared publicly. Your passport must also be
+              public.
+            </p>
             {achievements.map((a) => (
-              <AchievementCard key={a.id} achievement={a} />
+              <section className="panel" key={a.id}>
+                <AchievementCard achievement={a} />
+                {canWrite && (
+                  <form className="form" action={saveAchievementSharing}>
+                    <input type="hidden" name="achievement_id" value={a.id} />
+                    <label className="checkbox">
+                      <input
+                        type="checkbox"
+                        name="share_evidence"
+                        defaultChecked={
+                          a.achievement_sharing?.share_evidence ?? false
+                        }
+                      />
+                      Share the approved submission links and explanation on my
+                      public passport
+                    </label>
+                    <label className="field">
+                      Related portfolio project (optional)
+                      <select
+                        name="project_id"
+                        defaultValue={a.achievement_sharing?.project_id ?? ""}
+                      >
+                        <option value="">No related project</option>
+                        {projects.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.title}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <p className="muted">
+                      This links an existing project; it does not copy it or
+                      change the approved work.
+                    </p>
+                    <SubmitButton>Save sharing choices</SubmitButton>
+                  </form>
+                )}
+              </section>
             ))}
             {!achievements.length && (
-              <Empty title="Build toward your first achievement">
-                Company-approved submissions will appear here. A pending onchain
-                proof is clearly marked.
+              <Empty title="Your passport is useful before your first achievement">
+                Keep adding projects. Company challenges are an optional way to
+                earn recognition.{" "}
+                <Link href="/portal/talent/passport">Open my passport</Link>
               </Empty>
             )}
           </>
+        )}
+        {role === "talent" && section === "settings" && (
+          <section className="panel">
+            <h2>Account access</h2>
+            <p className="muted">
+              One ProofPak account works for your personal passport and company
+              workspace.
+            </p>
+            <div className="button-row section-spacer">
+              <Link className="text-link" href="/forgot-password">
+                Reset password
+              </Link>
+              <Link className="text-link" href="/resend-confirmation">
+                Resend confirmation email
+              </Link>
+              <Link className="text-link" href="/portal/talent/profile">
+                Edit profile and privacy
+              </Link>
+            </div>
+          </section>
         )}
         {role === "company" && section === "create" && (
           <>
@@ -711,7 +820,8 @@ export default async function Portal({
                     />
                     <label className="field">
                       Review decision
-                      <select name="decision">
+                      <select name="decision" required defaultValue="">
+                        <option value="">Choose a decision</option>
                         <option value="approved">
                           Approve and issue achievement
                         </option>
