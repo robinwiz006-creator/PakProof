@@ -61,7 +61,9 @@ export default async function Payments() {
                 {i.paid_milestones?.paid_projects?.title} ·{" "}
                 {i.paid_milestones?.title}
               </h2>
-              <span className="tag">{paymentStatusLabel(i.status)}</span>
+              <span className={`tag status-${i.status}`}>
+                {paymentStatusLabel(i.status)}
+              </span>
               <p>{tokenAmount(String(i.amount_units))} test USDC</p>
               <p className="hash">From {i.payer_wallet}</p>
               <p className="hash">To {i.recipient_wallet}</p>

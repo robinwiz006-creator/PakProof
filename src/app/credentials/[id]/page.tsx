@@ -138,14 +138,19 @@ export default async function CredentialPage({
           Solana devnet · v3 organization credential claim
         </p>
         {proof && (
-          <a
-            className="text-link"
-            href={explorerLink(proof.signature)}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Inspect recorded transaction ↗
-          </a>
+          <>
+            <p className="hash section-spacer">
+              Transaction signature: {proof.signature}
+            </p>
+            <a
+              className="text-link"
+              href={explorerLink(proof.signature)}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Inspect recorded transaction ↗
+            </a>
+          </>
         )}
         {!c.credential_evidence && (
           <p className="muted">

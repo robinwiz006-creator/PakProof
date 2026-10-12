@@ -9,6 +9,7 @@ for (const width of [320, 390]) {
       "/my-credentials",
       "/wallet",
       "/issuer-admin",
+      "/issuer-admin/40000000-0000-4000-8000-000000000001",
     ]) {
       await page.goto(route);
       await expect(page).toHaveURL(/\/sign-in/);

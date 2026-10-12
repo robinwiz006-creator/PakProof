@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { challenge } from "@/lib/data";
-import { isConfigured, supabase } from "@/lib/supabase/server";
+import { isConfigured, currentUser } from "@/lib/supabase/server";
 import { PageHeading, Tags, DemoNotice, ButtonLink } from "@/components/ui";
 import { Field, SubmitButton } from "@/components/forms";
 import { submitWork } from "@/lib/actions";
@@ -12,8 +12,7 @@ export default async function ChallengeDetail({
   const { id } = await params;
   const c = await challenge(id);
   if (!c) notFound();
-  const db = isConfigured() ? await supabase() : null;
-  const user = db ? (await db.auth.getUser()).data.user : null;
+  const user = isConfigured() ? await currentUser() : null;
   const closed =
     c.status !== "published" ||
     new Date(c.deadline + "T23:59:59Z") < new Date();
@@ -24,6 +23,11 @@ export default async function ChallengeDetail({
         title={c.title}
         description="A practical opportunity to show how you think and what you can build."
       />
+      <p className="workflow-callout">
+        Unpaid skill challenge · Review the brief → Submit evidence → Receive
+        feedback. Approval can earn an achievement; it does not guarantee a job
+        or payment.
+      </p>
       {!isConfigured() && <DemoNotice />}
       <div className="detail-grid">
         <div>

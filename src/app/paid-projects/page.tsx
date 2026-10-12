@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { PageHeading, Empty, Tags } from "@/components/ui";
-import { isConfigured, supabase } from "@/lib/supabase/server";
-import { projectData } from "@/lib/paid-data";
-import { tokenAmount } from "@/lib/payments";
+import { redirect } from "next/navigation";
+import { PageHeading, Empty } from "@/components/ui";
+import { isConfigured, supabase, currentUser } from "@/lib/supabase/server";
+import { projectListing } from "@/lib/opportunity-presentation";
+import { PaidProjectBrowser } from "@/components/paid-project-browser";
 export const dynamic = "force-dynamic";
 export default async function PaidProjects({
   searchParams,
@@ -10,19 +11,21 @@ export default async function PaidProjects({
   searchParams: Promise<{ view?: string; message?: string }>;
 }) {
   const { view, message } = await searchParams;
-  let projects: ReturnType<typeof projectData>[] = [];
+  let projects: ReturnType<typeof projectListing>[] = [];
   let unavailable = false;
   let signedIn = false;
   if (isConfigured()) {
     const db = await supabase();
-    const {
-      data: { user },
-    } = await db.auth.getUser();
+    const user = await currentUser();
     signedIn = Boolean(user);
+    if ((view === "mine" || view === "company") && !user) redirect("/sign-in");
     let query = db
       .from("paid_projects")
-      .select("*,companies(name)")
-      .order("created_at", { ascending: false });
+      .select(
+        "id,title,description,skills,deadline,budget_units,status,companies(name)",
+      )
+      .order("created_at", { ascending: false })
+      .limit(100);
     if (view === "company" && user) {
       const { data: members } = await db
         .from("company_memberships")
@@ -47,7 +50,7 @@ export default async function PaidProjects({
         .gte("deadline", new Date().toISOString().slice(0, 10));
     const { data, error } = await query;
     unavailable = Boolean(error);
-    projects = (data ?? []).map(projectData);
+    projects = (data ?? []).map(projectListing);
   } else unavailable = true;
   return (
     <div className="container page">
@@ -106,6 +109,10 @@ export default async function PaidProjects({
           {message}
         </p>
       )}
+      <p className="muted section-spacer">
+        Showing up to 100 newest accessible projects. Search and filters apply
+        to this list.
+      </p>
       {unavailable ? (
         <p className="notice">
           Paid projects require the new Supabase migration. No projects or
@@ -117,22 +124,7 @@ export default async function PaidProjects({
           own projects.
         </Empty>
       ) : (
-        <div className="challenge-grid section-spacer">
-          {projects.map((p) => (
-            <Link className="panel" href={`/paid-projects/${p.id}`} key={p.id}>
-              <p className="eyebrow">
-                {p.companies?.name} · {p.status}
-              </p>
-              <h2>{p.title}</h2>
-              <p className="muted">{p.description.slice(0, 180)}</p>
-              <Tags values={p.skills} />
-              <p className="section-spacer">
-                {tokenAmount(p.budget_units)} test USDC · Due {p.deadline}
-              </p>
-              <span className="text-link">View scope and milestones ↗</span>
-            </Link>
-          ))}
-        </div>
+        <PaidProjectBrowser items={projects} />
       )}
     </div>
   );

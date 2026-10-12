@@ -20,21 +20,26 @@ export default async function MyCredentials({
 }) {
   const { db, user } = await credentialWorkspace();
   const { message } = await searchParams;
-  const { data, error } = await db
-    .from("credentials")
-    .select(credentialSelect)
-    .eq("recipient_id", user.id)
-    .order("created_at", { ascending: false });
-  const { data: orgs } = await db
-    .from("organizations")
-    .select("*,companies(name)")
-    .eq("organization_type", "university")
-    .eq("issuer_status", "authorized");
-  const { data: requests } = await db
-    .from("qualification_requests")
-    .select("*")
-    .eq("recipient_id", user.id)
-    .order("created_at", { ascending: false });
+  const [credentialResult, orgResult, requestResult] = await Promise.all([
+    db
+      .from("credentials")
+      .select(credentialSelect)
+      .eq("recipient_id", user.id)
+      .order("created_at", { ascending: false }),
+    db
+      .from("organizations")
+      .select("*,companies(name)")
+      .eq("organization_type", "university")
+      .eq("issuer_status", "authorized"),
+    db
+      .from("qualification_requests")
+      .select("*")
+      .eq("recipient_id", user.id)
+      .order("created_at", { ascending: false }),
+  ]);
+  const { data, error } = credentialResult;
+  const orgs = orgResult.data;
+  const requests = requestResult.data;
   return (
     <div className="container page">
       <PageHeading
@@ -50,6 +55,11 @@ export default async function MyCredentials({
           Organization workspace
         </Link>
       </div>
+      <p className="workflow-callout">
+        Review the issuer and record → Accept or decline → Choose whether to
+        publish. Acceptance alone does not make a credential public or onchain
+        verified.
+      </p>
       {message && (
         <p className="notice section-spacer" role="status">
           {message}
@@ -76,12 +86,14 @@ export default async function MyCredentials({
                 <select
                   id={`accept-${c.id}`}
                   name="acceptance"
+                  required
                   defaultValue={
-                    c.credential_preferences.acceptance === "accepted"
-                      ? "accepted"
-                      : "declined"
+                    c.credential_preferences.acceptance === "pending"
+                      ? ""
+                      : c.credential_preferences.acceptance
                   }
                 >
+                  <option value="">Choose accept or decline</option>
                   <option value="declined">Decline / keep off passport</option>
                   <option value="accepted">Accept credential</option>
                 </select>

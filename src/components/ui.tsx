@@ -79,6 +79,7 @@ export function ChallengeCard({ challenge: c }: { challenge: Challenge }) {
       <div className="challenge-meta">
         <span className="company-avatar">{c.companies?.name?.[0] ?? "C"}</span>
         <span>{c.companies?.name ?? "Company challenge"}</span>
+        <span className="tag">Unpaid</span>
         <span className="level">{c.difficulty}</span>
       </div>
       <h3>{c.title}</h3>

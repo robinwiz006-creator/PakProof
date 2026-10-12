@@ -1,13 +1,13 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, Fingerprint } from "lucide-react";
+import { Menu, X, Fingerprint, ArrowUpRight } from "lucide-react";
 import { useState } from "react";
 export function Navigation({ signedIn = false }: { signedIn?: boolean }) {
   const [open, setOpen] = useState(false);
   const path = usePathname();
   return (
-    <header className="site-header">
+    <header className={`site-header ${path === "/" ? "marketing-header" : ""}`}>
       <div className="nav-wrap">
         <Link className="brand" href="/">
           <span className="brand-mark">
@@ -30,27 +30,30 @@ export function Navigation({ signedIn = false }: { signedIn?: boolean }) {
             href="/opportunities"
             onClick={() => setOpen(false)}
           >
-            Opportunities
+            Explore Opportunities
           </Link>
           <Link href="/how-it-works" onClick={() => setOpen(false)}>
             How it works
           </Link>
-          <Link href="/portal/company" onClick={() => setOpen(false)}>
-            For companies
+          <Link
+            href={signedIn ? "/organizations" : "/#organizations"}
+            onClick={() => setOpen(false)}
+          >
+            For Organizations
           </Link>
           <Link
             href={signedIn ? "/portal/talent/passport" : "/sign-in"}
             onClick={() => setOpen(false)}
           >
-            {signedIn ? "My passport" : "Sign in"}
+            {signedIn ? "My passport" : "Log In"}
           </Link>
           <Link
             className="button small"
             href={signedIn ? "/portal/talent" : "/sign-up"}
             onClick={() => setOpen(false)}
           >
-            {signedIn ? "My dashboard" : "Get started"}{" "}
-            <span aria-hidden="true">↗</span>
+            {signedIn ? "My dashboard" : "Get Started"}{" "}
+            <ArrowUpRight size={14} aria-hidden="true" />
           </Link>
         </nav>
       </div>

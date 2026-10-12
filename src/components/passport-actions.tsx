@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { ConfirmForm } from "./confirm-form";
 import { deleteProject } from "@/lib/actions";
 export function SharePassport({ slug }: { slug: string }) {
   const [message, setMessage] = useState("");
@@ -30,21 +31,16 @@ export function SharePassport({ slug }: { slug: string }) {
 }
 export function RemoveProject({ id }: { id: string }) {
   return (
-    <form
+    <ConfirmForm
       action={deleteProject}
-      onSubmit={(e) => {
-        if (
-          !window.confirm(
-            "Remove this project from your passport? Approved achievements will stay unchanged.",
-          )
-        )
-          e.preventDefault();
-      }}
+      title="Remove this portfolio project?"
+      message="The project will be removed from your passport. Approved achievement facts and historical proofs stay unchanged."
+      label="Remove project"
     >
       <input type="hidden" name="project_id" value={id} />
       <button type="submit" className="text-link">
         Remove project
       </button>
-    </form>
+    </ConfirmForm>
   );
 }

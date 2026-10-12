@@ -1,5 +1,6 @@
-import { supabase, isConfigured } from "@/lib/supabase/server";
+import { currentUser, isConfigured } from "@/lib/supabase/server";
 import type { Metadata } from "next";
+import { WorkspaceFrame } from "@/components/workspace-frame";
 import { Navigation } from "@/components/navigation";
 import Link from "next/link";
 import "./globals.css";
@@ -9,7 +10,7 @@ export const metadata: Metadata = {
     template: "%s | ProofPak",
   },
   description:
-    "A skill passport built through real projects and company challenges. ProofPak for companies helps companies discover talent through evidence.",
+    "Build your professional identity with a Skill Passport, organization-issued credentials, evidence of your work, and optional opportunities.",
 };
 export default async function RootLayout({
   children,
@@ -18,8 +19,7 @@ export default async function RootLayout({
 }) {
   let signedIn = false;
   if (isConfigured()) {
-    const db = await supabase();
-    signedIn = Boolean((await db.auth.getUser()).data.user);
+    signedIn = Boolean(await currentUser());
   }
   return (
     <html lang="en">
@@ -28,17 +28,29 @@ export default async function RootLayout({
           Skip to content
         </a>
         <Navigation signedIn={signedIn} />
-        <main id="main">{children}</main>
+        <main id="main">
+          <WorkspaceFrame>{children}</WorkspaceFrame>
+        </main>
         <footer className="site-footer">
           <div>
             <Link className="brand" href="/">
               ProofPak
             </Link>
-            <p>Opportunity starts with evidence.</p>
+            <p>
+              Skills, credentials, and evidence of your work. One professional
+              record.
+            </p>
+            <p className="footer-disclosure">
+              Hackathon MVP · Solana devnet proofs and test-token payments. No
+              guaranteed earnings.
+            </p>
           </div>
           <div>
             <Link href="/how-it-works">How it works</Link>
-            <Link href="/challenges">Explore challenges</Link>
+            <Link href="/opportunities">Explore Opportunities</Link>
+            <Link href="/challenges">Skill Challenges</Link>
+            <Link href="/paid-projects">Paid Projects</Link>
+            <Link href="/#organizations">For Organizations</Link>
             <span>Solana devnet · Hackathon MVP</span>
           </div>
         </footer>
