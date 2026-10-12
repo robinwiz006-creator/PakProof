@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { ArrowUpRight, Fingerprint, MoveUpRight, Check } from "lucide-react";
+import {
+  ArrowUpRight,
+  ArrowDownLeft,
+  Fingerprint,
+  MoveUpRight,
+  Check,
+} from "lucide-react";
 import { ButtonLink } from "@/components/ui";
 import { MarketingPassport } from "@/components/marketing-passport";
 import {
@@ -44,7 +50,9 @@ export default function Home() {
         <div className="hero-product">
           <div className="product-caption">
             <span>YOUR PROFESSIONAL RECORD</span>
-            <span>IN ONE PLACE ↙</span>
+            <span>
+              IN ONE PLACE <ArrowDownLeft size={13} aria-hidden="true" />
+            </span>
           </div>
           <MarketingPassport />
           <p className="product-footnote">

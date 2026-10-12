@@ -2199,3 +2199,9 @@ body:has(.marketing-home) .site-footer a:focus-visible {
   outline: 3px solid #9a3b20;
   outline-offset: 4px;
 }
+
+.product-caption > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}

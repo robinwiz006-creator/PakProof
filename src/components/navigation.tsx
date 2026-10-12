@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, Fingerprint } from "lucide-react";
+import { Menu, X, Fingerprint, ArrowUpRight } from "lucide-react";
 import { useState } from "react";
 export function Navigation({ signedIn = false }: { signedIn?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -53,7 +53,7 @@ export function Navigation({ signedIn = false }: { signedIn?: boolean }) {
             onClick={() => setOpen(false)}
           >
             {signedIn ? "My dashboard" : "Get Started"}{" "}
-            <span aria-hidden="true">↗</span>
+            <ArrowUpRight size={14} aria-hidden="true" />
           </Link>
         </nav>
       </div>

@@ -58,6 +58,7 @@ The earlier fix's additional source and regression files are preserved in ancest
 - Full desktop/mobile browser suite: 36 tests passed. After final refinements, 10 affected homepage/navigation tests passed again, with a fresh production build.
 - Widths: 320, 390, and 1280 pixels; no horizontal overflow in the checked layouts.
 - Local disposable PostgreSQL tests passed for ownership, RLS, issuer authorization, evidence privacy, wallet controls, payment boundaries, and historical record/proof preservation. Hosted migrations were not applied.
+- One browser-test launch was blocked by the local screenshot server already using its port. That server was stopped, and the tests were rerun; no unresolved test failure remains.
 - Screenshots inspected for desktop and mobile. Focus states and small-text contrast were reviewed; no automated accessibility audit is claimed.
 
 Browser runs used the existing explicitly unconfigured demo test environment. Populated listing presentation/error branches use labeled automated fixtures. Signed-in navigation presentation tests do not prove a real hosted login session works.
