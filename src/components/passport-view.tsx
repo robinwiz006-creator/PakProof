@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PassportCredentials } from "./passport-credentials";
 import type { Profile, Project, Achievement } from "@/lib/types";
 import { Tags, AchievementCard } from "./ui";
 import { SharePassport } from "./passport-actions";
@@ -84,7 +85,7 @@ export function ApprovedEvidence({
     </section>
   );
 }
-export function PassportView({
+export async function PassportView({
   profile: p,
   projects,
   achievements,
@@ -95,6 +96,10 @@ export function PassportView({
   achievements: Achievement[];
   preview?: boolean;
 }) {
+  const credentialSection = await PassportCredentials({
+    recipientId: p.id,
+    preview,
+  });
   return (
     <>
       <p className="eyebrow">
@@ -166,6 +171,7 @@ export function PassportView({
               ))}
             </section>
           )}
+          {credentialSection}
           {achievements.length > 0 && (
             <section id="achievements" className="section-spacer">
               <h2>Achievements</h2>
@@ -185,7 +191,7 @@ export function PassportView({
               ))}
             </section>
           )}
-          {!projects.length && !achievements.length && (
+          {!projects.length && !achievements.length && !credentialSection && (
             <p className="notice">
               This passport is starting out. Projects and achievements will
               appear as they are added.

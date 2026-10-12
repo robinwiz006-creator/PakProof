@@ -635,6 +635,9 @@ button:focus-visible {
   padding: 34px 20px 34px 0;
   border-right: 1px solid var(--border);
 }
+.sidebar nav {
+  display: block;
+}
 .sidebar .eyebrow {
   margin-bottom: 20px;
 }

@@ -6,6 +6,10 @@ For the passport-first release, follow [Phase 1 implementation and manual upgrad
 
 For a safe checklist to activate the existing implementation, see [Get the MVP operational](docs/GO-LIVE.md). Run `npm run doctor` for read-only service checks.
 
+## Credentials and optional wallets on this branch
+
+See [credentials/wallet delivery and manual setup](docs/CREDENTIALS-WALLETS-DELIVERY.md). This branch adds authorized organizations, direct credentials, recipient consent, private degree verification requests, v3 devnet proofs, and signed wallet ownership. The three new migrations are **unapplied** by this task. Paid projects and USDC settlement remain unfinished; wallet linking does not enable payments. No new feature is claimed tested in production.
+
 ## What you can use now
 
 - Responsive landing page, How It Works, searchable challenge browser and details.

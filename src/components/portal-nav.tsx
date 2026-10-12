@@ -53,6 +53,18 @@ export function PortalNav({
             {label}
           </Link>
         ))}
+        <Link href="/my-credentials">
+          <Award size={16} />
+          My Credentials
+        </Link>
+        <Link href="/organizations">
+          <Building2 size={16} />
+          Organizations
+        </Link>
+        <Link href="/wallet">
+          <UserRound size={16} />
+          Wallet (optional)
+        </Link>
       </nav>
       <div className="switch">
         <Link href={`/portal/${role === "company" ? "talent" : "company"}`}>
