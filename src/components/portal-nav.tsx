@@ -14,6 +14,7 @@ import {
   Users,
   Wallet,
   CreditCard,
+  ArrowUpRight,
 } from "lucide-react";
 export function PortalNav() {
   const pathname = usePathname();
@@ -82,7 +83,7 @@ export function PortalNav() {
       <div className="switch">
         <Link href={`/portal/${role === "company" ? "talent" : "company"}`}>
           {role === "company" ? "Open talent portal" : "Open company workspace"}{" "}
-          ↗
+          <ArrowUpRight size={14} aria-hidden="true" />
         </Link>
       </div>
     </aside>

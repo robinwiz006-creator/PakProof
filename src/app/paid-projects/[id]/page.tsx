@@ -46,117 +46,145 @@ export default async function PaidProjectPage({
   if (error || !data) notFound();
   const p = projectData(data);
   const { message } = await searchParams;
-  const { data: milestones } = await db
-    .from("paid_milestones")
-    .select("*")
-    .eq("project_id", id)
-    .order("position");
-  const ms = (milestones ?? []).map(milestoneData);
-  const { data: member } = user
-    ? await db
-        .from("company_memberships")
-        .select("role")
-        .eq("company_id", p.company_id)
-        .eq("user_id", user.id)
-        .maybeSingle()
-    : { data: null };
+  const [milestoneResult, memberResult, appResult, offerResult] =
+    await Promise.all([
+      db
+        .from("paid_milestones")
+        .select("*")
+        .eq("project_id", id)
+        .order("position"),
+      user
+        ? db
+            .from("company_memberships")
+            .select("role")
+            .eq("company_id", p.company_id)
+            .eq("user_id", user.id)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      user
+        ? db
+            .from("paid_project_applications")
+            .select("*")
+            .eq("project_id", id)
+            .order("created_at")
+        : Promise.resolve({ data: [], error: null }),
+      user && p.current_offer_id
+        ? db
+            .from("paid_project_offers")
+            .select("*")
+            .eq("id", p.current_offer_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+    ]);
+  if (
+    [milestoneResult, memberResult, appResult, offerResult].some((r) => r.error)
+  )
+    throw new Error("Project terms and applications could not be loaded.");
+  const ms = (milestoneResult.data ?? []).map(milestoneData);
+  const member = memberResult.data,
+    apps = appResult.data;
   const isCompany = Boolean(member),
     isWorker = user?.id === p.worker_id;
-  const { data: apps } = user
-    ? await db
-        .from("paid_project_applications")
-        .select("*")
-        .eq("project_id", id)
-        .order("created_at")
-    : { data: [] };
   const ownApp = (apps ?? []).find((a) => a.worker_id === user?.id);
-  const { data: offers } = user
-    ? await db
-        .from("paid_project_offers")
-        .select("*")
-        .eq("project_id", id)
-        .order("version", { ascending: false })
-    : { data: [] };
-  const offer = ((offers as unknown as PaidOffer[]) ?? []).find(
-    (o) => o.id === p.current_offer_id,
-  );
-  const { data: submissions } = user
-    ? await db
-        .from("paid_milestone_submissions")
-        .select("*")
-        .in(
-          "milestone_id",
-          ms.map((m) => m.id),
-        )
-        .order("created_at")
-    : { data: [] };
-  const { data: reviews } = user
-    ? await db
-        .from("paid_milestone_reviews")
-        .select("*")
-        .in(
-          "milestone_id",
-          ms.map((m) => m.id),
-        )
-        .order("created_at")
-    : { data: [] };
-  const { data: org } = isCompany
-    ? await db
-        .from("organizations")
-        .select("id")
-        .eq("company_id", p.company_id)
-        .maybeSingle()
-    : { data: null };
-  const { data: wallets } = user
-    ? await db
-        .from("wallet_connections")
-        .select("id,wallet_address,purpose,organization_id")
-        .eq("user_id", user.id)
-        .is("disconnected_at", null)
-    : { data: [] };
-  const payerWallets = (wallets ?? []).filter(
-    (w) => w.purpose === "company_payer" && w.organization_id === org?.id,
-  );
-  const accountWallets = (wallets ?? []).filter((w) => w.purpose === "account");
-  const { data: payout } =
-    isWorker || isCompany
-      ? await db
+  const offer = offerResult.data as unknown as PaidOffer | null;
+  const ids = ms.map((m) => m.id),
+    party = isWorker || isCompany;
+  const [
+    submissionResult,
+    reviewResult,
+    orgResult,
+    walletResult,
+    payoutResult,
+    intentResult,
+    receiptResult,
+    historyResult,
+  ] = await Promise.all([
+    party && ids.length
+      ? db
+          .from("paid_milestone_submissions")
+          .select("*")
+          .in("milestone_id", ids)
+          .order("created_at")
+      : Promise.resolve({ data: [], error: null }),
+    party && ids.length
+      ? db
+          .from("paid_milestone_reviews")
+          .select("*")
+          .in("milestone_id", ids)
+          .order("created_at")
+      : Promise.resolve({ data: [], error: null }),
+    isCompany
+      ? db
+          .from("organizations")
+          .select("id")
+          .eq("company_id", p.company_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    party && user
+      ? db
+          .from("wallet_connections")
+          .select("id,wallet_address,purpose,organization_id")
+          .eq("user_id", user.id)
+          .is("disconnected_at", null)
+      : Promise.resolve({ data: [], error: null }),
+    party && data.payout_authorization_id
+      ? db
           .from("paid_payout_authorizations")
           .select("wallet_address")
           .eq("id", data.payout_authorization_id)
           .maybeSingle()
-      : { data: null };
-  const { data: intents } =
-    isWorker || isCompany
-      ? await db
+      : Promise.resolve({ data: null, error: null }),
+    party && ids.length
+      ? db
           .from("payment_intents")
           .select("*,payment_attempts(*)")
-          .in(
-            "milestone_id",
-            ms.map((m) => m.id),
-          )
+          .in("milestone_id", ids)
           .order("created_at", { ascending: false })
-      : { data: [] };
-  const { data: receipts } =
-    isWorker || isCompany
-      ? await db
+      : Promise.resolve({ data: [], error: null }),
+    party && ids.length
+      ? db
           .from("payment_receipts")
           .select("milestone_id,signature")
-          .in(
-            "milestone_id",
-            ms.map((m) => m.id),
-          )
-      : { data: [] };
-  const { data: history } =
-    isWorker || isCompany
-      ? await db
+          .in("milestone_id", ids)
+      : Promise.resolve({ data: [], error: null }),
+    party
+      ? db
           .from("paid_work_history")
           .select("*")
           .eq("project_id", id)
           .maybeSingle()
-      : { data: null };
+      : Promise.resolve({ data: null, error: null }),
+  ]);
+  if (
+    [
+      submissionResult,
+      reviewResult,
+      orgResult,
+      walletResult,
+      payoutResult,
+      intentResult,
+      receiptResult,
+      historyResult,
+    ].some((r) => r.error)
+  )
+    throw new Error(
+      "Milestone evidence and payment records could not be loaded. Please try again.",
+    );
+  const submissions = submissionResult.data,
+    reviews = reviewResult.data,
+    org = orgResult.data,
+    payout = payoutResult.data,
+    intents = intentResult.data,
+    receipts = receiptResult.data,
+    history = historyResult.data;
+  const payerWallets = (walletResult.data ?? []).filter(
+    (w) => w.purpose === "company_payer" && w.organization_id === org?.id,
+  );
+  const accountWallets = (walletResult.data ?? []).filter(
+    (w) => w.purpose === "account",
+  );
   return (
-    <div className="container page">
+    <div className="container page paid-detail">
       <PageHeading
         eyebrow={`${p.companies?.name ?? "Company"} · ${p.status}`}
         title={p.title}
@@ -176,6 +204,11 @@ export default async function PaidProjectPage({
           My passport
         </Link>
       </div>
+      <p className="workflow-callout">
+        Apply → Be selected → Accept the exact milestone terms → Submit work →
+        Receive review → Organization signs payment. Approval and payment are
+        separate states.
+      </p>
       {message && (
         <p className="notice section-spacer" role="status">
           {message}

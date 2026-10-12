@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Buffer } from "buffer";
 import { getWallets } from "@wallet-standard/app";
@@ -14,13 +14,41 @@ import {
 export function WalletManager({
   organizations,
 }: {
-  organizations: { id: string; name: string }[];
+  organizations: {
+    id: string;
+    name: string;
+    issuerStatus?: string;
+    role?: string;
+  }[];
 }) {
   const [wallet, setWallet] = useState("Phantom"),
     [purpose, setPurpose] = useState("account"),
     [org, setOrg] = useState(organizations[0]?.id ?? ""),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState("");
+  const [available, setAvailable] = useState<string[]>([]);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    const registry = getWallets();
+    function update() {
+      setAvailable(
+        registry
+          .get()
+          .filter(
+            (w) =>
+              StandardConnect in w.features && SolanaSignMessage in w.features,
+          )
+          .map((w) => w.name),
+      );
+    }
+    update();
+    const offRegister = registry.on("register", update),
+      offUnregister = registry.on("unregister", update);
+    return () => {
+      offRegister();
+      offUnregister();
+    };
+  }, []);
   const router = useRouter();
   async function link() {
     setBusy(true);
@@ -36,7 +64,7 @@ export function WalletManager({
         );
       if (!w)
         throw new Error(
-          `Enable ${wallet} with message signing support, then reload.`,
+          `No ${wallet} message-signing connection was detected. Enable the extension or open this page inside the wallet app’s browser, then try again.`,
         );
       const { accounts } = await (
         w.features[
@@ -93,22 +121,80 @@ export function WalletManager({
   }
   return (
     <section className="panel section-spacer">
-      <h2>Link a wallet</h2>
+      <p className="eyebrow">MESSAGE SIGNING · NO TRANSACTION FEE</p>
+      <h2>Connect for a specific purpose</h2>
       <p className="muted">
         Your email account stays the same. Prove wallet control with a
         short-lived message. Never enter a seed phrase or private key into
         ProofPak.
       </p>
+      <div className="wallet-methods">
+        <h3>Choose a connection method</h3>
+        <p>
+          <strong>Desktop:</strong> use an enabled Phantom or Solflare extension
+          with message signing.
+        </p>
+        <p>
+          <strong>Mobile:</strong> open this exact website in your wallet’s
+          in-app browser, sign in with your email, and return to Wallet
+          ownership. Phantom’s in-app browser remains supported when it exposes
+          the required signing features.
+        </p>
+        <button
+          type="button"
+          className="button secondary"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(
+                `${window.location.origin}/wallet`,
+              );
+              setCopied(true);
+            } catch {
+              setMessage(
+                "Copy the website address from your browser and open /wallet inside your wallet app.",
+              );
+            }
+          }}
+        >
+          {copied ? "Wallet page URL copied" : "Copy wallet page URL"}
+        </button>
+        <p className="muted">
+          Desktop-to-phone QR pairing is not available in this version. Opening
+          a wallet app alone does not connect or prove ownership.
+        </p>
+        <p className="muted" role="status">
+          Detected message-signing wallets:{" "}
+          {available.length ? available.join(", ") : "none"}
+        </p>
+      </div>
       <label className="field">
         Wallet
-        <select value={wallet} onChange={(e) => setWallet(e.target.value)}>
+        <select
+          aria-label="Wallet"
+          value={wallet}
+          onChange={(e) => setWallet(e.target.value)}
+        >
           <option>Phantom</option>
           <option>Solflare</option>
         </select>
       </label>
       <label className="field">
         Purpose
-        <select value={purpose} onChange={(e) => setPurpose(e.target.value)}>
+        <select
+          aria-label="Purpose"
+          value={purpose}
+          onChange={(e) => {
+            const next = e.target.value;
+            setPurpose(next);
+            setOrg(
+              organizations.find((o) =>
+                next === "company_payer"
+                  ? o.role === "owner"
+                  : o.issuerStatus === "authorized",
+              )?.id ?? "",
+            );
+          }}
+        >
           <option value="account">
             My account / receive milestone payments
           </option>
@@ -120,19 +206,43 @@ export function WalletManager({
           </option>
         </select>
       </label>
+      <p className="wallet-purpose-note">
+        {purpose === "account"
+          ? "Personal wallet: associate your account and receive approved milestone payments. Your passport needs no wallet."
+          : purpose === "company_payer"
+            ? "Company payer: an organization owner authorizes this wallet for signing devnet payments. This does not authorize credential issuance."
+            : "Credential issuer: an authorized organization member proves control of a signing wallet. Issuer authorization is still checked separately."}
+      </p>
       {purpose !== "account" && (
         <label className="field">
           Organization
-          <select value={org} onChange={(e) => setOrg(e.target.value)}>
+          <select
+            aria-label="Organization"
+            value={org}
+            onChange={(e) => setOrg(e.target.value)}
+          >
             <option value="">Select organization</option>
-            {organizations.map((o) => (
-              <option value={o.id} key={o.id}>
-                {o.name}
-              </option>
-            ))}
+            {organizations
+              .filter((o) =>
+                purpose === "company_payer"
+                  ? o.role === "owner"
+                  : o.issuerStatus === "authorized",
+              )
+              .map((o) => (
+                <option value={o.id} key={o.id}>
+                  {o.name}
+                </option>
+              ))}
           </select>
         </label>
       )}
+      <ol className="wallet-instructions">
+        <li>Connect the account you intend to use.</li>
+        <li>Read and sign ProofPak’s short-lived ownership message.</li>
+        <li>
+          Wait for the server to verify ownership and show the linked wallet.
+        </li>
+      </ol>
       <button
         className="button"
         disabled={busy || (purpose !== "account" && !org)}

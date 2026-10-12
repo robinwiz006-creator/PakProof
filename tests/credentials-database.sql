@@ -114,5 +114,21 @@ set local request.jwt.claim.sub='40000000-0000-4000-8000-000000000001';
 do $$begin
  begin perform public.issue_credential(current_setting('test.organization_id')::uuid,'50000000-0000-4000-8000-000000000001','Suspended credential','degree','A suspended institution must not issue another credential.',current_date,null,'','','');raise exception 'Suspended issuance allowed';exception when raise_exception then if sqlerrm='Suspended issuance allowed' then raise;end if;end;
 end$$;
+-- A real administrator who is also a member must still be unable to self-authorize.
+reset role;
+insert into public.company_memberships(company_id,user_id,role)
+select company_id,'70000000-0000-4000-8000-000000000001','owner' from public.organizations where id=current_setting('test.organization_id')::uuid;
+set local role authenticated;
+set local request.jwt.claim.sub='70000000-0000-4000-8000-000000000001';
+do $$begin
+ begin
+  perform public.authorize_issuer(current_setting('test.organization_id')::uuid,'A conflicted administrator must not grant issuer authority.',true,'Fixture University','An isolated test university, not a real authorized institution.','https://example.com');
+  raise exception 'Conflicted administrator self-authorized';
+ exception when raise_exception then
+  if sqlerrm<>'Administrators cannot authorize an organization they belong to' then raise;end if;
+ end;
+end$$;
+set local request.jwt.claim.sub='60000000-0000-4000-8000-000000000001';
+do $$begin if exists(select 1 from public.issuer_authorizations) then raise exception 'Private admin audit leaked to ordinary user';end if;end$$;
 rollback;
 \echo 'PASS: organization trust, issuance, acceptance, evidence privacy, revocation, requests, immutable facts, and unauthorized attempts'

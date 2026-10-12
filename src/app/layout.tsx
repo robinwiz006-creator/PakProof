@@ -1,5 +1,6 @@
 import { currentUser, isConfigured } from "@/lib/supabase/server";
 import type { Metadata } from "next";
+import { WorkspaceFrame } from "@/components/workspace-frame";
 import { Navigation } from "@/components/navigation";
 import Link from "next/link";
 import "./globals.css";
@@ -27,7 +28,9 @@ export default async function RootLayout({
           Skip to content
         </a>
         <Navigation signedIn={signedIn} />
-        <main id="main">{children}</main>
+        <main id="main">
+          <WorkspaceFrame>{children}</WorkspaceFrame>
+        </main>
         <footer className="site-footer">
           <div>
             <Link className="brand" href="/">

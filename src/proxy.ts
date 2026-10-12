@@ -1,6 +1,16 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 export async function proxy(request: NextRequest) {
+  // Fail closed before streaming: isolated fixtures are never a public product route.
+  if (
+    request.nextUrl.pathname === "/test-ui" &&
+    (process.env.PROOFPAK_E2E !== "1" ||
+      Boolean(
+        process.env.NEXT_PUBLIC_SUPABASE_URL &&
+        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+      ))
+  )
+    return new NextResponse("Not found", { status: 404 });
   let response = NextResponse.next({ request });
   if (
     !process.env.NEXT_PUBLIC_SUPABASE_URL ||

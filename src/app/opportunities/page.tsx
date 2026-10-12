@@ -1,4 +1,9 @@
 import Link from "next/link";
+import { Suspense } from "react";
+import {
+  LiveOpportunities,
+  OpportunitiesLoading,
+} from "@/components/live-opportunities";
 import { PageHeading } from "@/components/ui";
 export default function Opportunities() {
   return (
@@ -8,6 +13,12 @@ export default function Opportunities() {
         title="More ways to build your record."
         description="Your passport comes first. Challenges and paid projects are optional ways to practise, show work, and earn recognition."
       />
+      <section className="section-spacer">
+        <h2>Open opportunities</h2>
+        <Suspense fallback={<OpportunitiesLoading />}>
+          <LiveOpportunities />
+        </Suspense>
+      </section>
       <section className="panel section-spacer">
         <p className="eyebrow">SKILL CHALLENGES</p>
         <h2>Show your approach to a practical problem.</h2>

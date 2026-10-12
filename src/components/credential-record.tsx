@@ -6,7 +6,7 @@ export function CredentialRecord({
   credential: Credential;
 }) {
   return (
-    <article className="panel section-spacer">
+    <article className="credential-record section-spacer">
       <p className="eyebrow">
         ORGANIZATION-ISSUED · {c.credential_type.replaceAll("_", " ")}
       </p>
@@ -17,15 +17,19 @@ export function CredentialRecord({
         Issued by {c.issuer_name} · {c.issue_date}
       </p>
       <div className="tags">
-        <span className="tag">{credentialValidity(c)}</span>
+        <span className="tag">Validity: {credentialValidity(c)}</span>
         <span className="tag">
           Issuer {c.organizations?.issuer_status ?? "unverified"}
         </span>
-        <span className="tag">{c.credential_preferences.acceptance}</span>
+        <span className={`tag status-${c.credential_preferences.acceptance}`}>
+          {c.credential_preferences.acceptance === "pending"
+            ? "Awaiting recipient acceptance"
+            : c.credential_preferences.acceptance}
+        </span>
       </div>
       <p className="muted section-spacer">
         {c.credential_proofs?.length
-          ? "Proof recorded · open to check. "
+          ? "Transaction recorded · open the credential to check integrity. "
           : "Proof not yet anchored. "}
         Issuer authorization and blockchain integrity are separate checks.
       </p>

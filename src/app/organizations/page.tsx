@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ConfirmForm } from "@/components/confirm-form";
 import { CredentialAnchor } from "@/components/credential-anchor";
 import { PageHeading, Empty } from "@/components/ui";
 import { Field, SubmitButton } from "@/components/forms";
@@ -63,8 +64,13 @@ export default async function Organizations({
     <div className="container page">
       <PageHeading
         eyebrow="PROOFPAK ORGANIZATIONS"
-        title="Recognize real learning and work."
-        description="Issue credentials through an authorized organization. Challenges remain an optional way to assess skills."
+        title="Organization workspace"
+        description="Manage your organization, recognize work, and follow the next step for each credential."
+        action={
+          <Link className="button secondary" href="/portal/company/profile">
+            Organization profile
+          </Link>
+        }
       />
       <div className="button-row">
         <Link className="text-link" href="/portal/talent">
@@ -101,6 +107,31 @@ export default async function Organizations({
           database setup.
         </p>
       )}
+      <p className="workflow-callout">
+        Register your organization → Request administrator review → Issue
+        credentials when authorized → Recipients accept and choose visibility.
+        Challenges and paid work remain available through their own workspaces.
+      </p>
+      <div className="stats">
+        <div className="stat">
+          <span>Organizations</span>
+          <strong>{organizations.length}</strong>
+        </div>
+        <div className="stat">
+          <span>Authorized issuers</span>
+          <strong>{eligible.length}</strong>
+        </div>
+        <div className="stat">
+          <span>Issued credentials</span>
+          <strong>{credentials?.length ?? 0}</strong>
+        </div>
+        <div className="stat">
+          <span>Pending verification requests</span>
+          <strong>
+            {(requests ?? []).filter((r) => r.status === "pending").length}
+          </strong>
+        </div>
+      </div>
       <section className="section-spacer">
         <h2>Organization overview</h2>
         {organizations.length ? (
@@ -159,7 +190,7 @@ export default async function Organizations({
             <select id="orgtype" name="organization_type">
               {organizationTypes.map((t) => (
                 <option key={t} value={t}>
-                  {t}
+                  {t.replaceAll("_", " ")}
                 </option>
               ))}
             </select>
@@ -186,6 +217,10 @@ export default async function Organizations({
       {eligible.length > 0 && (
         <section className="panel section-spacer">
           <h2>Issue a credential</h2>
+          <p className="notice">
+            Issuance creates a private record for recipient acceptance.
+            Publishing and Solana anchoring are separate next steps.
+          </p>
           <p className="muted">
             Use an existing recipient’s published passport URL or slug. No email
             search is available. Evidence stays private unless the recipient
@@ -277,7 +312,12 @@ export default async function Organizations({
                     issue a replacement referencing this credential ID.
                     Revocation does not erase the historical record.
                   </p>
-                  <form action={revokeCredential}>
+                  <ConfirmForm
+                    action={revokeCredential}
+                    title="Revoke this credential?"
+                    message="This creates a permanent revocation event. The original claim and any historical transaction remain unchanged."
+                    label="Confirm revocation"
+                  >
                     <input type="hidden" name="credential_id" value={c.id} />
                     <Field
                       name="reason"
@@ -288,7 +328,7 @@ export default async function Organizations({
                       maxLength={2000}
                     />
                     <SubmitButton>Revoke credential</SubmitButton>
-                  </form>
+                  </ConfirmForm>
                 </details>
               )}
             </div>

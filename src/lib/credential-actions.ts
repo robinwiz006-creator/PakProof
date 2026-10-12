@@ -233,6 +233,11 @@ export async function disconnectWallet(form: FormData) {
   const { error } = await db.rpc("disconnect_wallet", {
     p_connection: v.connection_id,
   });
+  if (error)
+    go(
+      path,
+      "Wallet link could not be disconnected. It may be locked by an accepted project or pending payment. Resolve that first, refresh, and try again. No wallet link was changed.",
+    );
   result(error, path);
   revalidatePath(path);
   go(
