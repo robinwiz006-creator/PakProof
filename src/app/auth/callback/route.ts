@@ -9,14 +9,16 @@ export async function GET(request: Request) {
     if (!error)
       return NextResponse.redirect(
         new URL(
-          `/portal/${data.user?.user_metadata.preferred_role === "company" ? "company" : "talent"}`,
+          url.searchParams.get("purpose") === "recovery"
+            ? "/reset-password"
+            : `/portal/${data.user?.user_metadata.preferred_role === "company" ? "company" : "talent"}`,
           url.origin,
         ),
       );
   }
   return NextResponse.redirect(
     new URL(
-      "/sign-in?message=Email+confirmation+failed.+Request+a+new+link+or+sign+in.",
+      "/sign-in?message=Email+confirmation+failed.+Use+Resend+confirmation+or+request+a+new+password+reset+link.",
       url.origin,
     ),
   );

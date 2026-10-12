@@ -20,11 +20,13 @@ export function PortalNav({
 }) {
   const talent = [
     ["", "Overview", LayoutDashboard],
-    ["profile", "My profile", UserRound],
+    ["passport", "My Passport", UserRound],
     ["projects", "My projects", FolderGit2],
-    ["browse", "Browse challenges", Compass],
+    ["achievements", "My Achievements", Award],
+    ["browse", "Explore Challenges", Compass],
     ["submissions", "My submissions", Send],
-    ["passport", "Skill passport", Award],
+    ["settings", "Account Settings", UserRound],
+    ["profile", "Edit Profile", UserRound],
   ] as const;
   const company = [
     ["", "Overview", LayoutDashboard],
@@ -37,7 +39,7 @@ export function PortalNav({
   return (
     <aside className="sidebar">
       <p className="eyebrow">
-        {role === "company" ? "SKILLBOARD" : "PROOFPAK"}
+        {role === "company" ? "PROOFPAK FOR COMPANIES" : "PROOFPAK"}
       </p>
       <nav aria-label="Portal navigation">
         {(role === "company" ? company : talent).map(([path, label, Icon]) => (
@@ -54,7 +56,8 @@ export function PortalNav({
       </nav>
       <div className="switch">
         <Link href={`/portal/${role === "company" ? "talent" : "company"}`}>
-          {role === "company" ? "Open talent portal" : "Open SkillBoard"} ↗
+          {role === "company" ? "Open talent portal" : "Open company workspace"}{" "}
+          ↗
         </Link>
       </div>
     </aside>

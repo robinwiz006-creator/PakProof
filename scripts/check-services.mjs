@@ -82,8 +82,19 @@ if (base && adminKey) {
       "submission_reviews",
       "achievements",
       "blockchain_proofs",
+      "achievement_claims",
+      "achievement_evidence",
+      "achievement_sharing",
+      "achievement_claims",
+      "achievement_evidence",
+      "achievement_sharing",
     ]) {
-      const field = table === "company_memberships" ? "company_id" : "id";
+      const field =
+        table === "company_memberships"
+          ? "company_id"
+          : table.startsWith("achievement_")
+            ? "achievement_id"
+            : "id";
       const result = await request(
         `/rest/v1/${table}?select=${field}&limit=0`,
         adminKey,
@@ -92,6 +103,36 @@ if (base && adminKey) {
         `Table ${table}`,
         result.ok,
         `HTTP ${result.status}${!result.ok && result.data.code === "PGRST205" ? " — missing from exposed schema" : ""}`,
+      );
+    }
+    for (const [table, field] of [
+      ["profiles", "passport_previewed_at"],
+      ["projects", "skills"],
+      ["blockchain_proofs", "claim_version"],
+    ]) {
+      const result = await request(
+        `/rest/v1/${table}?select=${field}&limit=0`,
+        adminKey,
+      );
+      report(
+        `Phase 1 column ${table}.${field}`,
+        result.ok,
+        `HTTP ${result.status}`,
+      );
+    }
+    for (const [table, field] of [
+      ["profiles", "passport_previewed_at"],
+      ["projects", "skills"],
+      ["blockchain_proofs", "claim_version"],
+    ]) {
+      const result = await request(
+        `/rest/v1/${table}?select=${field}&limit=0`,
+        adminKey,
+      );
+      report(
+        `Phase 1 column ${table}.${field}`,
+        result.ok,
+        `HTTP ${result.status}`,
       );
     }
     const schema = await request("/rest/v1/", adminKey);

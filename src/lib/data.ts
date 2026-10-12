@@ -50,7 +50,9 @@ export async function publicPassport(slug: string): Promise<{
     db.from("projects").select("*").eq("talent_id", profile.id),
     db
       .from("achievements")
-      .select("*, companies(name), blockchain_proofs(*)")
+      .select(
+        "*, companies(name), blockchain_proofs(*), achievement_claims(*), achievement_evidence(*), achievement_sharing(*)",
+      )
       .eq("talent_id", profile.id),
   ]);
   if (p.error || a.error)
@@ -62,7 +64,9 @@ export async function achievement(id: string): Promise<Achievement | null> {
   const db = await supabase();
   const { data, error } = await db
     .from("achievements")
-    .select("*, profiles(*), companies(name), blockchain_proofs(*)")
+    .select(
+      "*, profiles(*), companies(name), blockchain_proofs(*), achievement_claims(*), achievement_evidence(*), achievement_sharing(*)",
+    )
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error("Achievement could not be loaded.");

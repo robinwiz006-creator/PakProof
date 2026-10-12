@@ -114,3 +114,7 @@ This task does not push or merge automatically. If the cloud UI creates a pull r
 Project and supporting-document evidence uses external URLs; direct Supabase Storage uploads are deferred. There is no messaging, recruitment pipeline, recommendations, multi-company selector, membership invitation UI, project edit screen, or password-reset screen. Company profile editing is owner-only, while reviewers can publish and review challenges. The portal uses the first company for its profile/create screen and all existing memberships for review visibility; use one company per account for the demo. No live seed creates fabricated achievements: use the walkthrough to produce authentic test records and label the test company/profile as demonstration data.
 
 Company identity vetting, wallet identity binding, production abuse/rate-limit controls, account recovery, and a durable production-chain policy should precede a public launch. This is a hackathon MVP, not a completed production trust system.
+
+## Phase 1 passport foundation
+
+The passport-first branch requires the additive `202610120001_passport_foundation.sql` migration before deployment. Do not rerun the initial migration or merge before reviewing the manual upgrade procedure. See [Phase 1 implementation and release guide](docs/PHASE-1-PASSPORT.md) for user journeys, v1/v2 compatibility, security tests, and exact Supabase/Vercel actions.

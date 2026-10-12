@@ -1,4 +1,5 @@
 export type Profile = {
+  passport_previewed_at?: string | null;
   id: string;
   slug: string;
   full_name: string;
@@ -29,6 +30,7 @@ export type Challenge = {
   companies?: { name: string } | null;
 };
 export type Project = {
+  skills?: string[];
   id: string;
   talent_id: string;
   title: string;
@@ -54,6 +56,24 @@ export type Submission = {
   }[];
 };
 export type Achievement = {
+  achievement_claims?: {
+    issuer_name: string;
+    evidence_digest: string;
+    claim_type: "company_challenge";
+  } | null;
+  achievement_evidence?: {
+    challenge_title: string;
+    challenge_description: string;
+    deliverables: string;
+    project_url: string;
+    github_url: string;
+    explanation: string;
+    digest_salt: string;
+  } | null;
+  achievement_sharing?: {
+    share_evidence: boolean;
+    project_id: string | null;
+  } | null;
   id: string;
   challenge_id: string;
   submission_id: string;
@@ -66,6 +86,7 @@ export type Achievement = {
   blockchain_proofs?: Proof[];
 };
 export type Proof = {
+  claim_version?: 1 | 2;
   id: string;
   achievement_id: string;
   signature: string;

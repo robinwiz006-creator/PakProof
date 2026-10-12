@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X, Fingerprint } from "lucide-react";
 import { useState } from "react";
-export function Navigation() {
+export function Navigation({ signedIn = false }: { signedIn?: boolean }) {
   const [open, setOpen] = useState(false);
   const path = usePathname();
   return (
@@ -38,15 +38,19 @@ export function Navigation() {
           <Link href="/portal/company" onClick={() => setOpen(false)}>
             For companies
           </Link>
-          <Link href="/sign-in" onClick={() => setOpen(false)}>
-            Sign in
+          <Link
+            href={signedIn ? "/portal/talent/passport" : "/sign-in"}
+            onClick={() => setOpen(false)}
+          >
+            {signedIn ? "My passport" : "Sign in"}
           </Link>
           <Link
             className="button small"
-            href="/sign-up"
+            href={signedIn ? "/portal/talent" : "/sign-up"}
             onClick={() => setOpen(false)}
           >
-            Get started <span aria-hidden="true">↗</span>
+            {signedIn ? "My dashboard" : "Get started"}{" "}
+            <span aria-hidden="true">↗</span>
           </Link>
         </nav>
       </div>

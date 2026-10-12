@@ -3,55 +3,56 @@ export default function How() {
   return (
     <div className="container page">
       <PageHeading
-        eyebrow="HOW IT WORKS"
-        title="Good work deserves to be seen."
-        description="ProofPak connects emerging talent with practical company challenges. SkillBoard gives companies a clear view of the evidence."
+        eyebrow="HOW PROOFPAK WORKS"
+        title="Start with the work you can show."
+        description="Your skill passport brings your profile, projects, evidence, and recognition together. Company challenges are optional."
       />
       {[
         [
           "01",
-          "Build your profile",
-          "Add your interests, skills, and projects. Choose whether to make your passport public. Your email and private submissions are not published.",
+          "Complete your profile",
+          "Add a headline, introduction, location, and skills. These are self-reported. Optional details can wait.",
         ],
         [
           "02",
-          "Take on a challenge",
-          "Read the brief, choose a challenge that fits your goals, and submit a project link with an explanation of your decisions.",
+          "Add projects and evidence",
+          "Show personal, university, or freelance work through repositories, demos, and supporting links. You can edit your projects later.",
         ],
         [
           "03",
-          "Get a thoughtful review",
-          "The company reviews your work. It can approve your submission or ask for improvements with written feedback.",
+          "Preview, publish, and share",
+          "Preview your passport privately, choose to publish it, and copy its link. You can build a useful passport without completing a challenge.",
         ],
         [
           "04",
-          "Carry your proof forward",
-          "An approval creates an achievement in your passport. An authorized company reviewer can connect a Solana wallet and anchor its record hash on devnet.",
+          "Earn recognition over time",
+          "A company can review your submission to an optional challenge and approve an achievement. Choose whether to share its approved evidence on your passport.",
         ],
         [
           "05",
-          "Let others inspect the record",
-          "A public verification page recomputes the record hash and checks the transaction on Solana. This proves the record was committed; it does not independently prove the quality or truthfulness of the company’s assessment.",
+          "Check the record",
+          "A company reviewer can separately record the achievement on Solana devnet. Verification checks a finalized transaction and matching claim. It does not independently verify the issuer’s identity or your skill level.",
         ],
       ].map(([n, title, text]) => (
         <div className="how-step" key={n}>
           <span className="step-number">{n}</span>
           <div>
-            <h3>{title}</h3>
+            <h2>{title}</h2>
             <p>{text}</p>
           </div>
         </div>
       ))}
       <div className="button-row section-spacer">
-        <ButtonLink href="/sign-up">Build Your Skill Passport</ButtonLink>
+        <ButtonLink href="/sign-up?role=talent">
+          Build Your Skill Passport
+        </ButtonLink>
         <ButtonLink secondary href="/sign-up?role=company">
-          Find Proven Talent
+          Open company workspace
         </ButtonLink>
       </div>
       <p className="muted section-spacer">
-        Devnet is a testing network. It has no monetary value and its
-        transaction history may be reset. Private documents and personal details
-        are never included in the onchain memo.
+        University and organization credential issuance belongs to a future
+        release. Devnet is a testing network whose history can reset.
       </p>
     </div>
   );

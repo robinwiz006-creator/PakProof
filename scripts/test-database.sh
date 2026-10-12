@@ -16,4 +16,11 @@ if [[ "$ready" != true ]]; then
 fi
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < tests/database-bootstrap.sql
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < supabase/migrations/202610110001_initial.sql
+docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < supabase/migrations/202610120001_passport_foundation.sql
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < tests/database.sql
+
+# A separate local DB proves upgrading a populated v1 schema retains its data.
+docker exec "$container" createdb -U postgres proofpak_legacy_test
+for sql in tests/database-bootstrap.sql supabase/migrations/202610110001_initial.sql tests/legacy-before.sql supabase/migrations/202610120001_passport_foundation.sql tests/legacy-after.sql; do
+ docker exec -i "$container" psql -U postgres -d proofpak_legacy_test -v ON_ERROR_STOP=1 < "$sql"
+done

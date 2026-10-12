@@ -1,0 +1,52 @@
+# Phase 1 changed-file inventory
+
+Only the following repository files belong to this phase. The original initial migration, package dependencies, and production environment variables are unchanged.
+
+| File | Change |
+|---|---|
+| `README.md` | Modified |
+| `docs/PHASE-1-CHANGED-FILES.md` | New |
+| `docs/PHASE-1-PASSPORT.md` | New |
+| `docs/check-phase-1.sql` | New |
+| `scripts/check-services.mjs` | Modified |
+| `scripts/test-database.sh` | Modified |
+| `src/app/api/proofs/route.ts` | Modified |
+| `src/app/auth/callback/route.ts` | Modified |
+| `src/app/challenges/[id]/page.tsx` | Modified |
+| `src/app/forgot-password/page.tsx` | New |
+| `src/app/globals.css` | Modified |
+| `src/app/how-it-works/page.tsx` | Modified |
+| `src/app/layout.tsx` | Modified |
+| `src/app/page.tsx` | Modified |
+| `src/app/portal/[...section]/page.tsx` | Modified |
+| `src/app/resend-confirmation/page.tsx` | New |
+| `src/app/reset-password/page.tsx` | New |
+| `src/app/sign-in/page.tsx` | Modified |
+| `src/app/sign-up/page.tsx` | Modified |
+| `src/app/talent/[slug]/page.tsx` | Modified |
+| `src/app/verify/[id]/page.tsx` | Modified |
+| `src/components/navigation.tsx` | Modified |
+| `src/components/passport-actions.tsx` | New |
+| `src/components/passport-view.tsx` | New |
+| `src/components/portal-nav.tsx` | Modified |
+| `src/components/project-editor.tsx` | New |
+| `src/components/proof-anchor.tsx` | Modified |
+| `src/components/recovery-form.tsx` | New |
+| `src/components/skill-picker.tsx` | New |
+| `src/components/ui.tsx` | Modified |
+| `src/lib/actions.ts` | Modified |
+| `src/lib/data.ts` | Modified |
+| `src/lib/passport.ts` | New |
+| `src/lib/proof-record.ts` | New |
+| `src/lib/proof-status.ts` | New |
+| `src/lib/proof.ts` | Modified |
+| `src/lib/solana.ts` | Modified |
+| `src/lib/types.ts` | Modified |
+| `src/lib/validation.ts` | Modified |
+| `supabase/migrations/202610120001_passport_foundation.sql` | New |
+| `tests/database-bootstrap.sql` | Modified |
+| `tests/database.sql` | Modified |
+| `tests/e2e/demo.spec.ts` | Modified |
+| `tests/legacy-after.sql` | New |
+| `tests/legacy-before.sql` | New |
+| `tests/passport.test.ts` | New |

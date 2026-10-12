@@ -1,8 +1,11 @@
+import { verificationState, verificationLabels } from "@/lib/proof-status";
+import { achievementRecord } from "@/lib/proof-record";
+import { ApprovedEvidence } from "@/components/passport-view";
 import { notFound } from "next/navigation";
 import { achievement } from "@/lib/data";
 import {
-  canonicalRecord,
   hashRecord,
+  evidenceDigest,
   serializeRecord,
   explorerLink,
 } from "@/lib/proof";
@@ -17,14 +20,20 @@ export default async function Verify({
   const { id } = await params;
   const a = await achievement(id);
   if (!a) notFound();
-  const record = canonicalRecord(a);
-  const hash = await hashRecord(record);
   const proof = a.blockchain_proofs?.[0];
+  const version = proof?.claim_version ?? (proof ? 1 : 2);
+  const record = achievementRecord(a, version);
+  const hash = await hashRecord(record);
   let status = "Onchain proof pending",
     details =
       "The company approved this work. A devnet proof has not been recorded yet.";
+  const evidenceMatches =
+    version === 1 ||
+    !a.achievement_evidence ||
+    (await evidenceDigest(a.achievement_evidence)) ===
+      a.achievement_claims?.evidence_digest;
   if (proof) {
-    if (proof.record_hash !== hash) {
+    if (proof.record_hash !== hash || !evidenceMatches) {
       status = "Record hash mismatch";
       details =
         "The current achievement does not match the stored proof. Do not treat it as verified.";
@@ -34,12 +43,14 @@ export default async function Verify({
           proof.signature,
           hash,
           proof.issuer_wallet,
+          version,
         );
-        status = checked.valid
-          ? "Onchain record verified"
-          : "Onchain record could not be verified";
+        status =
+          verificationLabels[
+            verificationState({ stored: true, hashMatches: true, checked })
+          ];
         details = checked.valid
-          ? "The current record hash matches a successful finalized Solana devnet memo transaction signed by the recorded wallet."
+          ? "The current record hash matches a successful finalized Solana devnet memo transaction signed by the recorded wallet. When approved evidence is available to you, its digest is also checked."
           : "No matching finalized transaction was found. Devnet may have been reset, or the transaction does not match this achievement.";
       } catch {
         status = "Network verification unavailable";
@@ -53,7 +64,15 @@ export default async function Verify({
       <PageHeading
         eyebrow="ACHIEVEMENT VERIFICATION"
         title={a.title}
-        description={`Company recognition from ${a.companies?.name ?? "the issuing company"}`}
+        description={`Company recognition from ${a.achievement_claims?.issuer_name ?? a.companies?.name ?? "the issuing company"}`}
+      />
+      <ApprovedEvidence
+        achievement={a}
+        projectHref={
+          a.profiles?.is_public && a.achievement_sharing?.project_id
+            ? `/talent/${a.profiles.slug}#project-${a.achievement_sharing.project_id}`
+            : undefined
+        }
       />
       <div className="detail-grid">
         <div>
@@ -107,9 +126,10 @@ export default async function Verify({
           <section className="panel">
             <h3>Canonical achievement record</h3>
             <p className="muted">
-              Version 1 uses fixed key order and an ISO UTC timestamp at
-              millisecond precision. This contains opaque record identifiers,
-              not names, emails, project links, or private evidence.
+              Version {version} uses fixed key order and an ISO UTC timestamp.{" "}
+              {version === 1
+                ? "Legacy v1 covers achievement, company and challenge identifiers plus issue time. It does not cover recipient, title or evidence."
+                : "V2 also commits to recipient, issuer label, title, type, approved submission and a salted evidence digest. Only the final hash is placed onchain."}
             </p>
             <pre className="hash" style={{ whiteSpace: "pre-wrap" }}>
               {serializeRecord(record)}

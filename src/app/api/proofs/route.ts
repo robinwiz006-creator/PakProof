@@ -1,9 +1,15 @@
+import { canRecoverLegacy } from "@/lib/proof-record";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { isConfigured, supabase } from "@/lib/supabase/server";
-import { canonicalRecord, hashRecord } from "@/lib/proof";
-import { checkAnchor } from "@/lib/solana";
+import {
+  canonicalRecord,
+  claimV2,
+  hashRecord,
+  evidenceDigest,
+} from "@/lib/proof";
+import { checkAnchor, transactionStatus } from "@/lib/solana";
 export const runtime = "nodejs";
 async function authorized(id: string) {
   if (!isConfigured()) throw new Error("Supabase is not connected.");
@@ -30,13 +36,55 @@ async function authorized(id: string) {
     );
   return { db, a };
 }
+async function recordFor(
+  db: Awaited<ReturnType<typeof supabase>>,
+  a: Parameters<typeof claimV2>[0],
+  version: 1 | 2,
+) {
+  if (version === 1) {
+    const { data, error } = await db
+      .from("achievement_claims")
+      .select("legacy_eligible")
+      .eq("achievement_id", a.id)
+      .single();
+    if (error || !data?.legacy_eligible)
+      throw new Error("New achievements require a v2 proof.");
+    return canonicalRecord(a);
+  }
+  const { data, error } = await db
+    .from("achievement_claims")
+    .select("issuer_name,evidence_digest")
+    .eq("achievement_id", a.id)
+    .single();
+  if (error || !data)
+    throw new Error(
+      "Apply the passport foundation migration before preparing a new proof.",
+    );
+  const { data: ev, error: evError } = await db
+    .from("achievement_evidence")
+    .select("*")
+    .eq("achievement_id", a.id)
+    .single();
+  if (evError || !ev || (await evidenceDigest(ev)) !== data.evidence_digest)
+    throw new Error("Approved evidence no longer matches its snapshot.");
+  return claimV2(a, data);
+}
 export async function GET(request: Request) {
   try {
     const id = z
       .string()
       .uuid()
       .parse(new URL(request.url).searchParams.get("achievement"));
-    const { a } = await authorized(id);
+    const { db, a } = await authorized(id);
+    const sig = new URL(request.url).searchParams.get("signature");
+    if (sig) {
+      if (!/^[1-9A-HJ-NP-Za-km-z]{80,90}$/.test(sig))
+        throw new Error("Invalid signature");
+      return NextResponse.json(
+        { status: await transactionStatus(sig) },
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY)
       return NextResponse.json(
         {
@@ -45,7 +93,7 @@ export async function GET(request: Request) {
         },
         { status: 503 },
       );
-    const record = canonicalRecord(a);
+    const record = await recordFor(db, a, 2);
     return NextResponse.json(
       { record, hash: await hashRecord(record) },
       { headers: { "Cache-Control": "no-store" } },
@@ -70,6 +118,7 @@ export async function POST(request: Request) {
     const body = z
       .object({
         achievementId: z.string().uuid(),
+        claimVersion: z.union([z.literal(1), z.literal(2)]).default(1),
         signature: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{80,90}$/),
         issuerWallet: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/),
       })
@@ -80,7 +129,8 @@ export async function POST(request: Request) {
         { error: "Server proof storage is not configured." },
         { status: 503 },
       );
-    const hash = await hashRecord(canonicalRecord(a));
+    const record = await recordFor(db, a, body.claimVersion);
+    const hash = await hashRecord(record);
     const { data: existing } = await db
       .from("blockchain_proofs")
       .select("signature")
@@ -96,15 +146,47 @@ export async function POST(request: Request) {
             },
             { status: 409 },
           );
-    const proof = await checkAnchor(body.signature, hash, body.issuerWallet);
+    const proof = await checkAnchor(
+      body.signature,
+      hash,
+      body.issuerWallet,
+      body.claimVersion,
+    );
     if (!proof.valid || !proof.blockTime)
       return NextResponse.json(
         {
           error:
-            "No finalized, successful devnet transaction matches this record hash and signer. Wait for finalization and retry.",
+            proof.status === "failed"
+              ? "The transaction failed on devnet. Check its status before starting again."
+              : proof.status === "pending"
+                ? "The transaction is still pending. Wait and retry saving the same transaction."
+                : "No finalized transaction matches this claim and signer. Retain the signature and check Explorer before sending again.",
         },
         { status: 422 },
       );
+    if (body.claimVersion === 1) {
+      const { data: legacy, error } = await db
+        .from("achievement_claims")
+        .select("legacy_eligible,created_at")
+        .eq("achievement_id", a.id)
+        .single();
+      if (
+        error ||
+        !legacy ||
+        !canRecoverLegacy(
+          legacy.legacy_eligible,
+          legacy.created_at,
+          Number(proof.blockTime),
+        )
+      )
+        return NextResponse.json(
+          {
+            error:
+              "This v1 transaction is newer than the upgrade boundary. New transactions must use v2.",
+          },
+          { status: 422 },
+        );
+    }
     const admin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -112,6 +194,7 @@ export async function POST(request: Request) {
     );
     const { error } = await admin.from("blockchain_proofs").insert({
       achievement_id: a.id,
+      claim_version: body.claimVersion,
       signature: body.signature,
       record_hash: hash,
       issuer_wallet: body.issuerWallet,

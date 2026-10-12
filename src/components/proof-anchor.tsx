@@ -1,6 +1,6 @@
 "use client";
 import { Buffer } from "buffer";
-import { useState } from "react";
+import { useSyncExternalStore, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Connection,
@@ -32,7 +32,59 @@ export function ProofAnchor({ achievementId }: { achievementId: string }) {
     [walletAddress, setWalletAddress] = useState(""),
     [preferredWallet, setPreferredWallet] = useState("Phantom");
   const router = useRouter();
-  async function saveProof(sig: string, wallet: string) {
+  const [claimVersion, setClaimVersion] = useState<1 | 2>(2);
+  const savedPending = useSyncExternalStore(
+    (notify) => {
+      window.addEventListener("proofpak-pending", notify);
+      return () => window.removeEventListener("proofpak-pending", notify);
+    },
+    () => localStorage.getItem(`proofpak:pending:${achievementId}`),
+    () => null,
+  );
+  let stored: {
+    signature: string;
+    wallet: string;
+    claimVersion?: 1 | 2;
+  } | null = null;
+  try {
+    stored = savedPending ? JSON.parse(savedPending) : null;
+  } catch {
+    stored = null;
+  }
+  const [failed, setFailed] = useState(false);
+  async function inspectStatus() {
+    setBusy(true);
+    try {
+      const sig = signature || stored?.signature;
+      if (!sig) throw new Error("No transaction to check.");
+      const r = await fetch(
+        `/api/proofs?achievement=${achievementId}&signature=${encodeURIComponent(sig)}`,
+      );
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error);
+      setFailed(data.status === "failed");
+      setMessage(
+        data.status === "failed"
+          ? "Transaction failed. You may discard this failed attempt and start again."
+          : data.status === "finalized"
+            ? "Transaction finalized. Retry saving this transaction."
+            : data.status === "pending"
+              ? "Transaction pending. Wait before retrying."
+              : "Transaction not found. Keep the signature and inspect Explorer; do not send again yet.",
+      );
+    } catch {
+      setMessage(
+        "Could not check the transaction. Keep the signature and try again later.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function saveProof(
+    sig: string,
+    wallet: string,
+    version: 1 | 2 = claimVersion,
+  ) {
     const result = await fetch("/api/proofs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -40,6 +92,7 @@ export function ProofAnchor({ achievementId }: { achievementId: string }) {
         achievementId,
         signature: sig,
         issuerWallet: wallet,
+        claimVersion: version,
       }),
     });
     const body = await result.json();
@@ -56,6 +109,7 @@ export function ProofAnchor({ achievementId }: { achievementId: string }) {
       if (!response.ok) throw new Error(data.error);
       const record = data.record as AchievementRecord;
       const hash = await hashRecord(record);
+      setClaimVersion(record.version);
       if (hash !== data.hash)
         throw new Error("Achievement hash did not match. No transaction sent.");
       const wallet = getWallets()
@@ -96,7 +150,7 @@ export function ProofAnchor({ achievementId }: { achievementId: string }) {
         new TransactionInstruction({
           programId: new PublicKey(MEMO_PROGRAM),
           keys: [{ pubkey: publicKey, isSigner: true, isWritable: false }],
-          data: Buffer.from(memoFor(hash), "utf8"),
+          data: Buffer.from(memoFor(hash, record.version), "utf8"),
         }),
       );
       setMessage("Review the devnet memo transaction in your wallet.");
@@ -116,8 +170,13 @@ export function ProofAnchor({ achievementId }: { achievementId: string }) {
       setSignature(sig);
       localStorage.setItem(
         `proofpak:pending:${achievementId}`,
-        JSON.stringify({ signature: sig, wallet: publicKey.toBase58() }),
+        JSON.stringify({
+          signature: sig,
+          wallet: publicKey.toBase58(),
+          claimVersion: record.version,
+        }),
       );
+      window.dispatchEvent(new Event("proofpak-pending"));
       setMessage("Transaction sent. Waiting for devnet finalization…");
       const confirmation = await rpc.confirmTransaction(
         { ...latest, signature: sig },
@@ -127,8 +186,9 @@ export function ProofAnchor({ achievementId }: { achievementId: string }) {
         throw new Error(
           "The devnet transaction failed. Inspect its Explorer details.",
         );
-      await saveProof(sig, publicKey.toBase58());
+      await saveProof(sig, publicKey.toBase58(), record.version);
       localStorage.removeItem(`proofpak:pending:${achievementId}`);
+      window.dispatchEvent(new Event("proofpak-pending"));
     } catch (e) {
       setMessage(
         e instanceof Error ? e.message : "Could not create the proof.",
@@ -150,8 +210,9 @@ export function ProofAnchor({ achievementId }: { achievementId: string }) {
         );
       setSignature(sig);
       setWalletAddress(address);
-      await saveProof(sig, address);
+      await saveProof(sig, address, parsed?.claimVersion ?? claimVersion);
       localStorage.removeItem(`proofpak:pending:${achievementId}`);
+      window.dispatchEvent(new Event("proofpak-pending"));
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Retry failed.");
     } finally {
@@ -160,7 +221,7 @@ export function ProofAnchor({ achievementId }: { achievementId: string }) {
   }
   return (
     <section className="panel">
-      <h3>Anchor this achievement on Solana</h3>
+      <h3>Next step: record the approved achievement</h3>
       <p className="muted">
         Connect Phantom or Solflare with devnet SOL. Only an achievement hash is
         included in the memo. Your wallet signs the transaction; ProofPak never
@@ -179,7 +240,7 @@ export function ProofAnchor({ achievementId }: { achievementId: string }) {
       <div className="button-row section-spacer">
         <button
           className="button"
-          disabled={busy || Boolean(signature)}
+          disabled={busy || Boolean(signature || stored?.signature)}
           onClick={anchor}
         >
           {busy ? "Working…" : "Connect wallet & anchor"}
@@ -188,6 +249,40 @@ export function ProofAnchor({ achievementId }: { achievementId: string }) {
           Retry saving existing transaction
         </button>
       </div>
+      {stored?.signature && !message && (
+        <p className="notice">
+          A previously sent transaction needs attention. Retry saving it; do not
+          send again.
+        </p>
+      )}
+      {(signature || stored?.signature) && (
+        <button
+          type="button"
+          className="text-link section-spacer"
+          disabled={busy}
+          onClick={inspectStatus}
+        >
+          Check transaction status
+        </button>
+      )}
+      {failed && (
+        <button
+          type="button"
+          className="button secondary"
+          onClick={() => {
+            localStorage.removeItem(`proofpak:pending:${achievementId}`);
+            window.dispatchEvent(new Event("proofpak-pending"));
+            setSignature("");
+            setWalletAddress("");
+            setFailed(false);
+            setMessage(
+              "Failed attempt discarded. You can start a new transaction.",
+            );
+          }}
+        >
+          Discard failed attempt
+        </button>
+      )}
       {message && (
         <p className="message section-spacer" role="status">
           {message}
@@ -210,10 +305,23 @@ export function ProofAnchor({ achievementId }: { achievementId: string }) {
           and signing wallet, then retry saving. This sends no new transaction.
         </p>
         <label className="field section-spacer">
+          Claim version
+          <select
+            value={claimVersion}
+            onChange={(e) => setClaimVersion(Number(e.target.value) as 1 | 2)}
+          >
+            <option value={2}>V2 — new proofs</option>
+            <option value={1}>V1 — recover a historical transaction</option>
+          </select>
+        </label>
+        <label className="field section-spacer">
           Transaction signature
           <input
             value={signature}
-            onChange={(e) => setSignature(e.target.value)}
+            onChange={(e) => {
+              setSignature(e.target.value);
+              setFailed(false);
+            }}
           />
         </label>
         <label className="field section-spacer">

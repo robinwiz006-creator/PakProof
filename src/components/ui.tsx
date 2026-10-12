@@ -112,11 +112,14 @@ export function AchievementCard({
       <CheckCircle2 size={24} />
       <div>
         <h3>{a.title}</h3>
-        <p className="muted">Recognized by {a.companies?.name ?? "company"}</p>
+        <p className="muted">
+          Recognized by{" "}
+          {a.achievement_claims?.issuer_name ?? a.companies?.name ?? "company"}
+        </p>
         <span className="tag">
           {proof
-            ? "Solana proof recorded"
-            : "Company approved · onchain proof pending"}
+            ? "Proof recorded · open to verify"
+            : "Company-approved · proof pending"}
         </span>
       </div>
       <ArrowUpRight size={18} />

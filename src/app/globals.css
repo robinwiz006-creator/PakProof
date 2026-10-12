@@ -1334,3 +1334,43 @@ textarea {
     padding: 35px 0 45px;
   }
 }
+.passport-checklist {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 0;
+  list-style: none;
+  margin: 24px 0;
+}
+.passport-checklist li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.passport-checklist li > span {
+  color: var(--accent);
+}
+.passport-checklist .text-link {
+  text-align: left;
+  border: 0;
+  background: none;
+  padding: 0;
+}
+.profile-columns .panel {
+  overflow-wrap: anywhere;
+}
+summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 13px;
+}
+details > .form {
+  margin-top: 20px;
+}
+@media (max-width: 760px) {
+  .passport-checklist {
+    grid-template-columns: 1fr;
+  }
+}
