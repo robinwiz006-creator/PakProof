@@ -23,6 +23,7 @@ do $$begin
  if exists(select 1 from public.paid_project_applications) then raise exception 'Private application leaked';end if;
  begin perform public.publish_paid_project(current_setting('test.paid_project')::uuid);raise exception 'Unauthorized publication allowed';exception when raise_exception then if sqlerrm='Unauthorized publication allowed' then raise;end if;end;
 end$$;
+select public.apply_paid_project(:'project_id','I also have relevant work and would like to be considered.','https://example.com/other-portfolio');
 set local request.jwt.claim.sub='a0000000-0000-4000-8000-000000000001';
 select public.select_paid_worker(:'application_id') as offer_id \gset
 select set_config('test.paid_offer',:'offer_id',true);
@@ -37,6 +38,7 @@ select public.submit_paid_milestone(:'milestone_id','The first accessible dashbo
 set local request.jwt.claim.sub='a0000000-0000-4000-8000-000000000003';
 do $$begin
  if exists(select 1 from public.paid_milestone_submissions) then raise exception 'Private work evidence leaked';end if;
+ if (select status from public.paid_project_applications limit 1)<>'rejected' then raise exception 'Remaining applicant was not told the selection result';end if;
  begin perform public.review_paid_milestone(current_setting('test.paid_milestone')::uuid,'approved','Unrelated reviewer tries approval.');raise exception 'Unauthorized approval allowed';exception when raise_exception then if sqlerrm='Unauthorized approval allowed' then raise;end if;end;
 end$$;
 set local request.jwt.claim.sub='a0000000-0000-4000-8000-000000000001';

@@ -1,3 +1,4 @@
+import { sameRequestOrigin } from "@/lib/request-origin";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
@@ -112,7 +113,7 @@ export async function GET(request: Request) {
   }
 }
 export async function POST(request: Request) {
-  if (request.headers.get("origin") !== new URL(request.url).origin)
+  if (!sameRequestOrigin(request))
     return NextResponse.json(
       { error: "Invalid request origin." },
       { status: 403 },

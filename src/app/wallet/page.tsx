@@ -33,7 +33,7 @@ export default async function Wallet({
       <PageHeading
         eyebrow="OPTIONAL WALLET"
         title="Wallet ownership"
-        description="A wallet is not needed to create or share a passport. Signing credentials and receiving future payments use separate permissions."
+        description="A wallet is not needed to create or share a passport. Signing credentials and receiving milestone payments use separate permissions."
       />
       <div className="button-row">
         <Link className="text-link" href="/portal/talent/passport">
@@ -41,6 +41,12 @@ export default async function Wallet({
         </Link>
         <Link className="text-link" href="/organizations">
           Organizations
+        </Link>
+        <Link className="text-link" href="/payments">
+          Payment history
+        </Link>
+        <Link className="text-link" href="/paid-projects?view=mine">
+          My paid projects
         </Link>
       </div>
       {message && (

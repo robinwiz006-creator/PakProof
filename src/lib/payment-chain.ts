@@ -1,3 +1,4 @@
+import { PaymentError } from "./payment-error";
 import { Buffer } from "buffer";
 import { getBase58Decoder } from "@solana/kit";
 import {
@@ -70,12 +71,14 @@ export async function buildPaymentTransaction(
     BigInt(i.amount_units) > 1000000000000n ||
     i.payer_wallet === i.recipient_wallet
   )
-    throw new Error("Unsupported payment configuration.");
+    throw new PaymentError("Unsupported payment configuration.");
   if (
     (await tokenAccount(i.payer_wallet)) !== i.source_account ||
     (await tokenAccount(i.recipient_wallet)) !== i.destination_account
   )
-    throw new Error("Payment token accounts do not match their wallet owners.");
+    throw new PaymentError(
+      "Payment token accounts do not match their wallet owners.",
+    );
   const payer = new PublicKey(i.payer_wallet),
     mint = new PublicKey(TEST_USDC_MINT),
     source = new PublicKey(i.source_account),
@@ -128,7 +131,7 @@ export async function validateSignedPayment(
 ) {
   const bytes = Buffer.from(signedBase64, "base64");
   if (bytes.length > 1232 || !bytes.length)
-    throw new Error("Invalid transaction size.");
+    throw new PaymentError("Invalid transaction size.");
   const signed = Transaction.from(bytes),
     template = Transaction.from(Buffer.from(attempt.template_base64, "base64"));
   if (
@@ -138,7 +141,7 @@ export async function validateSignedPayment(
     !(await signed.verifySignatures()) ||
     !signed.signature
   )
-    throw new Error(
+    throw new PaymentError(
       "Wallet changed the payment or returned an invalid signature. Nothing will be broadcast.",
     );
   return {

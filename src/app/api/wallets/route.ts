@@ -1,3 +1,4 @@
+import { sameRequestOrigin, requestSiteOrigin } from "@/lib/request-origin";
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -6,7 +7,7 @@ import { credentialWorkspace } from "@/lib/credential-data";
 import { ownershipMessage, verifyOwnership } from "@/lib/wallet-ownership";
 export const runtime = "nodejs";
 export async function POST(request: Request) {
-  if (request.headers.get("origin") !== new URL(request.url).origin)
+  if (!sameRequestOrigin(request))
     return NextResponse.json(
       { error: "Invalid request origin." },
       { status: 403 },
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
       const issuedAt = new Date().toISOString(),
         expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
       const message = ownershipMessage({
-        domain: new URL(request.url).origin,
+        domain: requestSiteOrigin(request),
         userId: user.id,
         wallet: v.wallet,
         purpose: v.purpose,

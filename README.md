@@ -8,7 +8,7 @@ For a safe checklist to activate the existing implementation, see [Get the MVP o
 
 ## Credentials and optional wallets on this branch
 
-See [credentials/wallet delivery and manual setup](docs/CREDENTIALS-WALLETS-DELIVERY.md). This branch adds authorized organizations, direct credentials, recipient consent, private degree verification requests, v3 devnet proofs, and signed wallet ownership. The three new migrations are **unapplied** by this task. Paid projects and USDC settlement remain unfinished; wallet linking does not enable payments. No new feature is claimed tested in production.
+See [credentials/wallet delivery and manual setup](docs/CREDENTIALS-WALLETS-DELIVERY.md). This branch adds authorized organizations, direct credentials, recipient consent, private degree verification requests, v3 devnet proofs, and signed wallet ownership. The three new migrations are **unapplied** by this task. Stages 6–8 are now connected: see [paid-project/payment delivery and manual setup](docs/PAYMENTS-MVP.md). Paid projects use devnet test tokens only; new migrations remain unapplied by this task. No new feature is claimed tested in production.
 
 ## What you can use now
 

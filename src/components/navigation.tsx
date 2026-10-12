@@ -26,11 +26,11 @@ export function Navigation({ signedIn = false }: { signedIn?: boolean }) {
         </button>
         <nav className={open ? "open" : ""} aria-label="Main navigation">
           <Link
-            aria-current={path === "/challenges" ? "page" : undefined}
-            href="/challenges"
+            aria-current={path === "/opportunities" ? "page" : undefined}
+            href="/opportunities"
             onClick={() => setOpen(false)}
           >
-            Explore challenges
+            Opportunities
           </Link>
           <Link href="/how-it-works" onClick={() => setOpen(false)}>
             How it works

@@ -180,14 +180,11 @@ export default async function Home() {
             <article>
               <GraduationCap size={22} />
               <div>
-                <h3>
-                  Credentials from other issuers{" "}
-                  <span className="tag">FUTURE VISION</span>
-                </h3>
+                <h3>Organization-issued credentials</h3>
                 <p>
-                  We plan to support credentials from universities, training
-                  institutions, and other organizations. Issuance by these
-                  organizations is not available yet.
+                  Authorized universities, training institutions, communities
+                  and companies can issue credentials. You decide which to
+                  accept and publish.
                 </p>
               </div>
             </article>

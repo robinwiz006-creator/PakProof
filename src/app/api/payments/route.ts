@@ -1,3 +1,5 @@
+import { sameRequestOrigin } from "@/lib/request-origin";
+import { PaymentError } from "@/lib/payment-error";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { PublicKey } from "@solana/web3.js";
@@ -15,15 +17,16 @@ import {
 } from "@/lib/payment-chain";
 import type { PaymentIntent, PaymentAttempt } from "@/lib/payments";
 export const runtime = "nodejs";
+export const maxDuration = 60;
 export async function POST(request: Request) {
-  if (request.headers.get("origin") !== new URL(request.url).origin)
+  if (!sameRequestOrigin(request))
     return NextResponse.json(
       { error: "Invalid request origin." },
       { status: 403 },
     );
   try {
     if (!isConfigured())
-      throw new Error("Supabase payments are not configured.");
+      throw new PaymentError("Supabase payments are not configured.");
     const db = await supabase();
     const {
       data: { user },
@@ -44,7 +47,7 @@ export async function POST(request: Request) {
         .select("*")
         .eq("id", v.milestone_id)
         .single();
-      if (!m) throw new Error("Milestone not available.");
+      if (!m) throw new PaymentError("Milestone not available.");
       const { data: p } = await db
         .from("paid_projects")
         .select("*")
@@ -61,7 +64,7 @@ export async function POST(request: Request) {
         m.work_status !== "approved" ||
         p?.status !== "active"
       )
-        throw new Error(
+        throw new PaymentError(
           "Only company owners may pay approved milestones of accepted projects.",
         );
       const { data: existing } = await db
@@ -99,7 +102,9 @@ export async function POST(request: Request) {
             .single()
         : { data: null };
       if (!payer || org?.company_id !== p.company_id)
-        throw new Error("Link a company payer wallet for this company first.");
+        throw new PaymentError(
+          "Link a company payer wallet for this company first.",
+        );
       const { data: payout } = await db
         .from("paid_payout_authorizations")
         .select("*")
@@ -108,7 +113,7 @@ export async function POST(request: Request) {
         .eq("worker_id", p.worker_id)
         .maybeSingle();
       if (!payout)
-        throw new Error(
+        throw new PaymentError(
           "The worker must explicitly authorize a payout wallet on the project page.",
         );
       const { data: recipient } = await admin
@@ -120,7 +125,7 @@ export async function POST(request: Request) {
         .is("disconnected_at", null)
         .maybeSingle();
       if (!recipient || recipient.wallet_address !== payout.wallet_address)
-        throw new Error("Recipient wallet authorization needs renewal.");
+        throw new PaymentError("Recipient wallet authorization needs renewal.");
       const rpc = await paymentNetwork();
       const source = await tokenAccount(payer.wallet_address),
         destination = await tokenAccount(recipient.wallet_address);
@@ -134,7 +139,7 @@ export async function POST(request: Request) {
         Buffer.from(sourceInfo!.data).readBigUInt64LE(64) <
         BigInt(m.amount_units)
       )
-        throw new Error(
+        throw new PaymentError(
           "Payer wallet does not have enough devnet test USDC. No payment sent.",
         );
       const { data: intentId, error: prepareError } = await db.rpc(
@@ -147,7 +152,7 @@ export async function POST(request: Request) {
         },
       );
       if (prepareError)
-        throw new Error(
+        throw new PaymentError(
           "Could not prepare payment. Check project approval and wallet permissions.",
         );
       const { data: row } = await db
@@ -155,7 +160,7 @@ export async function POST(request: Request) {
         .select("*")
         .eq("id", intentId)
         .single();
-      if (!row) throw new Error("Payment intent unavailable.");
+      if (!row) throw new PaymentError("Payment intent unavailable.");
       const i = {
         ...row,
         amount_units: String(row.amount_units),
@@ -164,7 +169,7 @@ export async function POST(request: Request) {
         i.payer_user_id !== user.id ||
         i.payer_wallet !== payer.wallet_address
       )
-        throw new Error(
+        throw new PaymentError(
           "An existing payment is pinned to a different payer. That payer must resolve or cancel its unsigned preparation.",
         );
       if (i.status !== "prepared") {
@@ -186,7 +191,7 @@ export async function POST(request: Request) {
           : rpc.getMinimumBalanceForRentExemption(165, "finalized"),
       ]);
       if (fee.value === null || balance < fee.value + rent)
-        throw new Error(
+        throw new PaymentError(
           "Payer needs free devnet SOL for network fees and token-account creation. No payment sent. You can cancel the unsigned preparation in Payments.",
         );
       const template = Buffer.from(
@@ -206,7 +211,7 @@ export async function POST(request: Request) {
         },
       );
       if (storeError)
-        throw new Error(
+        throw new PaymentError(
           "Payment is already signed or permissions changed. Inspect Payments; do not pay again.",
         );
       return NextResponse.json({
@@ -237,7 +242,7 @@ export async function POST(request: Request) {
         .select("*")
         .eq("id", v.attempt_id)
         .single();
-      if (!row) throw new Error("Payment attempt not accessible.");
+      if (!row) throw new PaymentError("Payment attempt not accessible.");
       const a = {
         ...row,
         last_valid_block_height: String(row.last_valid_block_height),
@@ -248,7 +253,7 @@ export async function POST(request: Request) {
         .eq("id", a.intent_id)
         .single();
       if (!i || i.payer_user_id !== user.id)
-        throw new Error(
+        throw new PaymentError(
           "Only the preparing payer may register this signature.",
         );
       const signed = await validateSignedPayment(a, v.signed_base64);
@@ -265,7 +270,7 @@ export async function POST(request: Request) {
         (await rpc.getBlockHeight("finalized")) >
         BigInt(a.last_valid_block_height)
       )
-        throw new Error(
+        throw new PaymentError(
           "Unsigned preparation expired. Do not broadcast. Prepare again or cancel its unsigned intent.",
         );
       const { error } = await admin.rpc("register_signed_payment", {
@@ -275,7 +280,7 @@ export async function POST(request: Request) {
         p_signed: signed.signedBase64,
       });
       if (error)
-        throw new Error(
+        throw new PaymentError(
           "Could not durably register this attempt. Nothing should be broadcast. Refresh Payments to check whether registration succeeded.",
         );
       return NextResponse.json({
@@ -303,7 +308,7 @@ export async function POST(request: Request) {
         i.payer_user_id !== user.id ||
         !["registered", "pending"].includes(a.status)
       )
-        throw new Error(
+        throw new PaymentError(
           "Only the original payer may resume an unresolved registered transaction.",
         );
       const { data: m } = await db
@@ -325,7 +330,7 @@ export async function POST(request: Request) {
         .eq("user_id", user.id)
         .maybeSingle();
       if (member?.role !== "owner")
-        throw new Error(
+        throw new PaymentError(
           "Current company owner permission is required to resume broadcast.",
         );
       const rpc = await paymentNetwork();
@@ -337,7 +342,7 @@ export async function POST(request: Request) {
         (await rpc.getBlockHeight("finalized")) >
           BigInt(a.last_valid_block_height)
       )
-        throw new Error(
+        throw new PaymentError(
           "Check the existing transaction instead. A finalized or expired transaction must not be resent.",
         );
       const signed = await validateSignedPayment(
@@ -345,7 +350,7 @@ export async function POST(request: Request) {
         a.signed_base64,
       );
       if (signed.signature !== a.signature)
-        throw new Error("Registered signature mismatch.");
+        throw new PaymentError("Registered signature mismatch.");
       return NextResponse.json({
         signature: a.signature,
         signed_base64: a.signed_base64,
@@ -358,7 +363,7 @@ export async function POST(request: Request) {
         .select("id")
         .eq("id", v.attempt_id)
         .single();
-      if (!a) throw new Error("Payment attempt not accessible.");
+      if (!a) throw new PaymentError("Payment attempt not accessible.");
       return NextResponse.json(await reconcilePayment(a.id));
     }
     if (body.action === "cancel") {
@@ -367,21 +372,21 @@ export async function POST(request: Request) {
         p_intent: v.intent_id,
       });
       if (error)
-        throw new Error(
-          "Only a company owner may cancel a preparation which has never been signed or registered.",
+        throw new PaymentError(
+          "Only the worker or a company owner may cancel a preparation with no registered signature.",
         );
       return NextResponse.json({ cancelled: true });
     }
-    throw new Error("Unknown payment action.");
+    throw new PaymentError("Unknown payment action.");
   } catch (e) {
     return NextResponse.json(
       {
         error:
           e instanceof z.ZodError
             ? "Invalid payment request."
-            : e instanceof Error
+            : e instanceof PaymentError
               ? e.message
-              : "Payment unavailable. Do not send another transfer.",
+              : "Payment service unavailable. Keep any registered signature and check again; do not send another transfer.",
       },
       { status: 400 },
     );

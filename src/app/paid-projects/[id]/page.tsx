@@ -23,6 +23,8 @@ import {
   submitPaidMilestone,
   reviewPaidMilestone,
   authorizePayout,
+  sharePaidWork,
+  consentPaidWork,
 } from "@/lib/paid-actions";
 export const dynamic = "force-dynamic";
 export default async function PaidProjectPage({
@@ -147,6 +149,14 @@ export default async function PaidProjectPage({
             ms.map((m) => m.id),
           )
       : { data: [] };
+  const { data: history } =
+    isWorker || isCompany
+      ? await db
+          .from("paid_work_history")
+          .select("*")
+          .eq("project_id", id)
+          .maybeSingle()
+      : { data: null };
   return (
     <div className="container page">
       <PageHeading
@@ -228,7 +238,8 @@ export default async function PaidProjectPage({
       )}
       {ownApp && (
         <p className="notice section-spacer">
-          Your application: {ownApp.status}.{" "}
+          Your application:{" "}
+          {ownApp.status === "rejected" ? "Not selected" : ownApp.status}.{" "}
           {ownApp.status === "selected" && p.status === "offered"
             ? "Review the offer below before accepting."
             : "Track work and decisions on this page."}
@@ -337,6 +348,80 @@ export default async function PaidProjectPage({
             <Link className="text-link" href="/wallet">
               First link an account wallet ↗
             </Link>
+          )}
+        </section>
+      )}
+      {p.status === "completed" && (isWorker || isCompany) && (
+        <section className="panel section-spacer">
+          <h2>Add completed work to the passport</h2>
+          <p className="muted">
+            Both company consent and the worker’s publication choice are
+            required. Approved evidence needs a separate opt-in. Payment
+            amounts, wallets and private terms are never included in this
+            passport record. Blockchain transactions remain publicly
+            discoverable.
+          </p>
+          {isCompany && (
+            <form action={consentPaidWork}>
+              <input type="hidden" name="project_id" value={id} />
+              <label>
+                <input
+                  name="consent"
+                  type="checkbox"
+                  defaultChecked={history?.company_consent ?? false}
+                />{" "}
+                Allow disclosure of company name, completed work and approved
+                evidence chosen by the worker
+              </label>
+              <div className="section-spacer">
+                <SubmitButton>Save company consent</SubmitButton>
+              </div>
+            </form>
+          )}
+          {isWorker && (
+            <form action={sharePaidWork}>
+              <input type="hidden" name="project_id" value={id} />
+              <Field
+                label="My work summary (optional, self-reported)"
+                name="summary"
+                type="textarea"
+                maxLength={4000}
+                value={history?.recipient_summary ?? ""}
+              />
+              <label>
+                <input
+                  name="is_public"
+                  type="checkbox"
+                  defaultChecked={history?.is_public ?? false}
+                />{" "}
+                Add this completed work to my published passport
+              </label>
+              <br />
+              <label>
+                <input
+                  name="share_evidence"
+                  type="checkbox"
+                  defaultChecked={history?.share_evidence ?? false}
+                />{" "}
+                Also publish approved evidence
+              </label>
+              <p className="muted">
+                Company disclosure consent:{" "}
+                {history?.company_consent ? "Granted" : "Not granted yet"}. A
+                private passport remains private.
+              </p>
+              <SubmitButton>Save work history preferences</SubmitButton>
+            </form>
+          )}
+          {isCompany && (
+            <p className="section-spacer">
+              Payment does not issue a credential. An authorized organization
+              may{" "}
+              <Link className="text-link" href="/organizations">
+                separately recognize the work with a credential ↗
+              </Link>
+              .
+            </p>
           )}
         </section>
       )}
@@ -473,7 +558,7 @@ export default async function PaidProjectPage({
                           attempt={attempt ?? null}
                           intentId={intent.id}
                           canCancel={
-                            member?.role === "owner" &&
+                            (member?.role === "owner" || isWorker) &&
                             intent.status === "prepared"
                           }
                           canResume={intent.payer_user_id === user?.id}

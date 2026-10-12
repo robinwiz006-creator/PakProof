@@ -51,6 +51,13 @@ do $$begin
  begin perform public.disconnect_wallet(current_setting('test.payment_wallet')::uuid);raise exception 'Unresolved recipient wallet could disconnect';exception when raise_exception then if sqlerrm='Unresolved recipient wallet could disconnect' then raise;end if;end;
  begin perform public.authorize_project_payout(current_setting('test.payment_project')::uuid,current_setting('test.payment_wallet')::uuid);raise exception 'Prepared payment destination could change';exception when raise_exception then if sqlerrm='Prepared payment destination could change' then raise;end if;end;
 end$$;
+-- The worker can release a preparation which has no registered signature, then explicitly reauthorize.
+select public.cancel_unsigned_payment(:'intent_id');
+do $$begin if exists(select 1 from public.wallet_connections where lock_reason is not null) then raise exception 'Cancelled unsigned preparation retained wallet lock';end if;end$$;
+select public.authorize_project_payout(:'project_id',:'recipient_connection');
+set local request.jwt.claim.sub='b0000000-0000-4000-8000-000000000001';
+select public.prepare_milestone_payment(:'milestone_id',:'payer_connection','fixture-source','fixture-destination') as intent_id \gset
+select set_config('test.payment_intent',:'intent_id',true);
 set local request.jwt.claim.sub='b0000000-0000-4000-8000-000000000003';
 do $$begin if exists(select 1 from public.payment_intents) or exists(select 1 from public.payment_receipts) then raise exception 'Payment details leaked to unrelated user';end if;end$$;
 set local role service_role;
@@ -66,6 +73,12 @@ do $$begin
 end$$;
 set local role service_role;
 select public.record_payment_result(:'attempt_id','pending','Fixture pending transaction, not a real transfer');
+select public.record_payment_result(:'attempt_id','needs_review','Fixture historical metadata unavailable');
+do $$begin
+ if exists(select 1 from public.payment_receipts) then raise exception 'Unknown outcome incorrectly credited';end if;
+ if not exists(select 1 from public.wallet_connections where lock_reason is not null) then raise exception 'Unknown outcome released wallet lock';end if;
+ begin perform public.store_payment_template(current_setting('test.payment_intent')::uuid,'b0000000-0000-4000-8000-000000000001','new-payment','new-blockhash',2000);raise exception 'Unknown outcome allowed duplicate attempt';exception when raise_exception then if sqlerrm='Unknown outcome allowed duplicate attempt' then raise;end if;end;
+end$$;
 select public.record_payment_result(:'attempt_id','paid','Offline settlement verifier fixture',now());
 select public.record_payment_result(:'attempt_id','paid','Repeated settlement is idempotent',now());
 do $$begin
@@ -82,12 +95,60 @@ do $$begin
  begin perform public.register_signed_payment(current_setting('test.second_attempt')::uuid,'b0000000-0000-4000-8000-000000000001',repeat('1',88),'offline-second-signed');raise exception 'Signature reused for another milestone';exception when unique_violation then null;end;
 end$$;
 select public.register_signed_payment(:'second_attempt','b0000000-0000-4000-8000-000000000001',repeat('2',88),'offline-second-signed');
-select public.record_payment_result(:'second_attempt','paid','Offline second settlement verifier fixture',now());
+select public.record_payment_result(:'second_attempt','failed','Offline finalized-failure fixture');
+do $$begin
+ if (select count(*) from public.payment_receipts)<>1 then raise exception 'Failed transfer created a receipt';end if;
+ if exists(select 1 from public.wallet_connections where lock_reason is not null) then raise exception 'Finalized failure did not release wallet locks';end if;
+end$$;
+set local role authenticated;
+set local request.jwt.claim.sub='b0000000-0000-4000-8000-000000000001';
+select public.prepare_milestone_payment(:'second_milestone',:'payer_connection','fixture-source','fixture-destination') as retry_intent \gset
+set local role service_role;
+select public.store_payment_template(:'retry_intent','b0000000-0000-4000-8000-000000000001','offline-retry-template','offline-blockhash',1000) as retry_attempt \gset
+select public.register_signed_payment(:'retry_attempt','b0000000-0000-4000-8000-000000000001',repeat('3',88),'offline-retry-signed');
+select public.record_payment_result(:'retry_attempt','paid','Offline second settlement verifier fixture',now());
 do $$begin
  if (select count(*) from public.payment_receipts)<>2 then raise exception 'Second receipt missing';end if;
  if (select status from public.paid_projects where id=current_setting('test.payment_project')::uuid)<>'completed' then raise exception 'Fully settled project not completed';end if;
  if exists(select 1 from public.wallet_connections where lock_reason is not null) then raise exception 'Resolved wallet locks not released';end if;
  if exists(select 1 from public.credentials) then raise exception 'Payment incorrectly issued a credential';end if;
 end$$;
+
+-- Work history requires separate recipient choice and company disclosure consent.
+set local role authenticated;
+set local request.jwt.claim.sub='b0000000-0000-4000-8000-000000000002';
+update public.profiles set is_public=true where id=auth.uid();
+select public.share_paid_work(:'project_id',true,false,'I delivered an accessible interface with documentation.');
+set local role anon;
+set local request.jwt.claim.sub='';
+do $$begin if exists(select 1 from public.paid_work_history) then raise exception 'Work history leaked without company consent';end if;end$$;
+set local role authenticated;
+set local request.jwt.claim.sub='b0000000-0000-4000-8000-000000000001';
+select public.consent_paid_work(:'project_id',true);
+set local role anon;
+set local request.jwt.claim.sub='';
+do $$declare h jsonb;begin
+ if (select count(*) from public.paid_work_history)<>1 then raise exception 'Consented history not visible';end if;
+ if exists(select 1 from public.paid_work_evidence) then raise exception 'Private approved evidence leaked';end if;
+ select to_jsonb(t) into h from public.paid_work_history t limit 1;
+ if h ?| array['amount_units','budget_units','signature','payer_wallet','recipient_wallet','terms_hash'] then raise exception 'Financial information stored in public history';end if;
+end$$;
+set local role authenticated;
+set local request.jwt.claim.sub='b0000000-0000-4000-8000-000000000002';
+select public.share_paid_work(:'project_id',true,true,'I delivered an accessible interface with documentation.');
+set local role anon;
+set local request.jwt.claim.sub='';
+do $$begin if (select count(*) from public.paid_work_evidence)<>1 then raise exception 'Chosen evidence not visible';end if;end$$;
+set local role authenticated;
+set local request.jwt.claim.sub='b0000000-0000-4000-8000-000000000002';
+update public.profiles set is_public=false where id=auth.uid();
+set local role anon;
+set local request.jwt.claim.sub='';
+do $$begin if exists(select 1 from public.paid_work_history) or exists(select 1 from public.paid_work_evidence) then raise exception 'Private passport leaked work history';end if;end$$;
+set local role authenticated;
+set local request.jwt.claim.sub='b0000000-0000-4000-8000-000000000003';
+do $$begin
+ begin perform public.share_paid_work(current_setting('test.payment_project')::uuid,true,true,'An unrelated worker attempts to publish another record.');raise exception 'Unrelated worker could publish';exception when raise_exception then if sqlerrm='Unrelated worker could publish' then raise;end if;end;
+end$$;
 rollback;
-\echo 'PASS: payment trust boundary, pinned payout, wallet locks, duplicate prevention, receipt uniqueness and project completion (offline fixtures only)'
+\echo 'PASS: payment trust boundary, pinned payout, wallet locks, duplicate prevention, receipt uniqueness, project completion and passport consent/privacy (offline fixtures only)'

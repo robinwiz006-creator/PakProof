@@ -31,6 +31,8 @@ async function mutate(
         : "Could not save. Check your permissions and the current project status, then try again.",
     );
   revalidatePath("/paid-projects", "layout");
+  revalidatePath("/talent", "layout");
+  revalidatePath("/portal/talent", "layout");
   go(path, message);
 }
 export async function createPaidProject(form: FormData) {
@@ -219,5 +221,32 @@ export async function authorizePayout(form: FormData) {
     { p_project: v.project_id, p_connection: v.connection_id },
     `/paid-projects/${v.project_id}`,
     "Payout wallet explicitly authorized for future milestones. Prepared payments retain their original destination.",
+  );
+}
+export async function sharePaidWork(form: FormData) {
+  const v = parse(
+    z.object({ project_id: z.uuid(), summary: z.string().trim().max(4000) }),
+    form,
+    "/paid-projects",
+  );
+  await mutate(
+    "share_paid_work",
+    {
+      p_project: v.project_id,
+      p_public: form.get("is_public") === "on",
+      p_evidence: form.get("share_evidence") === "on",
+      p_summary: v.summary,
+    },
+    `/paid-projects/${v.project_id}`,
+    "Work history preferences saved. Public display requires company consent and a published passport; payment amounts stay off your passport.",
+  );
+}
+export async function consentPaidWork(form: FormData) {
+  const v = parse(z.object({ project_id: z.uuid() }), form, "/paid-projects");
+  await mutate(
+    "consent_paid_work",
+    { p_project: v.project_id, p_consent: form.get("consent") === "on" },
+    `/paid-projects/${v.project_id}`,
+    "Company disclosure consent saved. This does not issue a skill credential.",
   );
 }

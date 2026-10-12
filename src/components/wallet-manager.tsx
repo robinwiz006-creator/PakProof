@@ -109,7 +109,9 @@ export function WalletManager({
       <label className="field">
         Purpose
         <select value={purpose} onChange={(e) => setPurpose(e.target.value)}>
-          <option value="account">My account / receive future payments</option>
+          <option value="account">
+            My account / receive milestone payments
+          </option>
           <option value="credential_issuer">
             Organization credential signing
           </option>

@@ -1,3 +1,4 @@
+import { PaymentError } from "./payment-error";
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { PublicKey } from "@solana/web3.js";
@@ -18,7 +19,7 @@ export function paymentAdmin() {
     !process.env.SUPABASE_SERVICE_ROLE_KEY ||
     !process.env.NEXT_PUBLIC_SUPABASE_URL
   )
-    throw new Error(
+    throw new PaymentError(
       "Server payment storage is not configured. No transaction should be sent.",
     );
   return createClient(
@@ -30,7 +31,9 @@ export function paymentAdmin() {
 export async function paymentNetwork() {
   const rpc = connection();
   if ((await rpc.getGenesisHash()) !== DEVNET_GENESIS)
-    throw new Error("Payments are disabled: the RPC is not Solana devnet.");
+    throw new PaymentError(
+      "Payments are disabled: the RPC is not Solana devnet.",
+    );
   const mint = await rpc.getAccountInfo(
     new PublicKey(TEST_USDC_MINT),
     "finalized",
@@ -42,7 +45,7 @@ export async function paymentNetwork() {
     mint.data[44] !== 6 ||
     mint.data[45] !== 1
   )
-    throw new Error(
+    throw new PaymentError(
       "Payments are disabled: the allowlisted devnet test mint is unavailable or changed.",
     );
   return rpc;
@@ -61,7 +64,7 @@ export function validateTokenAccount(
     new PublicKey(account.data.slice(32, 64)).toBase58() !== wallet ||
     account.data[108] !== 1
   )
-    throw new Error(
+    throw new PaymentError(
       "Token account is missing, frozen, or has an unexpected mint or wallet owner.",
     );
 }
@@ -73,7 +76,7 @@ export async function reconcilePayment(attemptId: string) {
     .eq("id", attemptId)
     .single();
   if (aError || !a?.signature || !a.signed_base64)
-    throw new Error("No registered signed attempt to reconcile.");
+    throw new PaymentError("No registered signed attempt to reconcile.");
   if (a.status === "paid" || a.status === "failed")
     return { status: a.status, note: a.status_note };
   const { data: row, error: iError } = await db
@@ -81,7 +84,7 @@ export async function reconcilePayment(attemptId: string) {
     .select("*")
     .eq("id", a.intent_id)
     .single();
-  if (iError || !row) throw new Error("Payment intent not found.");
+  if (iError || !row) throw new PaymentError("Payment intent not found.");
   const i = { ...row, amount_units: String(row.amount_units) } as PaymentIntent;
   const attempt = {
     ...a,
@@ -108,12 +111,14 @@ export async function reconcilePayment(attemptId: string) {
     signal: AbortSignal.timeout(15000),
   });
   if (!response.ok)
-    throw new Error(
+    throw new PaymentError(
       "Devnet RPC temporarily unavailable. The outcome is unknown; do not repay.",
     );
   const raw = await response.json();
   if (raw.error)
-    throw new Error("Could not retrieve finalized transaction. Do not repay.");
+    throw new PaymentError(
+      "Could not retrieve finalized transaction. Do not repay.",
+    );
   let status: "paid" | "pending" | "failed" | "needs_review" = "pending",
     note =
       "Outcome unknown. Keep the registered signature; do not send another payment.",
@@ -124,12 +129,19 @@ export async function reconcilePayment(attemptId: string) {
       maxSupportedTransactionVersion: 0,
     });
     if (!parsed)
-      throw new Error(
+      throw new PaymentError(
         "Historical parsed transaction unavailable. Do not repay.",
       );
     if (!parsed.meta || !raw.result.meta || raw.result.meta.err === undefined)
-      throw new Error(
+      throw new PaymentError(
         "Historical transaction metadata is unavailable. Outcome unknown; do not repay.",
+      );
+    if (
+      parsed.transaction.signatures[0] !== a.signature ||
+      (parsed.meta.err === null) !== (raw.result.meta.err === null)
+    )
+      throw new PaymentError(
+        "RPC transaction metadata is inconsistent. Keep the original signature; do not repay.",
       );
     const tx = {
       finalized: true,
@@ -182,7 +194,7 @@ export async function reconcilePayment(attemptId: string) {
     p_finalized: finalized,
   });
   if (error)
-    throw new Error(
+    throw new PaymentError(
       "Chain checked but saving failed. Reconcile this same registered signature; do not repay.",
     );
   return { status, note, signature: a.signature };

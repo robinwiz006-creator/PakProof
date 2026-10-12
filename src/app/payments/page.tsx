@@ -13,7 +13,7 @@ export default async function Payments() {
   const { data, error } = await db
     .from("payment_intents")
     .select(
-      "*,paid_milestones(title,project_id,paid_projects(title)),payment_attempts(*)",
+      "*,paid_milestones(title,project_id,paid_projects(title,worker_id)),payment_attempts(*)",
     )
     .order("created_at", { ascending: false });
   return (
@@ -78,7 +78,10 @@ export default async function Payments() {
                   intentId={i.id}
                   canResume={i.payer_user_id === user.id}
                   canCancel={
-                    i.payer_user_id === user.id && i.status === "prepared"
+                    (i.payer_user_id === user.id ||
+                      i.paid_milestones?.paid_projects?.worker_id ===
+                        user.id) &&
+                    i.status === "prepared"
                   }
                 />
               )}

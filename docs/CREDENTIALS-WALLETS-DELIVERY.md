@@ -1,5 +1,7 @@
 # ProofPak credentials and wallet foundation — implementation delivery
 
+Historical checkpoint at `d2f39b2`. Stages 6–8 were subsequently implemented; see [current payment delivery](PAYMENTS-MVP.md). The stage-status table below records this earlier checkpoint.
+
 This branch builds on Phase 1 commit `2e8d307`, not the older main branch. Nothing was applied to hosted Supabase, merged into main, deployed, or broadcast to Solana. There are no invented institutions, winners, authorized issuers, or public credentials.
 
 ## What is implemented

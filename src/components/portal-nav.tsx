@@ -10,6 +10,8 @@ import {
   PlusCircle,
   ListChecks,
   Users,
+  Wallet,
+  CreditCard,
 } from "lucide-react";
 export function PortalNav({
   role,
@@ -19,21 +21,28 @@ export function PortalNav({
   section: string;
 }) {
   const talent = [
-    ["", "Overview", LayoutDashboard],
+    ["", "Dashboard", LayoutDashboard],
     ["passport", "My Passport", UserRound],
-    ["projects", "My projects", FolderGit2],
+    ["projects", "My Projects", FolderGit2],
+    ["/my-credentials", "My Credentials", Award],
     ["achievements", "My Achievements", Award],
-    ["browse", "Explore Challenges", Compass],
+    ["/opportunities", "Opportunities", Compass],
+    ["/wallet", "Wallet (optional)", Wallet],
+    ["/payments", "Payments", CreditCard],
     ["submissions", "My submissions", Send],
     ["settings", "Account Settings", UserRound],
     ["profile", "Edit Profile", UserRound],
   ] as const;
   const company = [
-    ["", "Overview", LayoutDashboard],
+    ["", "Dashboard", LayoutDashboard],
+    ["/organizations", "Organization / Credentials", Building2],
     ["profile", "Company profile", Building2],
+    ["challenges", "Challenges", Compass],
     ["create", "Create challenge", PlusCircle],
-    ["challenges", "Manage challenges", Compass],
     ["reviews", "Review submissions", ListChecks],
+    ["/paid-projects?view=company", "Paid Projects", FolderGit2],
+    ["/payments", "Payments", CreditCard],
+    ["/wallet", "Wallet", Wallet],
     ["directory", "Talent directory", Users],
   ] as const;
   return (
@@ -45,26 +54,22 @@ export function PortalNav({
         {(role === "company" ? company : talent).map(([path, label, Icon]) => (
           <Link
             key={path}
-            className={section === path ? "active" : ""}
-            aria-current={section === path ? "page" : undefined}
-            href={`/portal/${role}${path ? `/${path}` : ""}`}
+            className={
+              !path.startsWith("/") && section === path ? "active" : ""
+            }
+            aria-current={
+              !path.startsWith("/") && section === path ? "page" : undefined
+            }
+            href={
+              path.startsWith("/")
+                ? path
+                : `/portal/${role}${path ? `/${path}` : ""}`
+            }
           >
             <Icon size={16} />
             {label}
           </Link>
         ))}
-        <Link href="/my-credentials">
-          <Award size={16} />
-          My Credentials
-        </Link>
-        <Link href="/organizations">
-          <Building2 size={16} />
-          Organizations
-        </Link>
-        <Link href="/wallet">
-          <UserRound size={16} />
-          Wallet (optional)
-        </Link>
       </nav>
       <div className="switch">
         <Link href={`/portal/${role === "company" ? "talent" : "company"}`}>

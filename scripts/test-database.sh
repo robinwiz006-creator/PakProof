@@ -22,6 +22,8 @@ docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < supabase/migra
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < supabase/migrations/202610120004_wallet_ownership.sql
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < supabase/migrations/202610120005_paid_projects.sql
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < supabase/migrations/202610120006_milestone_payments.sql
+docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < supabase/migrations/202610120007_paid_work_history.sql
+docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < supabase/migrations/202610120008_payment_workflow_guards.sql
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < tests/paid-projects-database.sql
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < tests/payment-database.sql
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < tests/database.sql
@@ -30,6 +32,6 @@ docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < tests/wallet-d
 
 # A separate local DB proves upgrading a populated v1 schema retains its data.
 docker exec "$container" createdb -U postgres proofpak_legacy_test
-for sql in tests/database-bootstrap.sql supabase/migrations/202610110001_initial.sql tests/legacy-before.sql supabase/migrations/202610120001_passport_foundation.sql supabase/migrations/202610120002_organizations_credentials.sql supabase/migrations/202610120003_credential_proofs.sql supabase/migrations/202610120004_wallet_ownership.sql supabase/migrations/202610120005_paid_projects.sql supabase/migrations/202610120006_milestone_payments.sql tests/legacy-after.sql; do
+for sql in tests/database-bootstrap.sql supabase/migrations/202610110001_initial.sql tests/legacy-before.sql supabase/migrations/202610120001_passport_foundation.sql supabase/migrations/202610120002_organizations_credentials.sql supabase/migrations/202610120003_credential_proofs.sql supabase/migrations/202610120004_wallet_ownership.sql supabase/migrations/202610120005_paid_projects.sql supabase/migrations/202610120006_milestone_payments.sql supabase/migrations/202610120007_paid_work_history.sql supabase/migrations/202610120008_payment_workflow_guards.sql tests/legacy-after.sql; do
  docker exec -i "$container" psql -U postgres -d proofpak_legacy_test -v ON_ERROR_STOP=1 < "$sql"
 done
