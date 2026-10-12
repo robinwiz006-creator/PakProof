@@ -137,3 +137,7 @@ Add a general authorized issuer model and organization staff workflow within the
 ## Changed source files
 
 See [complete changed-file inventory](PHASE-1-CHANGED-FILES.md). GitHub review should compare only this feature branch to main. Branch: `phase-1-passport-foundation`; comparison: https://github.com/robinwiz006-creator/PakProof/compare/main...phase-1-passport-foundation . If API access blocks PR creation, create the PR there manually. Do not merge until the migration steps above are complete.
+
+## Hosted readiness check before release
+
+A fresh read-only doctor run confirms the original ten tables, workflow RPCs, authentication connection, and both devnet endpoints are reachable. The three new tables return missing-schema responses, and the three additive columns are absent. Doctor exits nonzero as expected until the manual Phase 1 migration is applied. No hosted data, accounts, settings, or transactions were changed.
