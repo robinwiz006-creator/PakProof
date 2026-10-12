@@ -1,0 +1,7 @@
+-- READ ONLY. Expected: 12 tables with RLS enabled, each has a read policy; no authenticated write policies.
+select c.relname,c.relrowsecurity as rls_enabled,(select count(*) from pg_policy p where p.polrelid=c.oid) as policy_count
+from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname in ('paid_projects','paid_milestones','paid_project_applications','paid_project_offers','paid_milestone_submissions','paid_milestone_reviews','paid_payout_authorizations','payment_intents','payment_attempts','payment_receipts','paid_work_history','paid_work_evidence') order by c.relname;
+-- Expected: true for authenticated on workflow actions, FALSE on these three trusted-server payment functions.
+select p.proname,has_function_privilege('authenticated',p.oid,'execute') as authenticated_can_execute,has_function_privilege('service_role',p.oid,'execute') as server_can_execute
+from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('create_paid_project','publish_paid_project','apply_paid_project','select_paid_worker','respond_paid_offer','submit_paid_milestone','review_paid_milestone','authorize_project_payout','prepare_milestone_payment','cancel_unsigned_payment','store_payment_template','register_signed_payment','record_payment_result','share_paid_work','consent_paid_work') order by p.proname;
+select indexname from pg_indexes where schemaname='public' and indexname in ('one_live_payment_intent','one_live_payment_attempt');

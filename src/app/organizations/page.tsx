@@ -63,6 +63,12 @@ export default async function Organizations({
         <Link className="text-link" href="/portal/company">
           Challenges workspace
         </Link>
+        <Link className="text-link" href="/paid-projects?view=company">
+          Paid projects
+        </Link>
+        <Link className="text-link" href="/payments">
+          Payments
+        </Link>
         <Link className="text-link" href="/my-credentials">
           My credentials
         </Link>

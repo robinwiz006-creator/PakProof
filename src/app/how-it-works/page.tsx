@@ -5,7 +5,7 @@ export default function How() {
       <PageHeading
         eyebrow="HOW PROOFPAK WORKS"
         title="Start with the work you can show."
-        description="Your skill passport brings your profile, projects, evidence, and recognition together. Company challenges are optional."
+        description="Your skill passport brings your profile, projects, evidence, and recognition together. Credentials are issued separately from your own projects. Challenges and paid work are optional."
       />
       {[
         [
@@ -26,12 +26,17 @@ export default function How() {
         [
           "04",
           "Earn recognition over time",
-          "A company can review your submission to an optional challenge and approve an achievement. Choose whether to share its approved evidence on your passport.",
+          "An authorized organization can issue a credential for you to accept or decline. An optional company challenge can also lead to an approved achievement. Choose what to publish and whether to share evidence.",
         ],
         [
           "05",
           "Check the record",
-          "A company reviewer can separately record the achievement on Solana devnet. Verification checks a finalized transaction and matching claim. It does not independently verify the issuer’s identity or your skill level.",
+          "Issuers can separately record their credential or achievement on Solana devnet. Verification checks a finalized transaction and matching claim. It does not independently verify the issuer’s identity or your skill level.",
+        ],
+        [
+          "06",
+          "Optional paid work",
+          "Agree on fixed milestones with a company, submit evidence and receive review. Approved work can be paid in devnet test USDC after wallet ownership checks. Test tokens are not real money, and direct payments are not guaranteed. Completed work can join your passport with consent; payment alone is not a skill credential.",
         ],
       ].map(([n, title, text]) => (
         <div className="how-step" key={n}>
@@ -51,8 +56,9 @@ export default function How() {
         </ButtonLink>
       </div>
       <p className="muted section-spacer">
-        University and organization credential issuance belongs to a future
-        release. Devnet is a testing network whose history can reset.
+        Institution verification requires an authorized human representative;
+        ProofPak does not access university databases automatically. Devnet is a
+        testing network whose history can reset.
       </p>
     </div>
   );

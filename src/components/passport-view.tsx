@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PassportPaidWork } from "./passport-paid-work";
 import { PassportCredentials } from "./passport-credentials";
 import type { Profile, Project, Achievement } from "@/lib/types";
 import { Tags, AchievementCard } from "./ui";
@@ -100,6 +101,10 @@ export async function PassportView({
     recipientId: p.id,
     preview,
   });
+  const paidWorkSection = await PassportPaidWork({
+    recipientId: p.id,
+    preview,
+  });
   return (
     <>
       <p className="eyebrow">
@@ -171,6 +176,7 @@ export async function PassportView({
               ))}
             </section>
           )}
+          {paidWorkSection}
           {credentialSection}
           {achievements.length > 0 && (
             <section id="achievements" className="section-spacer">
@@ -191,12 +197,15 @@ export async function PassportView({
               ))}
             </section>
           )}
-          {!projects.length && !achievements.length && !credentialSection && (
-            <p className="notice">
-              This passport is starting out. Projects and achievements will
-              appear as they are added.
-            </p>
-          )}
+          {!projects.length &&
+            !achievements.length &&
+            !credentialSection &&
+            !paidWorkSection && (
+              <p className="notice">
+                This passport is starting out. Projects and achievements will
+                appear as they are added.
+              </p>
+            )}
         </div>
       </div>
     </>
