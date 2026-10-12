@@ -26,10 +26,38 @@ const url = z.union([
       "Use an HTTP or HTTPS evidence URL.",
     ),
 ]);
+// Accept the slug or copied public passport URL, not arbitrary paths.
+export const recipientPassportSlug = z
+  .string()
+  .trim()
+  .min(1)
+  .max(2048)
+  .transform((value) => {
+    let slug = value;
+    if (/^https?:\/\//i.test(value)) {
+      try {
+        slug = new URL(value).pathname;
+      } catch {
+        return "";
+      }
+    }
+    const path = /^\/talent\/([^/]+)\/?$/.exec(slug);
+    if (path) slug = path[1];
+    return slug.toLowerCase();
+  })
+  .pipe(
+    z
+      .string()
+      .max(120)
+      .regex(
+        /^[a-z0-9]+(-[a-z0-9]+)*$/,
+        "Enter a passport slug or public passport URL.",
+      ),
+  );
 export const credentialInput = z
   .object({
     organization_id: z.uuid(),
-    recipient_slug: z.string().trim().min(1).max(120),
+    recipient_slug: recipientPassportSlug,
     title: z.string().trim().min(3).max(160),
     credential_type: z.enum(credentialTypes),
     description: z.string().trim().min(20).max(4000),

@@ -20,21 +20,26 @@ export default async function MyCredentials({
 }) {
   const { db, user } = await credentialWorkspace();
   const { message } = await searchParams;
-  const { data, error } = await db
-    .from("credentials")
-    .select(credentialSelect)
-    .eq("recipient_id", user.id)
-    .order("created_at", { ascending: false });
-  const { data: orgs } = await db
-    .from("organizations")
-    .select("*,companies(name)")
-    .eq("organization_type", "university")
-    .eq("issuer_status", "authorized");
-  const { data: requests } = await db
-    .from("qualification_requests")
-    .select("*")
-    .eq("recipient_id", user.id)
-    .order("created_at", { ascending: false });
+  const [credentialResult, orgResult, requestResult] = await Promise.all([
+    db
+      .from("credentials")
+      .select(credentialSelect)
+      .eq("recipient_id", user.id)
+      .order("created_at", { ascending: false }),
+    db
+      .from("organizations")
+      .select("*,companies(name)")
+      .eq("organization_type", "university")
+      .eq("issuer_status", "authorized"),
+    db
+      .from("qualification_requests")
+      .select("*")
+      .eq("recipient_id", user.id)
+      .order("created_at", { ascending: false }),
+  ]);
+  const { data, error } = credentialResult;
+  const orgs = orgResult.data;
+  const requests = requestResult.data;
   return (
     <div className="container page">
       <PageHeading

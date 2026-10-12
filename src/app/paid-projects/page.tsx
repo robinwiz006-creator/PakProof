@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { PageHeading, Empty, Tags } from "@/components/ui";
-import { isConfigured, supabase } from "@/lib/supabase/server";
+import { isConfigured, supabase, currentUser } from "@/lib/supabase/server";
 import { projectData } from "@/lib/paid-data";
 import { tokenAmount } from "@/lib/payments";
 export const dynamic = "force-dynamic";
@@ -15,9 +15,7 @@ export default async function PaidProjects({
   let signedIn = false;
   if (isConfigured()) {
     const db = await supabase();
-    const {
-      data: { user },
-    } = await db.auth.getUser();
+    const user = await currentUser();
     signedIn = Boolean(user);
     let query = db
       .from("paid_projects")

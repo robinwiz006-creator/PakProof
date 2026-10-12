@@ -30,6 +30,11 @@ set local request.jwt.claim.sub='40000000-0000-4000-8000-000000000001';
 do $$begin
  begin update public.companies set name='Impersonated University' where id=(select company_id from public.organizations where id=current_setting('test.organization_id')::uuid);raise exception 'Authorized identity changed silently';exception when raise_exception then if sqlerrm='Authorized identity changed silently' then raise;end if;end;
 end$$;
+-- Match the app's published-slug lookup under the issuer's actual RLS role.
+do $$begin
+ if (select count(*) from public.profiles where slug='talent-50000000000040008000000000000001' and is_public)<>1 then raise exception 'Issuer cannot resolve published passport';end if;
+ if exists(select 1 from public.profiles where slug='talent-70000000000040008000000000000001' and is_public) then raise exception 'Private administrator passport exposed';end if;
+end$$;
 select public.issue_credential(:'organization_id','50000000-0000-4000-8000-000000000001','Solana Hackathon Winner','hackathon_achievement','Recognition for a fixture event, not a real hackathon result.',current_date,null,'Fixture hackathon','First place','https://example.com/private-results') as credential_id \gset
 select set_config('test.credential_id',:'credential_id',true);
 set local request.jwt.claim.sub='60000000-0000-4000-8000-000000000001';
@@ -84,6 +89,25 @@ do $$begin
  begin update public.credentials set title='Privileged rewrite';raise exception 'Frozen facts could be rewritten';exception when raise_exception then if sqlerrm='Frozen facts could be rewritten' then raise;end if;end;
 end$$;
 set local role authenticated;
+set local request.jwt.claim.sub='70000000-0000-4000-8000-000000000001';
+-- A public administrator passport remains discoverable by a separate issuer.
+update public.profiles set is_public=true where id=auth.uid();
+-- Admin access does not imply membership in the organization workspace.
+do $$begin
+ if exists(select 1 from public.organizations o where o.company_id in (select company_id from public.company_memberships where user_id=auth.uid())) then raise exception 'Admin unexpectedly became organization member';end if;
+end$$;
+set local role anon;
+set local request.jwt.claim.sub='';
+do $$begin
+ if not exists(select 1 from public.profiles where slug='talent-70000000000040008000000000000001' and is_public) then raise exception 'Published administrator passport not public';end if;
+end$$;
+set local role authenticated;
+set local request.jwt.claim.sub='40000000-0000-4000-8000-000000000001';
+do $$declare recipient uuid;begin
+ select id into recipient from public.profiles where slug='talent-70000000000040008000000000000001' and is_public;
+ if recipient is null then raise exception 'Issuer cannot resolve administrator passport';end if;
+ perform public.issue_credential(current_setting('test.organization_id')::uuid,recipient,'Administrator recipient test','company_achievement','An isolated test of issuing to a public administrator passport.',current_date,null,'','','');
+end$$;
 set local request.jwt.claim.sub='70000000-0000-4000-8000-000000000001';
 select public.authorize_issuer(:'organization_id','Fixture: authorization suspended for investigation.',false,'Fixture University','An isolated test university, not a real authorized institution.','https://example.com');
 set local request.jwt.claim.sub='40000000-0000-4000-8000-000000000001';

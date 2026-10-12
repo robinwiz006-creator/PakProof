@@ -1,4 +1,6 @@
-import Link from "next/link";
+"use client";
+import Link, { useLinkStatus } from "next/link";
+import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   UserRound,
@@ -13,13 +15,10 @@ import {
   Wallet,
   CreditCard,
 } from "lucide-react";
-export function PortalNav({
-  role,
-  section,
-}: {
-  role: string;
-  section: string;
-}) {
+export function PortalNav() {
+  const pathname = usePathname();
+  const parts = pathname.split("/");
+  const role = parts[2] === "company" ? "company" : "talent";
   const talent = [
     ["", "Dashboard", LayoutDashboard],
     ["passport", "My Passport", UserRound],
@@ -55,10 +54,20 @@ export function PortalNav({
           <Link
             key={path}
             className={
-              !path.startsWith("/") && section === path ? "active" : ""
+              pathname ===
+              (path.startsWith("/")
+                ? path.split("?")[0]
+                : `/portal/${role}${path ? `/${path}` : ""}`)
+                ? "active"
+                : ""
             }
             aria-current={
-              !path.startsWith("/") && section === path ? "page" : undefined
+              pathname ===
+              (path.startsWith("/")
+                ? path.split("?")[0]
+                : `/portal/${role}${path ? `/${path}` : ""}`)
+                ? "page"
+                : undefined
             }
             href={
               path.startsWith("/")
@@ -66,8 +75,7 @@ export function PortalNav({
                 : `/portal/${role}${path ? `/${path}` : ""}`
             }
           >
-            <Icon size={16} />
-            {label}
+            <NavLabel icon={<Icon size={16} />} label={label} />
           </Link>
         ))}
       </nav>
@@ -78,5 +86,18 @@ export function PortalNav({
         </Link>
       </div>
     </aside>
+  );
+}
+
+function NavLabel({ icon, label }: { icon: React.ReactNode; label: string }) {
+  const { pending } = useLinkStatus();
+  return (
+    <>
+      <span className="nav-icon">{icon}</span>
+      {label}
+      <span className="nav-pending" data-pending={pending} role="status">
+        {pending ? "Loading…" : ""}
+      </span>
+    </>
   );
 }

@@ -14,13 +14,17 @@ export default async function IssuerAdmin({
   const { data: admin, error } = await db.rpc("is_platform_administrator");
   if (error || !admin) notFound();
   const { message } = await searchParams;
-  const { data } = await db
-    .from("organizations")
-    .select("*,companies(name,description,website)");
-  const { data: reviews } = await db
-    .from("issuer_authorizations")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const [orgResult, reviewResult] = await Promise.all([
+    db.from("organizations").select("*,companies(name,description,website)"),
+    db
+      .from("issuer_authorizations")
+      .select("*")
+      .order("created_at", { ascending: false }),
+  ]);
+  if (orgResult.error || reviewResult.error)
+    throw new Error("Issuer administration could not be loaded.");
+  const data = orgResult.data;
+  const reviews = reviewResult.data;
   return (
     <div className="container page">
       <PageHeading

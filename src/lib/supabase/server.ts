@@ -1,5 +1,6 @@
 import "server-only";
 import { createServerClient } from "@supabase/ssr";
+import { cache } from "react";
 import { cookies } from "next/headers";
 export function isConfigured() {
   return Boolean(
@@ -7,7 +8,7 @@ export function isConfigured() {
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
   );
 }
-export async function supabase() {
+export const supabase = cache(async () => {
   if (!isConfigured())
     throw new Error("Connect Supabase to use accounts and save your work.");
   const jar = await cookies();
@@ -29,4 +30,10 @@ export async function supabase() {
       },
     },
   );
-}
+});
+
+// Request-scoped only: never share authenticated results across users.
+export const currentUser = cache(async () => {
+  const db = await supabase();
+  return (await db.auth.getUser()).data.user;
+});

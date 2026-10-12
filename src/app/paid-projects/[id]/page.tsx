@@ -5,7 +5,7 @@ import {
 } from "@/components/milestone-payment";
 import { notFound } from "next/navigation";
 import { z } from "zod";
-import { isConfigured, supabase } from "@/lib/supabase/server";
+import { isConfigured, supabase, currentUser } from "@/lib/supabase/server";
 import { PageHeading, Tags } from "@/components/ui";
 import { Field, SubmitButton } from "@/components/forms";
 import { projectData, milestoneData } from "@/lib/paid-data";
@@ -37,9 +37,7 @@ export default async function PaidProjectPage({
   const { id } = await params;
   if (!z.uuid().safeParse(id).success || !isConfigured()) notFound();
   const db = await supabase();
-  const {
-    data: { user },
-  } = await db.auth.getUser();
+  const user = await currentUser();
   const { data, error } = await db
     .from("paid_projects")
     .select("*,companies(name)")

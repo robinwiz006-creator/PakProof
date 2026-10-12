@@ -1,4 +1,4 @@
-import { supabase, isConfigured } from "@/lib/supabase/server";
+import { currentUser, isConfigured } from "@/lib/supabase/server";
 import type { Metadata } from "next";
 import { Navigation } from "@/components/navigation";
 import Link from "next/link";
@@ -18,8 +18,7 @@ export default async function RootLayout({
 }) {
   let signedIn = false;
   if (isConfigured()) {
-    const db = await supabase();
-    signedIn = Boolean((await db.auth.getUser()).data.user);
+    signedIn = Boolean(await currentUser());
   }
   return (
     <html lang="en">

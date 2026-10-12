@@ -1377,3 +1377,21 @@ details > .form {
     grid-template-columns: 1fr;
   }
 }
+
+/* Reflect actual router pending state; no timers or simulated progress. */
+.sidebar nav a:has([data-pending="true"]) {
+  background: var(--surface, #eef6f5);
+  color: var(--teal, #007f78);
+}
+.sidebar
+  nav:has([data-pending="true"])
+  a.active:not(:has([data-pending="true"])) {
+  background: transparent;
+}
+.nav-icon {
+  display: inline-flex;
+}
+.nav-pending {
+  margin-left: auto;
+  font-size: 0.7rem;
+}

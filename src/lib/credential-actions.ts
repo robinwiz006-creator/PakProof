@@ -72,10 +72,20 @@ export async function issueCredential(form: FormData) {
     .eq("slug", v.recipient_slug)
     .eq("is_public", true)
     .maybeSingle();
-  if (lookupError || !recipient)
+  if (lookupError) {
+    // Do not mislabel connection, permissions, or schema errors as privacy.
+    console.error("Credential recipient lookup failed", {
+      code: lookupError.code,
+    });
     go(
       path,
-      "Ask the recipient for their published passport URL. Private accounts cannot be searched here.",
+      "We could not check the recipient’s passport. Please try again. If it continues, contact ProofPak support.",
+    );
+  }
+  if (!recipient)
+    go(
+      path,
+      "No published passport matched that slug. Check the copied passport URL or slug. Private accounts cannot be searched here.",
     );
   const { error } = await db.rpc("issue_credential", {
     p_organization: v.organization_id,

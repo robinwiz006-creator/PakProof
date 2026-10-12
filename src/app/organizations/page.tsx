@@ -30,22 +30,32 @@ export default async function Organizations({
     .select("company_id,role,companies(id,name)")
     .eq("user_id", user.id);
   const ids = (members ?? []).map((m) => m.company_id);
-  const { data: orgs, error } = await db
-    .from("organizations")
-    .select("*,companies(name,description,website)")
-    .in("company_id", ids);
+  const { data: orgs, error } = ids.length
+    ? await db
+        .from("organizations")
+        .select("*,companies(name,description,website)")
+        .in("company_id", ids)
+    : { data: [], error: null };
   const organizations = (orgs ?? []) as unknown as Organization[];
   const orgIds = organizations.map((o) => o.id);
-  const { data: credentials } = await db
-    .from("credentials")
-    .select(credentialSelect)
-    .in("organization_id", orgIds)
-    .order("created_at", { ascending: false });
-  const { data: requests } = await db
-    .from("qualification_requests")
-    .select("*")
-    .in("organization_id", orgIds)
-    .order("created_at", { ascending: false });
+  const [credentialResult, requestResult] = await Promise.all([
+    orgIds.length
+      ? db
+          .from("credentials")
+          .select(credentialSelect)
+          .in("organization_id", orgIds)
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [], error: null }),
+    orgIds.length
+      ? db
+          .from("qualification_requests")
+          .select("*")
+          .in("organization_id", orgIds)
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  const credentials = credentialResult.data;
+  const requests = requestResult.data;
   const eligible = organizations.filter(
     (o) => o.issuer_status === "authorized",
   );
@@ -81,11 +91,14 @@ export default async function Organizations({
           {message}
         </p>
       )}
-      {(error || memberError) && (
+      {(error ||
+        memberError ||
+        credentialResult.error ||
+        requestResult.error) && (
         <p className="notice">
-          Organization features are not available until the additive credentials
-          migration is applied. Existing passport and challenge pages are
-          unchanged.
+          We could not load all organization records. Please try again. If it
+          continues, ask support to check the connection, permissions, and
+          database setup.
         </p>
       )}
       <section className="section-spacer">
@@ -174,9 +187,9 @@ export default async function Organizations({
         <section className="panel section-spacer">
           <h2>Issue a credential</h2>
           <p className="muted">
-            Use the slug at the end of an existing recipient’s published
-            passport URL. No email search is available. Evidence stays private
-            unless the recipient chooses to share it.
+            Use an existing recipient’s published passport URL or slug. No email
+            search is available. Evidence stays private unless the recipient
+            chooses to share it.
           </p>
           <form action={issueCredential}>
             <div className="field">
@@ -191,7 +204,7 @@ export default async function Organizations({
             </div>
             <Field
               name="recipient_slug"
-              label="Recipient passport slug"
+              label="Recipient passport slug or URL"
               required
             />
             <Field
