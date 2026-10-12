@@ -4,14 +4,16 @@ test("landing has two clear paths and responsive navigation", async ({
 }, info) => {
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: /You have the skills/ }),
+    page.getByRole("heading", { name: /Your skills are more than a CV/ }),
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "Build Your Skill Passport", exact: true }),
+    page.getByRole("link", { name: "Build Your Passport", exact: true }),
   ).toHaveAttribute("href", "/sign-up?role=talent");
   await expect(
-    page.getByRole("link", { name: "Find Proven Talent", exact: true }),
-  ).toHaveAttribute("href", "/sign-up?role=company");
+    page
+      .locator(".editorial-hero")
+      .getByRole("link", { name: "Explore Opportunities", exact: true }),
+  ).toHaveAttribute("href", "/opportunities");
   if (info.project.name === "mobile") {
     await page.getByRole("button", { name: "Open navigation" }).click();
     await expect(
