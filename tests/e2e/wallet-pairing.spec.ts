@@ -1,42 +1,51 @@
 import { test, expect } from "@playwright/test";
-test("wallet modal offers actual methods, cancellation, and honest missing configuration", async ({
-  page,
-}) => {
-  await page.goto("/test-ui");
-  await page
-    .getByRole("button", { name: "Connect and prove ownership" })
-    .click();
-  const dialog = page.getByRole("dialog");
-  await expect(dialog).toBeVisible();
-  await expect(
-    dialog.getByRole("button", { name: "Connect Phantom extension" }),
-  ).toBeVisible();
-  await expect(
-    dialog.getByRole("button", { name: "Connect Solflare extension" }),
-  ).toBeVisible();
-  await page.screenshot({
-    path: `test-results/wallet-method-modal-${test.info().project.name}.png`,
+for (const wallet of ["Phantom", "Solflare"] as const) {
+  test(`${wallet} selection stays wallet-specific and refuses an incompatible QR`, async ({
+    page,
+  }) => {
+    let ownershipRequests = 0;
+    page.on("request", (r) => {
+      if (r.url().includes("/api/wallets")) ownershipRequests++;
+    });
+    await page.goto("/test-ui");
+    await page
+      .getByRole("combobox", { name: "Wallet", exact: true })
+      .selectOption(wallet);
+    await page
+      .getByRole("button", { name: "Connect and prove ownership" })
+      .click();
+    const dialog = page.getByRole("dialog");
+    await expect(
+      dialog.getByRole("heading", { name: `Connect ${wallet}`, exact: true }),
+    ).toBeVisible();
+    await expect(
+      dialog.getByRole("button", { name: `Connect ${wallet} extension` }),
+    ).toBeVisible();
+    await expect(
+      dialog.getByRole("button", {
+        name: `Connect ${wallet === "Phantom" ? "Solflare" : "Phantom"} extension`,
+      }),
+    ).not.toBeVisible();
+    await dialog
+      .getByRole("button", { name: "Connect Phone Wallet", exact: true })
+      .click();
+    await expect(dialog).toContainText(`${wallet} does not support`);
+    await expect(page.locator("w3m-modal")).toHaveCount(0);
+    await expect(page.locator("wui-qr-code")).toHaveCount(0);
+    await expect(
+      page.getByText("Ownership verified and wallet linked", { exact: false }),
+    ).not.toBeVisible();
+    expect(ownershipRequests).toBe(0);
+    await page.screenshot({
+      path: `test-results/${wallet.toLowerCase()}-phone-availability-${test.info().project.name}.png`,
+    });
+    await dialog
+      .getByRole("button", { name: `Back to ${wallet} methods` })
+      .click();
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(dialog).not.toBeVisible();
   });
-  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(dialog).not.toBeVisible();
-  await page
-    .getByRole("button", { name: "Connect and prove ownership" })
-    .click();
-  await dialog
-    .getByRole("button", { name: "Connect phone wallet / QR" })
-    .click();
-  await expect(
-    page.getByText("Mobile QR pairing needs a Reown project ID.", {
-      exact: false,
-    }),
-  ).toBeVisible({ timeout: 20000 });
-  await expect(
-    page.getByText("Ownership verified and wallet linked", { exact: false }),
-  ).not.toBeVisible();
-  await page.screenshot({
-    path: `test-results/wallet-pairing-configuration-needed-${test.info().project.name}.png`,
-  });
-});
+}
 test("unavailable extension fails honestly and lets the user select another method", async ({
   page,
 }) => {

@@ -135,7 +135,7 @@ for (const width of [320, 390, 768, 1280]) {
     await page.goto("/test-ui");
     await expect(
       page.getByText(
-        "Use a browser extension or pair a compatible phone wallet",
+        "Choose Phantom or Solflare, then choose its connection method",
         {
           exact: false,
         },
