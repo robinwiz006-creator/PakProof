@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { Buffer } from "buffer";
 import { Connection, Transaction } from "@solana/web3.js";
 import { getBase58Decoder } from "@solana/kit";
-import { getWallets } from "@wallet-standard/app";
+import { signingWallet, REMOTE_WALLET } from "@/lib/wallet-connection";
 import {
   StandardConnect,
   type StandardConnectFeature,
@@ -70,14 +70,7 @@ export function MilestonePayment({
     if (!prepared || prepared.recovery || prepared.attempt.signature) return;
     setBusy(true);
     try {
-      const w = getWallets()
-        .get()
-        .find(
-          (w) =>
-            w.name === walletName &&
-            StandardConnect in w.features &&
-            SolanaSignTransaction in w.features,
-        );
+      const w = await signingWallet(walletName, SolanaSignTransaction);
       if (!w)
         throw new Error(
           `Enable ${walletName} with Wallet Standard transaction signing.`,
@@ -242,6 +235,7 @@ export function MilestonePayment({
                 >
                   <option>Phantom</option>
                   <option>Solflare</option>
+                  <option value={REMOTE_WALLET}>Mobile / QR session</option>
                 </select>
               </label>
               <button className="button" disabled={busy} onClick={pay}>

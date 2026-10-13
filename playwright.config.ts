@@ -25,6 +25,7 @@ export default defineConfig({
     reuseExistingServer: false,
     env: {
       PROOFPAK_E2E: "1",
+      NEXT_PUBLIC_REOWN_PROJECT_ID: "",
       CRON_SECRET: "",
       SUPABASE_SERVICE_ROLE_KEY: "",
       NEXT_PUBLIC_SUPABASE_URL: "",

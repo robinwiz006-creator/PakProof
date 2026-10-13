@@ -118,6 +118,7 @@ test("wallet ownership UI signs a real offline Ed25519 message through a Wallet 
   await page
     .getByRole("button", { name: "Connect and prove ownership" })
     .click();
+  await page.getByRole("button", { name: "Connect Phantom extension" }).click();
   await expect(
     page.getByText(
       "Wallet ownership confirmed for this purpose. No transaction was sent.",
@@ -133,9 +134,12 @@ for (const width of [320, 390, 768, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/test-ui");
     await expect(
-      page.getByText("Desktop-to-phone QR pairing is not available", {
-        exact: false,
-      }),
+      page.getByText(
+        "Use a browser extension or pair a compatible phone wallet",
+        {
+          exact: false,
+        },
+      ),
     ).toBeVisible();
     await page
       .getByRole("combobox", { name: "Purpose", exact: true })

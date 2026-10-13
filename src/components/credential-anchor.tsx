@@ -14,7 +14,7 @@ import {
   Transaction,
   TransactionInstruction,
 } from "@solana/web3.js";
-import { getWallets } from "@wallet-standard/app";
+import { signingWallet, REMOTE_WALLET } from "@/lib/wallet-connection";
 import {
   StandardConnect,
   type StandardConnectFeature,
@@ -113,14 +113,10 @@ export function CredentialAnchor({ achievementId }: { achievementId: string }) {
       setClaimVersion(record.version);
       if (hash !== data.hash)
         throw new Error("Credential hash did not match. No transaction sent.");
-      const wallet = getWallets()
-        .get()
-        .find(
-          (w) =>
-            w.name === preferredWallet &&
-            StandardConnect in w.features &&
-            SolanaSignTransaction in w.features,
-        );
+      const wallet = await signingWallet(
+        preferredWallet,
+        SolanaSignTransaction,
+      );
       if (!wallet)
         throw new Error(
           `Install or enable ${preferredWallet} with Wallet Standard support, then reload. No transaction sent.`,
@@ -269,6 +265,7 @@ export function CredentialAnchor({ achievementId }: { achievementId: string }) {
         >
           <option>Phantom</option>
           <option>Solflare</option>
+          <option value={REMOTE_WALLET}>Mobile / QR session</option>
         </select>
       </label>
       <div className="button-row section-spacer">
