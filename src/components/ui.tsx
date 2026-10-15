@@ -120,7 +120,7 @@ export function AchievementCard({
         <span className="tag">
           {proof
             ? "Proof recorded · open to verify"
-            : "Company-approved · proof pending"}
+            : "Company-approved · blockchain record not completed"}
         </span>
       </div>
       <ArrowUpRight size={18} />

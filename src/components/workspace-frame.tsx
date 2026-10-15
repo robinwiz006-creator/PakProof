@@ -1,6 +1,7 @@
 "use client";
 import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
+import { PortalNav } from "./portal-nav";
 import { Fingerprint } from "lucide-react";
 function Pending() {
   const { pending } = useLinkStatus();
@@ -10,7 +11,13 @@ function Pending() {
     </span>
   );
 }
-export function WorkspaceFrame({ children }: { children: React.ReactNode }) {
+export function WorkspaceFrame({
+  children,
+  signedIn = false,
+}: {
+  children: React.ReactNode;
+  signedIn?: boolean;
+}) {
   const path = usePathname();
   const workspace = [
     "/organizations",
@@ -19,7 +26,12 @@ export function WorkspaceFrame({ children }: { children: React.ReactNode }) {
     "/payments",
     "/issuer-admin",
   ].some((p) => path === p || path.startsWith(p + "/"));
-  if (!workspace) return children;
+  const opportunityWorkspace =
+    signedIn &&
+    ["/opportunities", "/paid-projects", "/challenges"].some(
+      (p) => path === p || path.startsWith(p + "/"),
+    );
+  if (!workspace && !opportunityWorkspace) return children;
   const admin = path.startsWith("/issuer-admin");
   const links = admin
     ? [
@@ -27,49 +39,40 @@ export function WorkspaceFrame({ children }: { children: React.ReactNode }) {
         ["/organizations", "My organizations"],
         ["/portal/talent/passport", "My Passport"],
       ]
-    : [
-        ["/portal/talent", "Overview"],
-        ["/portal/talent/passport", "My Passport"],
-        ["/portal/talent/projects", "My Projects"],
-        ["/my-credentials", "My Credentials"],
-        ["/portal/talent/achievements", "My Achievements"],
-        ["/opportunities", "Opportunities"],
-        ["/paid-projects?view=mine", "My paid work"],
-        ["/organizations", "Organization workspace"],
-        ["/portal/company", "Challenges workspace"],
-        ["/payments", "Payment history"],
-        ["/wallet", "Wallet ownership"],
-        ["/portal/talent/settings", "Account settings"],
-      ];
+    : [];
   return (
     <div className="workspace-frame">
-      <aside className="workspace-sidebar">
-        <p className="eyebrow">
-          <Fingerprint size={16} />
-          {admin ? "ADMINISTRATION" : "YOUR WORKSPACE"}
-        </p>
-        <nav aria-label="Workspace navigation">
-          {links.map(([href, label]) => (
-            <Link
-              key={href}
-              href={href}
-              aria-current={
-                path === href || (href === "/issuer-admin" && admin)
-                  ? "page"
-                  : undefined
-              }
-            >
-              {label}
-              <Pending />
-            </Link>
-          ))}
-        </nav>
-        <p className="workspace-note">
-          Your passport comes first.
-          <br />
-          Wallets and opportunities are optional.
-        </p>
-      </aside>
+      {admin ? (
+        <aside className="workspace-sidebar">
+          <p className="eyebrow">
+            <Fingerprint size={16} />
+            {admin ? "ADMINISTRATION" : "YOUR WORKSPACE"}
+          </p>
+          <nav aria-label="Workspace navigation">
+            {links.map(([href, label]) => (
+              <Link
+                key={href}
+                href={href}
+                aria-current={
+                  path === href || (href === "/issuer-admin" && admin)
+                    ? "page"
+                    : undefined
+                }
+              >
+                {label}
+                <Pending />
+              </Link>
+            ))}
+          </nav>
+          <p className="workspace-note">
+            Your passport comes first.
+            <br />
+            Wallets and opportunities are optional.
+          </p>
+        </aside>
+      ) : (
+        <PortalNav workspace />
+      )}
       <div className="workspace-body">{children}</div>
     </div>
   );

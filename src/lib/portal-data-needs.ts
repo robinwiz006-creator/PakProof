@@ -6,7 +6,7 @@ export function portalDataNeeds(role: string, section: string) {
       talent &&
       ["", "projects", "passport", "preview", "achievements"].includes(section),
     achievements:
-      talent && ["", "passport", "preview", "achievements"].includes(section),
-    submissions: talent && ["", "submissions"].includes(section),
+      talent && ["passport", "preview", "achievements"].includes(section),
+    submissions: talent && ["submissions", "activity"].includes(section),
   };
 }

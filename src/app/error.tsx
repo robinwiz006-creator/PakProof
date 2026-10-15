@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 export default function ErrorPage({
   retry,
 }: {
@@ -9,12 +10,15 @@ export default function ErrorPage({
     <div className="container page">
       <h1>We couldn’t load this page.</h1>
       <p className="muted section-spacer">
-        Check your connection. If you’re setting up ProofPak, confirm the
-        Supabase configuration and apply the database migration.
+        Please try again. If the problem continues, return to your dashboard and
+        try opening this page again.
       </p>
       <button className="button section-spacer" onClick={retry}>
         Try again
       </button>
+      <Link className="text-link section-spacer" href="/portal/talent">
+        Return to my dashboard
+      </Link>
     </div>
   );
 }

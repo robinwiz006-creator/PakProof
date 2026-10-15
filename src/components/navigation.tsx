@@ -45,7 +45,7 @@ export function Navigation({ signedIn = false }: { signedIn?: boolean }) {
             href={signedIn ? "/portal/talent/passport" : "/sign-in"}
             onClick={() => setOpen(false)}
           >
-            {signedIn ? "My passport" : "Log In"}
+            {signedIn ? "My Profile" : "Log In"}
           </Link>
           <Link
             className="button small"

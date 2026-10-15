@@ -4,11 +4,11 @@ test("sidebar responds while destination data is delayed", async ({ page }) => {
   await page.goto("/portal/talent/passport");
   const nav = page.getByRole("navigation", { name: "Portal navigation" });
   await expect(nav).toBeVisible();
-  await page.route("**/portal/talent/achievements*", async (route) => {
+  await page.route("**/portal/talent/activity*", async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 1000));
     await route.continue();
   });
-  const link = nav.getByRole("link", { name: "My Achievements", exact: true });
+  const link = nav.getByRole("link", { name: "My Activity", exact: true });
   await link.click();
   await expect(nav).toBeVisible();
   await expect
@@ -23,7 +23,7 @@ test("sidebar responds while destination data is delayed", async ({ page }) => {
     )
     .toBe(true);
   await expect(
-    page.getByRole("heading", { name: "My achievements." }),
+    page.getByRole("heading", { name: "My Activity" }),
   ).toBeVisible();
   await expect(link).toHaveAttribute("aria-current", "page");
   await expect(link.locator('[data-pending="true"]')).toHaveCount(0);

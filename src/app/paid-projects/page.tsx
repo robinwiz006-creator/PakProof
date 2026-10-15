@@ -66,9 +66,20 @@ export default async function PaidProjects({
         description="Build experience through clearly scoped work. Direct payments follow company approval; funds are not locked or guaranteed."
         action={
           signedIn ? (
-            <Link className="button" href="/paid-projects/new">
-              Create a paid project ↗
-            </Link>
+            view === "company" ? (
+              <Link className="button" href="/paid-projects/new">
+                Create a paid project ↗
+              </Link>
+            ) : (
+              <Link
+                className="button"
+                href={
+                  view === "mine" ? "/paid-projects" : "/portal/talent/activity"
+                }
+              >
+                {view === "mine" ? "Find a project" : "My Activity"} ↗
+              </Link>
+            )
           ) : (
             <Link className="button" href="/sign-in">
               Sign in to apply ↗
@@ -97,7 +108,7 @@ export default async function PaidProjects({
           Unpaid skill challenges
         </Link>
         <Link className="text-link" href="/portal/talent/passport">
-          My passport
+          My Profile
         </Link>
       </div>
       <p className="notice section-spacer">
@@ -115,8 +126,8 @@ export default async function PaidProjects({
       </p>
       {unavailable ? (
         <p className="notice">
-          Paid projects require the new Supabase migration. No projects or
-          payments are being simulated.
+          We could not load paid projects. Please try again later. No projects
+          or payments are being simulated.
         </p>
       ) : !projects.length ? (
         <Empty title="No paid projects here yet">

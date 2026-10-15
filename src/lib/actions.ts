@@ -1,4 +1,5 @@
 "use server";
+import { messageLink } from "./navigation-message";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -14,7 +15,7 @@ import {
   skillsList,
 } from "./validation";
 function go(path: string, message: string): never {
-  redirect(`${path}?message=${encodeURIComponent(message)}`);
+  redirect(messageLink(path, message));
 }
 function raw(form: FormData) {
   return Object.fromEntries(form.entries());
@@ -383,4 +384,57 @@ export async function resetPassword(form: FormData) {
       "Could not update your password. Request a new reset link and try again.",
     );
   go("/portal/talent/settings", "Password updated.");
+}
+
+export async function saveProfileStep(
+  _previous: { error: string; values?: Record<string, string> },
+  form: FormData,
+): Promise<{ error: string; values?: Record<string, string> }> {
+  const { db, user } = await context();
+  const step = String(form.get("step"));
+  const values = Object.fromEntries(
+    [...form.entries()].filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
+  );
+  let patch;
+  try {
+    const { profileStepPatch } = await import("./profile-setup");
+    patch = profileStepPatch(step, values);
+  } catch (e) {
+    return {
+      error:
+        e instanceof z.ZodError
+          ? e.issues[0].message
+          : "Please check your profile details.",
+      values,
+    };
+  }
+  const { data, error } = await db
+    .from("profiles")
+    .update(patch)
+    .eq("id", user.id)
+    .select("id")
+    .single();
+  if (error || !data)
+    return {
+      error:
+        error?.code === "23505"
+          ? "That profile link is already in use. Choose another."
+          : "We could not save your changes. Your other profile details have not changed. Try again.",
+      values,
+    };
+  revalidatePath("/", "layout");
+  const next =
+    step === "about" ? "skills" : step === "skills" ? "work" : "publish";
+  go(
+    next === "work"
+      ? "/portal/talent/projects"
+      : `/portal/talent/profile?step=${next}`,
+    step === "publish"
+      ? "is_public" in patch && patch.is_public
+        ? "Your Skill Passport is published. You can copy its link and share it."
+        : "Your profile is private. Only you can preview it."
+      : "Saved. Continue below or return later.",
+  );
 }

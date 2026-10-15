@@ -10,8 +10,8 @@ export default function Opportunities() {
     <div className="container page">
       <PageHeading
         eyebrow="OPTIONAL EXPERIENCE"
-        title="More ways to build your record."
-        description="Your passport comes first. Challenges and paid projects are optional ways to practise, show work, and earn recognition."
+        title="Find opportunities"
+        description="Find a challenge to practise your skills or apply for a paid project. Your Skill Passport is useful with or without an opportunity."
       />
       <section className="section-spacer">
         <h2>Open opportunities</h2>
@@ -54,7 +54,7 @@ export default function Opportunities() {
         passport.
       </p>
       <Link className="text-link section-spacer" href="/portal/talent/passport">
-        Return to my passport ↗
+        Return to My Profile ↗
       </Link>
     </div>
   );
