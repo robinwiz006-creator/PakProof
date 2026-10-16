@@ -29,7 +29,7 @@ export default async function RootLayout({
         </a>
         <Navigation signedIn={signedIn} />
         <main id="main">
-          <WorkspaceFrame>{children}</WorkspaceFrame>
+          <WorkspaceFrame signedIn={signedIn}>{children}</WorkspaceFrame>
         </main>
         <footer className="site-footer">
           <div>

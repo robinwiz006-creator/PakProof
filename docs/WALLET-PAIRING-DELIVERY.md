@@ -1,5 +1,7 @@
 # ProofPak wallet pairing delivery
 
+> Superseded for Phantom/Solflare phone initiation: see [wallet-specific findings](WALLET-SPECIFIC-CONNECTION.md). Both live Reown records report `supports_wc: false`; generic QR generation was not evidence of compatibility. The selected-wallet phone actions are now gated.
+
 ## Release status
 
 A real Reown AppKit / WalletConnect Solana integration is implemented locally. It is **not yet verified as a successful laptop-to-phone wallet ownership flow**. Do not record or advertise that success until the device acceptance test below passes.

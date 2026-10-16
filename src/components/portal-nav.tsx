@@ -1,100 +1,103 @@
 "use client";
 import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useSyncExternalStore } from "react";
 import {
-  LayoutDashboard,
-  UserRound,
-  FolderGit2,
-  Compass,
-  Send,
-  Award,
-  Building2,
-  PlusCircle,
-  ListChecks,
-  Users,
-  Wallet,
-  CreditCard,
-  ArrowUpRight,
-} from "lucide-react";
-export function PortalNav() {
+  personalNavigation,
+  organizationNavigation,
+  secondaryNavigation,
+  personalSection,
+  type DashboardRole,
+} from "@/lib/dashboard-navigation";
+function subscribe(notify: () => void) {
+  window.addEventListener("proofpak-workspace", notify);
+  return () => window.removeEventListener("proofpak-workspace", notify);
+}
+function snapshot(): DashboardRole {
+  try {
+    return sessionStorage.getItem("proofpak:workspace") === "company"
+      ? "company"
+      : "talent";
+  } catch {
+    return "talent";
+  }
+}
+function remember(role: DashboardRole) {
+  try {
+    sessionStorage.setItem("proofpak:workspace", role);
+    window.dispatchEvent(new Event("proofpak-workspace"));
+  } catch {
+    /* Navigation works without storage. */
+  }
+}
+export function useDashboardRole(): DashboardRole {
+  const path = usePathname();
+  const stored = useSyncExternalStore(
+    subscribe,
+    snapshot,
+    () => "talent" as const,
+  );
+  const explicit =
+    path.startsWith("/portal/company") || path.startsWith("/organizations")
+      ? "company"
+      : path.startsWith("/portal/talent") || path.startsWith("/my-credentials")
+        ? "talent"
+        : null;
+  useEffect(() => {
+    if (explicit) remember(explicit);
+  }, [explicit]);
+  return explicit ?? stored;
+}
+export function PortalNav({ workspace = false }: { workspace?: boolean }) {
   const pathname = usePathname();
-  const parts = pathname.split("/");
-  const role = parts[2] === "company" ? "company" : "talent";
-  const talent = [
-    ["", "Dashboard", LayoutDashboard],
-    ["passport", "My Passport", UserRound],
-    ["projects", "My Projects", FolderGit2],
-    ["/my-credentials", "My Credentials", Award],
-    ["achievements", "My Achievements", Award],
-    ["/opportunities", "Opportunities", Compass],
-    ["/wallet", "Wallet (optional)", Wallet],
-    ["/payments", "Payments", CreditCard],
-    ["submissions", "My submissions", Send],
-    ["settings", "Account Settings", UserRound],
-    ["profile", "Edit Profile", UserRound],
-  ] as const;
-  const company = [
-    ["", "Dashboard", LayoutDashboard],
-    ["/organizations", "Organization / Credentials", Building2],
-    ["profile", "Company profile", Building2],
-    ["challenges", "Challenges", Compass],
-    ["create", "Create challenge", PlusCircle],
-    ["reviews", "Review submissions", ListChecks],
-    ["/paid-projects?view=company", "Paid Projects", FolderGit2],
-    ["/payments", "Payments", CreditCard],
-    ["/wallet", "Wallet", Wallet],
-    ["directory", "Talent directory", Users],
-  ] as const;
+  const role = useDashboardRole();
+  const primary =
+    role === "company" ? organizationNavigation : personalNavigation;
+  const current = role === "talent" ? personalSection(pathname) : pathname;
+  const render = (links: readonly (readonly [string, string])[]) =>
+    links.map(([href, label]) => (
+      <Link
+        key={href}
+        href={href}
+        onClick={() => remember(role)}
+        className={current === href.split("?")[0] ? "active" : ""}
+        aria-current={current === href.split("?")[0] ? "page" : undefined}
+      >
+        <NavLabel label={label} />
+      </Link>
+    ));
   return (
-    <aside className="sidebar">
+    <aside className={workspace ? "workspace-sidebar" : "sidebar"}>
       <p className="eyebrow">
-        {role === "company" ? "PROOFPAK FOR COMPANIES" : "PROOFPAK"}
+        {role === "company" ? "ORGANIZATION DASHBOARD" : "MY DASHBOARD"}
       </p>
-      <nav aria-label="Portal navigation">
-        {(role === "company" ? company : talent).map(([path, label, Icon]) => (
-          <Link
-            key={path}
-            className={
-              pathname ===
-              (path.startsWith("/")
-                ? path.split("?")[0]
-                : `/portal/${role}${path ? `/${path}` : ""}`)
-                ? "active"
-                : ""
-            }
-            aria-current={
-              pathname ===
-              (path.startsWith("/")
-                ? path.split("?")[0]
-                : `/portal/${role}${path ? `/${path}` : ""}`)
-                ? "page"
-                : undefined
-            }
-            href={
-              path.startsWith("/")
-                ? path
-                : `/portal/${role}${path ? `/${path}` : ""}`
-            }
-          >
-            <NavLabel icon={<Icon size={16} />} label={label} />
-          </Link>
-        ))}
+      <nav
+        aria-label={workspace ? "Workspace navigation" : "Portal navigation"}
+      >
+        {render(primary)}
       </nav>
+      <div className="nav-secondary">
+        <p className="eyebrow">ACCOUNT</p>
+        <nav aria-label="Account navigation">{render(secondaryNavigation)}</nav>
+      </div>
       <div className="switch">
-        <Link href={`/portal/${role === "company" ? "talent" : "company"}`}>
-          {role === "company" ? "Open talent portal" : "Open company workspace"}{" "}
-          <ArrowUpRight size={14} aria-hidden="true" />
+        <Link
+          href={role === "company" ? "/portal/talent" : "/portal/company"}
+          onClick={() => remember(role === "company" ? "talent" : "company")}
+        >
+          {role === "company"
+            ? "My personal dashboard"
+            : "Organization dashboard"}{" "}
+          ↗
         </Link>
       </div>
     </aside>
   );
 }
-
-function NavLabel({ icon, label }: { icon: React.ReactNode; label: string }) {
+function NavLabel({ label }: { label: string }) {
   const { pending } = useLinkStatus();
   return (
     <>
-      <span className="nav-icon">{icon}</span>
       {label}
       <span className="nav-pending" data-pending={pending} role="status">
         {pending ? "Loading…" : ""}

@@ -19,7 +19,12 @@ export function CredentialRecord({
       <div className="tags">
         <span className="tag">Validity: {credentialValidity(c)}</span>
         <span className="tag">
-          Issuer {c.organizations?.issuer_status ?? "unverified"}
+          Organization{" "}
+          {c.organizations?.issuer_status === "authorized"
+            ? "approved"
+            : c.organizations?.issuer_status === "pending"
+              ? "awaiting approval"
+              : (c.organizations?.issuer_status ?? "unverified")}
         </span>
         <span className={`tag status-${c.credential_preferences.acceptance}`}>
           {c.credential_preferences.acceptance === "pending"
@@ -30,8 +35,8 @@ export function CredentialRecord({
       <p className="muted section-spacer">
         {c.credential_proofs?.length
           ? "Transaction recorded · open the credential to check integrity. "
-          : "Proof not yet anchored. "}
-        Issuer authorization and blockchain integrity are separate checks.
+          : "Blockchain record not completed. "}
+        Organization approval and blockchain integrity are separate checks.
       </p>
     </article>
   );

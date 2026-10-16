@@ -13,7 +13,8 @@ export default async function SignUp({
       <p className="eyebrow">START WITH WHAT YOU CAN DO</p>
       <h1>Create your account.</h1>
       <p className="muted">
-        Build your passport or discover talent through ProofPak for companies.
+        Create your Skill Passport in a few short steps. Skills and projects can
+        be added later. You do not need a wallet.
       </p>
       {!isConfigured() && (
         <div className="notice section-spacer">
@@ -26,6 +27,10 @@ export default async function SignUp({
           {message}
         </p>
       )}
+      <p className="muted">
+        One account works for your personal profile and organizations. Choose
+        where you want to start; you can switch later.
+      </p>
       <form className="form" action={signUp}>
         <label className="field">
           I’m here to
@@ -34,9 +39,7 @@ export default async function SignUp({
             defaultValue={role === "company" ? "company" : "talent"}
           >
             <option value="talent">Build my skill passport</option>
-            <option value="company">
-              Find talent with ProofPak for companies
-            </option>
+            <option value="company">Manage an organization</option>
           </select>
         </label>
         <Field

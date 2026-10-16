@@ -80,7 +80,7 @@ export function ApprovedEvidence({
       </Link>
       {a.achievement_sharing?.project_id && projectHref && (
         <a className="text-link section-spacer" href={projectHref}>
-          Related self-reported portfolio project ↓
+          Related project added by the owner ↓
         </a>
       )}
     </section>
@@ -126,7 +126,7 @@ export async function PassportView({
           <span className="muted">
             {[p.university, p.location].filter(Boolean).join(" · ")}
           </span>
-          <p className="record-label">PROFILE INFORMATION IS SELF-REPORTED</p>
+          <p className="record-label">PROFILE INFORMATION ADDED BY THE OWNER</p>
         </div>
       </div>
       {!preview && <SharePassport slug={p.slug} />}
@@ -147,7 +147,7 @@ export async function PassportView({
           {p.skills.length > 0 && (
             <section className="panel">
               <h2>Skills</h2>
-              <p className="record-label">SELF-REPORTED</p>
+              <p className="record-label">ADDED BY THE OWNER</p>
               <Tags values={p.skills} />
             </section>
           )}
@@ -167,7 +167,9 @@ export async function PassportView({
                   className="panel section-spacer"
                   key={pr.id}
                 >
-                  <span className="record-label">SELF-REPORTED PROJECT</span>
+                  <span className="record-label">
+                    PROJECT ADDED BY THE OWNER
+                  </span>
                   <h3>{pr.title}</h3>
                   <p className="muted">{pr.description}</p>
                   <Tags values={pr.skills ?? []} />

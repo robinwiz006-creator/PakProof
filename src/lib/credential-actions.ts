@@ -1,11 +1,12 @@
 "use server";
+import { messageLink } from "./navigation-message";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { supabase, isConfigured } from "./supabase/server";
 import { credentialInput, organizationTypes } from "./credentials";
 function go(path: string, message: string): never {
-  redirect(`${path}?message=${encodeURIComponent(message)}`);
+  redirect(messageLink(path, message));
 }
 async function context() {
   if (!isConfigured())
@@ -26,14 +27,14 @@ function result(error: { message: string } | null, path: string) {
   if (error)
     go(
       path,
-      "Could not save. Check your permissions, issuer authorization, and migration setup. No change was made.",
+      "Could not save. Check your details and organization approval, or ask an organization owner to check your access. No change was made.",
     );
   revalidatePath("/organizations");
   revalidatePath("/my-credentials");
   revalidatePath("/talent", "layout");
 }
 export async function registerOrganization(form: FormData) {
-  const path = "/organizations";
+  const path = "/organizations?view=register";
   const v = parse(
     z.object({
       organization_type: z.enum(organizationTypes),
@@ -58,12 +59,12 @@ export async function registerOrganization(form: FormData) {
   });
   result(error, path);
   go(
-    path,
+    "/organizations?view=overview",
     "Organization created. An administrator must review your identity before credential issuance is enabled.",
   );
 }
 export async function issueCredential(form: FormData) {
-  const path = "/organizations";
+  const path = "/organizations?view=issue";
   const v = parse(credentialInput, form, path);
   const db = await context();
   const { data: recipient, error: lookupError } = await db
@@ -101,7 +102,7 @@ export async function issueCredential(form: FormData) {
   });
   result(error, path);
   go(
-    path,
+    "/organizations?view=issued",
     "Credential issued privately. The recipient can accept or decline it in My Credentials.",
   );
 }
@@ -126,7 +127,7 @@ export async function respondCredential(form: FormData) {
   go(path, "Your credential preferences were saved.");
 }
 export async function revokeCredential(form: FormData) {
-  const path = "/organizations";
+  const path = "/organizations?view=issued";
   const v = parse(
     z.object({
       credential_id: z.uuid(),
@@ -204,7 +205,7 @@ export async function requestQualification(form: FormData) {
   );
 }
 export async function reviewQualification(form: FormData) {
-  const path = "/organizations";
+  const path = "/organizations?view=requests";
   const v = parse(
     z.object({
       request_id: z.uuid(),

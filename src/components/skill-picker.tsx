@@ -35,7 +35,7 @@ export function SkillPicker({
       />
       <small id={`${id}-hint`}>
         Select suggestions or add your own, separated by commas. These skills
-        are self-reported.
+        are added by you, not independently verified.
       </small>
       <div className="tags">
         {suggestions.map((skill) => (

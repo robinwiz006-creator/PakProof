@@ -8,7 +8,7 @@ for (const width of [320, 390, 1280]) {
     page.on("pageerror", (e) => errors.push(e.message));
     await page.goto("/opportunities");
     await expect(
-      page.getByRole("heading", { name: "More ways to build your record." }),
+      page.getByRole("heading", { name: "Find opportunities" }),
     ).toBeVisible();
     await expect(
       page.getByRole("link", { name: "Explore paid projects ↗" }),
@@ -16,7 +16,7 @@ for (const width of [320, 390, 1280]) {
     await page.goto("/paid-projects");
     await expect(
       page.getByText(
-        "Paid projects require the new Supabase migration. No projects or payments are being simulated.",
+        "We could not load paid projects. Please try again later. No projects or payments are being simulated.",
       ),
     ).toBeVisible();
     expect(

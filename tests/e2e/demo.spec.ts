@@ -137,9 +137,9 @@ test("passport-first onboarding, preview and recovery routes work at small mobil
     await page.setViewportSize({ width, height: 844 });
     await page.goto("/portal/talent");
     await expect(
-      page.getByRole("heading", { name: "Your passport progress" }),
+      page.getByRole("heading", { name: "Build my profile" }),
     ).toBeVisible();
-    await expect(page.locator(".passport-checklist li")).toHaveCount(6);
+    await expect(page.locator(".dashboard-actions > a")).toHaveCount(3);
     await page.goto("/portal/talent/preview");
     await expect(
       page.getByText("PRIVATE PREVIEW · ONLY YOU CAN SEE THIS PAGE"),

@@ -44,12 +44,12 @@ export default async function MyCredentials({
     <div className="container page">
       <PageHeading
         eyebrow="MY PASSPORT"
-        title="My credentials"
-        description="Organization-issued records are separate from your self-reported projects. You choose what to accept and publish."
+        title="Credentials"
+        description="Review credentials sent to you. Accept or decline each one, then choose whether to display it on your Skill Passport."
       />
       <div className="button-row">
         <Link className="text-link" href="/portal/talent/passport">
-          My passport
+          My Profile
         </Link>
         <Link className="text-link" href="/organizations">
           Organization workspace
@@ -57,8 +57,8 @@ export default async function MyCredentials({
       </div>
       <p className="workflow-callout">
         Review the issuer and record → Accept or decline → Choose whether to
-        publish. Acceptance alone does not make a credential public or onchain
-        verified.
+        publish. Acceptance alone does not make a credential public or
+        blockchain verified.
       </p>
       {message && (
         <p className="notice section-spacer" role="status">
@@ -72,8 +72,13 @@ export default async function MyCredentials({
         </p>
       ) : !(data ?? []).length ? (
         <Empty title="No credentials yet">
-          An authorized organization can issue a credential using your published
-          passport slug, or you can request qualification verification below.
+          You can build and publish your profile before receiving any
+          credentials. An approved organization can send you one using your
+          public profile link.{" "}
+          <Link href="/portal/talent/profile?step=publish">
+            Manage your profile link
+          </Link>
+          .
         </Empty>
       ) : (
         (data as unknown as Credential[]).map((c) => (

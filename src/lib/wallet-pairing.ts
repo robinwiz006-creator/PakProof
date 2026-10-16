@@ -96,71 +96,13 @@ export async function pairedWallet() {
   await withWalletTimeout(kit.ready());
   return sessionWallet(readSession);
 }
-export async function connectPairedWallet() {
-  const kit = appKit();
-  await withWalletTimeout(kit.ready());
-  // An existing session still needs a fresh server-issued ownership challenge.
-  if (kit.getAccount("solana")?.isConnected) return sessionWallet(readSession);
-  return new Promise<ReturnType<typeof sessionWallet>>((resolve, reject) => {
-    let finished = false,
-      opened = false;
-    const cleanup: (() => void)[] = [];
-    function finish(error?: Error) {
-      if (finished) return;
-      let wallet;
-      try {
-        if (!error) wallet = sessionWallet(readSession);
-      } catch (e) {
-        error =
-          e instanceof Error ? e : new Error("Unsupported wallet session.");
-      }
-      finished = true;
-      cleanup.forEach((off) => off());
-      void kit.close();
-      if (error) reject(error);
-      else resolve(wallet!);
-    }
-    function check() {
-      if (kit.getAccount("solana")?.isConnected && kit.getProvider("solana"))
-        finish();
-    }
-    cleanup.push(
-      kit.subscribeAccount(check, "solana"),
-      kit.subscribeProviders(check),
-    );
-    cleanup.push(
-      kit.subscribeState((state) => {
-        if (state.open) opened = true;
-        else if (opened && !finished) {
-          if (kit.getAccount("solana")?.isConnected) check();
-          else
-            finish(
-              new Error(
-                "Wallet connection cancelled or rejected. Nothing was linked.",
-              ),
-            );
-        }
-      }),
-    );
-    const timeout = setTimeout(
-      () =>
-        finish(
-          new Error(
-            "Pairing timed out. Nothing was linked. Generate a new pairing and try again.",
-          ),
-        ),
-      120_000,
-    );
-    cleanup.push(() => clearTimeout(timeout));
-    void kit
-      .open({ view: "Connect", namespace: "solana" })
-      .catch((e) =>
-        finish(
-          e instanceof Error ? e : new Error("Could not open wallet pairing."),
-        ),
-      );
-    check();
-  });
+/** Neither selected wallet supports Reown's WalletConnect transport.
+ * Keep existing-session recovery/disconnection, but never launch a misleading picker. */
+export async function connectPairedWallet(
+  wallet: import("./wallet-phone-support").SelectedWallet,
+): Promise<never> {
+  const { requirePhonePairingSupport } = await import("./wallet-phone-support");
+  return requirePhonePairingSupport(wallet);
 }
 export async function disconnectPairedWallet() {
   await appKit().disconnect("solana");

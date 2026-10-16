@@ -12,6 +12,10 @@ import {
   type SolanaSignMessageFeature,
 } from "@solana/wallet-standard-features";
 import { withWalletTimeout } from "@/lib/wallet-session";
+import {
+  phoneConnectionInfo,
+  type SelectedWallet,
+} from "@/lib/wallet-phone-support";
 import { signingWallet } from "@/lib/wallet-connection";
 export function WalletManager({
   organizations,
@@ -23,7 +27,7 @@ export function WalletManager({
     role?: string;
   }[];
 }) {
-  const [wallet, setWallet] = useState("Phantom"),
+  const [wallet, setWallet] = useState<SelectedWallet>("Phantom"),
     [purpose, setPurpose] = useState("account"),
     [org, setOrg] = useState(organizations[0]?.id ?? ""),
     [busy, setBusy] = useState(false),
@@ -31,6 +35,10 @@ export function WalletManager({
   const [available, setAvailable] = useState<string[]>([]);
   const dialog = useRef<HTMLDialogElement>(null);
   const [linked, setLinked] = useState(false);
+  const [connectionView, setConnectionView] = useState<"methods" | "phone">(
+    "methods",
+  );
+  const phone = phoneConnectionInfo(wallet);
   useEffect(() => {
     const registry = getWallets();
     function update() {
@@ -93,7 +101,7 @@ export function WalletManager({
       eligible[0]?.id ??
       "");
   const router = useRouter();
-  async function link(remote = false, selectedWallet = wallet) {
+  async function link(selectedWallet = wallet) {
     try {
       sessionStorage.setItem(
         "proofpak:wallet-intent",
@@ -110,14 +118,8 @@ export function WalletManager({
     setBusy(true);
     setMessage("");
     try {
-      setMessage(
-        remote
-          ? "Opening secure pairing. Choose a wallet and approve its connection."
-          : "Waiting for wallet connection approval…",
-      );
-      const w = remote
-        ? await (await import("@/lib/wallet-pairing")).connectPairedWallet()
-        : await signingWallet(selectedWallet, SolanaSignMessage);
+      setMessage("Waiting for wallet connection approval…");
+      const w = await signingWallet(selectedWallet, SolanaSignMessage);
       if (!w)
         throw new Error(
           `No ${selectedWallet} message-signing connection was detected. Enable the extension or open this page inside the wallet app’s browser, then try again.`,
@@ -195,8 +197,9 @@ export function WalletManager({
         {available.length ? available.join(", ") : "none"}
       </p>
       <p className="muted">
-        Use a browser extension or pair a compatible phone wallet. A connection
-        is not a linked wallet until ProofPak verifies your ownership signature.
+        Choose Phantom or Solflare, then choose its connection method. A
+        connection is not a linked wallet until ProofPak verifies your ownership
+        signature.
       </p>
       <label className="field">
         Wallet
@@ -204,7 +207,7 @@ export function WalletManager({
           disabled={busy}
           aria-label="Wallet"
           value={wallet}
-          onChange={(e) => setWallet(e.target.value)}
+          onChange={(e) => setWallet(e.target.value as SelectedWallet)}
         >
           <option>Phantom</option>
           <option>Solflare</option>
@@ -285,7 +288,10 @@ export function WalletManager({
       <button
         className="button"
         disabled={busy || (activePurpose !== "account" && !activeOrg)}
-        onClick={() => dialog.current?.showModal()}
+        onClick={() => {
+          setConnectionView("methods");
+          dialog.current?.showModal();
+        }}
       >
         {busy ? "Verifying…" : "Connect and prove ownership"}
       </button>
@@ -294,7 +300,9 @@ export function WalletManager({
         className="confirmation-dialog wallet-connect-dialog"
         onCancel={() => dialog.current?.close()}
       >
-        <h2>Connect your wallet</h2>
+        <h2>
+          {connectionView === "phone" ? phone.title : `Connect ${wallet}`}
+        </h2>
         <p>
           Purpose:{" "}
           {activePurpose === "account"
@@ -304,44 +312,50 @@ export function WalletManager({
               : "Credential issuer"}
           . No transaction or payment is requested.
         </p>
-        <div className="wallet-methods">
-          <div className="button-row">
+        {connectionView === "methods" ? (
+          <div className="wallet-methods">
             <button
               className="button"
-              onClick={() => void link(false, "Phantom")}
+              onClick={() => void link()}
               disabled={busy}
             >
-              Connect Phantom extension
+              Connect {wallet} extension
+            </button>
+            <p>
+              Connect the selected wallet directly. Your ownership message is
+              verified by ProofPak after you sign it.
+            </p>
+            <button
+              className="button secondary"
+              onClick={() => setConnectionView("phone")}
+              disabled={busy}
+            >
+              Connect Phone Wallet
+            </button>
+            <p className="muted">
+              Phone pairing availability depends on {wallet}’s supported
+              protocol. No generic wallet list will open.
+            </p>
+          </div>
+        ) : (
+          <div className="wallet-methods">
+            <p>{phone.message}</p>
+            <p>{phone.alternative}</p>
+            <button
+              className="button"
+              onClick={() => void link()}
+              disabled={busy}
+            >
+              Use {wallet} extension
             </button>
             <button
               className="button secondary"
-              onClick={() => void link(false, "Solflare")}
-              disabled={busy}
+              onClick={() => setConnectionView("methods")}
             >
-              Connect Solflare extension
+              Back to {wallet} methods
             </button>
           </div>
-          <p>
-            Phantom and Solflare extensions, including supported wallet in-app
-            browsers.
-          </p>
-          <button
-            className="button secondary"
-            onClick={() => void link(true)}
-            disabled={busy}
-          >
-            Connect phone wallet / QR
-          </button>
-          <p>
-            Choose a compatible wallet in Reown. Desktop uses a live pairing QR;
-            mobile uses a supported wallet link. Devnet and message signing are
-            required.
-          </p>
-          <p className="muted">
-            Phantom mobile QR compatibility is not confirmed. Solflare pairing
-            still needs device verification. Extensions remain available.
-          </p>
-        </div>
+        )}
         <button
           className="button secondary"
           onClick={() => dialog.current?.close()}
