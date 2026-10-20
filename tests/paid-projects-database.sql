@@ -15,8 +15,25 @@ do $$begin if exists(select 1 from public.paid_projects) then raise exception 'D
 set local role authenticated;
 set local request.jwt.claim.sub='a0000000-0000-4000-8000-000000000001';
 select public.publish_paid_project(:'project_id');
+do $$begin
+ begin perform public.apply_paid_project(current_setting('test.paid_project')::uuid,'Organization members must not apply to their own projects.','https://example.com/own');raise exception 'Company self application allowed';exception when raise_exception then if sqlerrm='Company self application allowed' then raise;end if;end;
+end$$;
+set local role anon;
+set local request.jwt.claim.sub='';
+do $$begin
+ begin perform public.apply_paid_project(current_setting('test.paid_project')::uuid,'Anonymous users cannot submit an application.','https://example.com/anonymous');raise exception 'Anonymous application allowed';exception when insufficient_privilege then null;end;
+end$$;
+set local role authenticated;
 set local request.jwt.claim.sub='a0000000-0000-4000-8000-000000000002';
+do $$begin
+ begin perform public.apply_paid_project(current_setting('test.paid_project')::uuid,'short','https://example.com/short');raise exception 'Short application accepted';exception when check_violation then null;end;
+ begin perform public.apply_paid_project(current_setting('test.paid_project')::uuid,'A sufficiently detailed application with an unsafe evidence link.','javascript:alert(1)');raise exception 'Unsafe evidence accepted';exception when check_violation then null;end;
+end$$;
 select public.apply_paid_project(:'project_id','I built accessible React dashboards and can deliver this work.','https://example.com/portfolio');
+do $$begin
+ begin perform public.apply_paid_project(current_setting('test.paid_project')::uuid,'Duplicate application must not create a second record.','https://example.com/duplicate');raise exception 'Duplicate application allowed';exception when unique_violation then null;end;
+ if (select count(*) from public.paid_project_applications where project_id=current_setting('test.paid_project')::uuid)<>1 then raise exception 'Application submission did not preserve a single owned record';end if;
+end$$;
 select id as application_id from public.paid_project_applications where project_id=:'project_id' \gset
 set local request.jwt.claim.sub='a0000000-0000-4000-8000-000000000003';
 do $$begin

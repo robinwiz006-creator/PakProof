@@ -1,22 +1,27 @@
 import Link from "next/link";
 import { credentialWorkspace } from "@/lib/credential-data";
 import { PageHeading } from "@/components/ui";
-import { ConfirmForm } from "@/components/confirm-form";
-import { SubmitButton } from "@/components/forms";
 import { WalletManager } from "@/components/wallet-manager";
-import { disconnectWallet } from "@/lib/credential-actions";
+import { WalletLinks } from "@/components/wallet-links";
+import type { WalletPurpose } from "@/components/wallet-manager";
 export const dynamic = "force-dynamic";
 export default async function Wallet({
   searchParams,
 }: {
-  searchParams: Promise<{ message?: string }>;
+  searchParams: Promise<{
+    message?: string;
+    purpose?: string;
+    organization?: string;
+  }>;
 }) {
   const { db, user } = await credentialWorkspace();
-  const { message } = await searchParams;
+  const { message, purpose, organization } = await searchParams;
   const [linkResult, memberResult] = await Promise.all([
     db
       .from("wallet_connections")
-      .select("*")
+      .select(
+        "id,wallet_address,purpose,organization_id,disconnected_at,lock_reason,created_at",
+      )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false }),
     db
@@ -28,19 +33,39 @@ export default async function Wallet({
   const members = memberResult.data;
   if (memberResult.error)
     throw new Error("Organization wallet permissions could not be loaded.");
-  const { data: orgs } = await db
+  const { data: orgs, error: organizationError } = await db
     .from("organizations")
     .select("id,issuer_status,company_id,companies(name)")
     .in(
       "company_id",
       (members ?? []).map((m) => m.company_id),
     );
+  if (organizationError)
+    throw new Error("Organization wallet permissions could not be loaded.");
+  const organizations = (orgs ?? []).map((o) => ({
+    id: o.id,
+    issuerStatus: o.issuer_status,
+    role: members?.find((m) => m.company_id === o.company_id)?.role ?? "",
+    name: (o.companies as unknown as { name: string })?.name ?? "Organization",
+  }));
+  const requestedPurpose: WalletPurpose =
+    purpose === "company_payer" || purpose === "credential_issuer"
+      ? purpose
+      : "account";
+  const selectedOrganization = organizations.find(
+    (o) =>
+      o.id === organization &&
+      (requestedPurpose === "company_payer"
+        ? o.role === "owner"
+        : requestedPurpose === "credential_issuer" &&
+          o.issuerStatus === "authorized"),
+  );
   return (
     <div className="container page narrow">
       <PageHeading
         eyebrow="OPTIONAL WALLET"
-        title="Wallet ownership"
-        description="A wallet is not needed to create or share a passport. Signing credentials and receiving milestone payments use separate permissions."
+        title="My Wallet"
+        description="Connect a wallet to receive supported payments and sign blockchain records. A wallet is optional for most ProofPak features."
       />
       <div className="button-row">
         <Link className="text-link" href="/portal/talent/passport">
@@ -63,59 +88,23 @@ export default async function Wallet({
       )}
       {error ? (
         <p className="notice">
-          Wallet management requires the additive wallet migration.
+          We couldn’t load your linked wallets. Please try again or contact the
+          site administrator.
         </p>
       ) : (
         <>
-          <WalletManager
-            organizations={(orgs ?? []).map((o) => ({
-              id: o.id,
-              issuerStatus: o.issuer_status,
-              role:
-                members?.find((m) => m.company_id === o.company_id)?.role ?? "",
-              name: (o.companies as unknown as { name: string })?.name ?? o.id,
-            }))}
-          />
-          <section className="section-spacer">
-            <h2>Linked wallets</h2>
-            {!(links ?? []).length && (
-              <p className="muted">
-                No linked wallets. Your passport works without one.
-              </p>
+          <WalletLinks
+            links={links ?? []}
+            organizationNames={Object.fromEntries(
+              organizations.map((o) => [o.id, o.name]),
             )}
-            {(links ?? []).map((l) => (
-              <article className="panel section-spacer" key={l.id}>
-                <p className="hash">{l.wallet_address}</p>
-                <p>
-                  {l.purpose.replaceAll("_", " ")} ·{" "}
-                  {l.disconnected_at ? "Disconnected" : "Active"}
-                </p>
-                {l.organization_id && (
-                  <p className="muted">Organization {l.organization_id}</p>
-                )}
-                {l.lock_reason && <p className="notice">{l.lock_reason}</p>}
-                {!l.disconnected_at && !l.lock_reason && (
-                  <details>
-                    <summary>Disconnect this wallet link</summary>
-                    <p className="muted">
-                      This disconnects the ProofPak association. It cannot undo
-                      a transaction or hide a public Solana address. To replace
-                      it, disconnect first and sign a new ownership message.
-                    </p>
-                    <ConfirmForm
-                      action={disconnectWallet}
-                      title="Disconnect wallet association?"
-                      message="Existing transactions and proofs remain unchanged. Pending payments may block disconnection. A replacement requires a fresh ownership signature."
-                      label="Disconnect association"
-                    >
-                      <input type="hidden" name="connection_id" value={l.id} />
-                      <SubmitButton>Confirm disconnect</SubmitButton>
-                    </ConfirmForm>
-                  </details>
-                )}
-              </article>
-            ))}
-          </section>
+          />
+          <WalletManager
+            key={`${requestedPurpose}:${selectedOrganization?.id ?? ""}`}
+            organizations={organizations}
+            initialPurpose={requestedPurpose}
+            initialOrganization={selectedOrganization?.id ?? ""}
+          />
         </>
       )}
     </div>

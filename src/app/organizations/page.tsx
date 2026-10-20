@@ -73,7 +73,7 @@ export default async function Organizations({
       <PageHeading
         eyebrow="PROOFPAK ORGANIZATIONS"
         title="Organization & credentials"
-        description="Start with your organization profile. Approval allows you to issue credentials; challenges and paid projects are separate ways to offer work."
+        description="Manage your organization, credentials and opportunities."
         action={
           <Link className="button secondary" href="/portal/company/profile">
             Organization profile
@@ -175,6 +175,13 @@ export default async function Organizations({
                     {o.issuer_status === "authorized" && (
                       <Link href="/organizations?view=issue">
                         Issue a credential
+                      </Link>
+                    )}
+                    {o.issuer_status === "authorized" && (
+                      <Link
+                        href={`/wallet?purpose=credential_issuer&organization=${o.id}`}
+                      >
+                        Credential signing wallet
                       </Link>
                     )}
                   </div>

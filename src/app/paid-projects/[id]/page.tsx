@@ -6,7 +6,12 @@ import {
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { isConfigured, supabase, currentUser } from "@/lib/supabase/server";
-import { PageHeading, Tags } from "@/components/ui";
+import {
+  PaidProjectBrief,
+  ProjectMilestoneHeading,
+} from "@/components/paid-project-brief";
+import { PaidProjectApplication } from "@/components/paid-project-application";
+import { projectApplicationState } from "@/lib/project-application";
 import { Field, SubmitButton } from "@/components/forms";
 import { projectData, milestoneData } from "@/lib/paid-data";
 import {
@@ -183,19 +188,44 @@ export default async function PaidProjectPage({
   const accountWallets = (walletResult.data ?? []).filter(
     (w) => w.purpose === "account",
   );
+  const applicationState = projectApplicationState({
+    signedIn: Boolean(user),
+    companyMember: isCompany,
+    hasApplication: Boolean(ownApp),
+    status: p.status,
+    deadline: p.deadline,
+  });
   return (
     <div className="container page paid-detail">
-      <PageHeading
-        eyebrow={`${p.companies?.name ?? "Company"} · ${p.status}`}
-        title={p.title}
-        description={p.description}
+      <PaidProjectBrief
+        project={p}
+        action={
+          applicationState === "apply" ? (
+            <PaidProjectApplication projectId={id} action={applyPaidProject} />
+          ) : applicationState === "sign-in" ? (
+            <Link className="button" href="/sign-in">
+              Sign in to apply
+            </Link>
+          ) : applicationState === "applied" ? (
+            <span className="tag">Application sent</span>
+          ) : applicationState === "closed" ? (
+            <span className="tag">Applications closed</span>
+          ) : undefined
+        }
       />
       <div className="button-row">
         <Link className="text-link" href="/paid-projects">
           Paid projects
         </Link>
-        <Link className="text-link" href="/wallet">
-          Wallet ownership
+        <Link
+          className="text-link"
+          href={
+            isCompany && org
+              ? `/wallet?purpose=company_payer&organization=${org.id}`
+              : "/wallet"
+          }
+        >
+          My Wallet
         </Link>
         <Link className="text-link" href="/payments">
           Payment history
@@ -204,30 +234,11 @@ export default async function PaidProjectPage({
           My passport
         </Link>
       </div>
-      <p className="workflow-callout">
-        Apply → Be selected → Accept the exact milestone terms → Submit work →
-        Receive review → Organization signs payment. Approval and payment are
-        separate states.
-      </p>
       {message && (
         <p className="notice section-spacer" role="status">
           {message}
         </p>
       )}
-      <section className="panel section-spacer">
-        <h2>Scope and requirements</h2>
-        <p>{p.requirements}</p>
-        <Tags values={p.skills} />
-        <p className="section-spacer">
-          Deadline {p.deadline} · Budget {tokenAmount(p.budget_units)} devnet
-          test USDC
-        </p>
-        <p className="muted">
-          Test tokens have no promised monetary value. Direct payment follows
-          approval. Funds are not locked or guaranteed. Submitted evidence and
-          payment records stay private to the parties.
-        </p>
-      </section>
       {isCompany && p.status === "draft" && (
         <form className="panel section-spacer" action={publishPaidProject}>
           <h2>Review before publishing</h2>
@@ -238,34 +249,6 @@ export default async function PaidProjectPage({
           <input name="project_id" type="hidden" value={id} />
           <SubmitButton>Publish project</SubmitButton>
         </form>
-      )}
-      {user && !isCompany && p.status === "published" && !ownApp && (
-        <section className="panel section-spacer">
-          <h2>Apply for this project</h2>
-          <form action={applyPaidProject}>
-            <input name="project_id" type="hidden" value={id} />
-            <Field
-              name="pitch"
-              label="Explain your relevant work and approach"
-              type="textarea"
-              required
-              minLength={20}
-              maxLength={4000}
-            />
-            <Field
-              name="evidence_url"
-              label="Project or evidence URL"
-              type="url"
-              required
-            />
-            <SubmitButton>Send application</SubmitButton>
-          </form>
-        </section>
-      )}
-      {!user && p.status === "published" && (
-        <Link className="button section-spacer" href="/sign-in">
-          Sign in to apply
-        </Link>
       )}
       {ownApp && (
         <p className="notice section-spacer">
@@ -310,28 +293,42 @@ export default async function PaidProjectPage({
       )}
       {offer && (isWorker || isCompany) && (
         <section className="panel section-spacer">
-          <h2>Agreed terms · version {offer.version}</h2>
+          <h2>
+            {offer.response === "accepted" ? "Agreed terms" : "Project offer"} ·
+            version {offer.version}
+          </h2>
           <p>
             Company: {offer.terms.company_name} · {offer.response}
           </p>
-          <p>{offer.terms.description}</p>
-          <p>{offer.terms.requirements}</p>
-          <p>
-            Total: {tokenAmount(offer.terms.budget_units)} test USDC · Due{" "}
-            {offer.terms.deadline}
-          </p>
-          {offer.terms.milestones.map((m) => (
-            <p key={m.id}>
-              {m.title}: {m.deliverables} · {tokenAmount(m.amount_units)} test
-              USDC · {m.deadline}
+          <details
+            className="section-spacer"
+            open={offer.response === "pending"}
+          >
+            <summary>Review the exact scope and milestones</summary>
+            <h3>Project description</h3>
+            <p className="project-requirements">{offer.terms.description}</p>
+            <h3 className="section-spacer">Requirements</h3>
+            <p className="project-requirements">{offer.terms.requirements}</p>
+            <p>
+              Total: {tokenAmount(offer.terms.budget_units)} test USDC · Due{" "}
+              {offer.terms.deadline}
             </p>
-          ))}
-          <p className="muted">
-            These exact terms are fixed. This MVP does not support amendments:
-            do not start different work without a separately agreed project. No
-            payment is guaranteed and approval does not mean payment has
-            completed.
-          </p>
+            <ol className="offer-milestones">
+              {offer.terms.milestones.map((m) => (
+                <li key={m.id}>
+                  <h4>{m.title}</h4>
+                  <p className="project-requirements">{m.deliverables}</p>
+                  <p className="muted">
+                    {tokenAmount(m.amount_units)} test USDC · Due {m.deadline}
+                  </p>
+                </li>
+              ))}
+            </ol>
+            <p className="muted">
+              Accepted terms cannot be edited. Changes require a separately
+              agreed project. Work approval does not mean payment is complete.
+            </p>
+          </details>
           {isWorker && offer.response === "pending" && (
             <form action={respondPaidOffer}>
               <input type="hidden" name="offer_id" value={offer.id} />
@@ -357,8 +354,8 @@ export default async function PaidProjectPage({
         <section className="panel section-spacer">
           <h2>Authorize your payout wallet</h2>
           <p className="muted">
-            Select your ownership-verified account wallet. Prepared payments
-            keep their destination and block wallet replacement until resolved.
+            Choose your verified personal wallet. Active agreements or
+            unresolved payments may block replacement.
           </p>
           {accountWallets.length ? (
             <form action={authorizePayout}>
@@ -386,11 +383,9 @@ export default async function PaidProjectPage({
         <section className="panel section-spacer">
           <h2>Add completed work to the passport</h2>
           <p className="muted">
-            Both company consent and the worker’s publication choice are
-            required. Approved evidence needs a separate opt-in. Payment
-            amounts, wallets and private terms are never included in this
-            passport record. Blockchain transactions remain publicly
-            discoverable.
+            Choose whether to share this work. Company consent and separate
+            evidence permission are required. Private terms and amounts stay off
+            your passport; blockchain transactions remain publicly discoverable.
           </p>
           {isCompany && (
             <form action={consentPaidWork}>
@@ -458,6 +453,10 @@ export default async function PaidProjectPage({
       )}
       <section className="section-spacer">
         <h2>Milestones</h2>
+        <p className="muted">
+          Each milestone is reviewed and paid separately. Approval is not
+          payment.
+        </p>
         {ms.map((m) => {
           const submission = (submissions ?? []).find(
             (s) => s.id === m.current_submission_id,
@@ -472,13 +471,8 @@ export default async function PaidProjectPage({
             (a: PaymentAttempt) => !["failed", "cancelled"].includes(a.status),
           ) as PaymentAttempt | undefined;
           return (
-            <article className="panel section-spacer" key={m.id}>
-              <p className="eyebrow">Milestone {m.position}</p>
-              <h3>{m.title}</h3>
-              <p>{m.deliverables}</p>
-              <p className="muted">
-                {tokenAmount(m.amount_units)} test USDC · Due {m.deadline}
-              </p>
+            <article className="project-milestone section-spacer" key={m.id}>
+              <ProjectMilestoneHeading milestone={m} />
               {(isCompany || isWorker) && (
                 <>
                   <span className="tag">

@@ -2,6 +2,7 @@
 import { PaidProjectEditor } from "./paid-project-editor";
 import { IssuerQueue } from "./issuer-queue";
 import { useState } from "react";
+import { WalletLinks } from "./wallet-links";
 import { WalletManager } from "./wallet-manager";
 import { ConfirmForm } from "./confirm-form";
 import { PaidProjectBrowser } from "./paid-project-browser";
@@ -51,6 +52,34 @@ export function WorkspaceFixture() {
               },
             },
           ]}
+        />
+      </section>
+      <section aria-label="Linked wallet display fixtures">
+        <p>
+          Offline linked-wallet display fixtures — not real linked accounts.
+        </p>
+        <WalletLinks
+          links={[
+            {
+              id: "60000000-0000-4000-8000-000000000001",
+              wallet_address: "11111111111111111111111111111111",
+              purpose: "account",
+              organization_id: null,
+              disconnected_at: null,
+              lock_reason: "Fixture: an unresolved payment prevents unlinking.",
+              created_at: "2026-10-13T00:00:00Z",
+            },
+            {
+              id: "60000000-0000-4000-8000-000000000002",
+              wallet_address: "11111111111111111111111111111112",
+              purpose: "credential_issuer",
+              organization_id: "fixture-org",
+              disconnected_at: "2026-10-14T00:00:00Z",
+              lock_reason: null,
+              created_at: "2026-10-13T00:00:00Z",
+            },
+          ]}
+          organizationNames={{ "fixture-org": "Offline fixture organization" }}
         />
       </section>
       <WalletManager

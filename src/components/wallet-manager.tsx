@@ -1,24 +1,31 @@
 "use client";
-import { useEffect, useState, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Buffer } from "buffer";
 import { getWallets } from "@wallet-standard/app";
+import type { Wallet } from "@wallet-standard/base";
 import {
   StandardConnect,
+  StandardDisconnect,
   type StandardConnectFeature,
+  type StandardDisconnectFeature,
 } from "@wallet-standard/features";
 import {
   SolanaSignMessage,
   type SolanaSignMessageFeature,
 } from "@solana/wallet-standard-features";
 import { withWalletTimeout } from "@/lib/wallet-session";
-import {
-  phoneConnectionInfo,
-  type SelectedWallet,
-} from "@/lib/wallet-phone-support";
 import { signingWallet } from "@/lib/wallet-connection";
+import type { SelectedWallet } from "@/lib/wallet-phone-support";
+export type WalletPurpose = "account" | "company_payer" | "credential_issuer";
+const downloads = {
+  Phantom: "https://phantom.com/download",
+  Solflare: "https://www.solflare.com/download/",
+};
 export function WalletManager({
   organizations,
+  initialPurpose = "account",
+  initialOrganization = "",
 }: {
   organizations: {
     id: string;
@@ -26,22 +33,30 @@ export function WalletManager({
     issuerStatus?: string;
     role?: string;
   }[];
+  initialPurpose?: WalletPurpose;
+  initialOrganization?: string;
 }) {
-  const [wallet, setWallet] = useState<SelectedWallet>("Phantom"),
-    [purpose, setPurpose] = useState("account"),
-    [org, setOrg] = useState(organizations[0]?.id ?? ""),
-    [busy, setBusy] = useState(false),
-    [message, setMessage] = useState("");
+  const [purpose, setPurpose] = useState<WalletPurpose>(initialPurpose);
+  const [org, setOrg] = useState(initialOrganization);
+  const [wallet, setWallet] = useState<SelectedWallet | null>(null);
   const [available, setAvailable] = useState<string[]>([]);
-  const dialog = useRef<HTMLDialogElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
   const [linked, setLinked] = useState(false);
-  const [connectionView, setConnectionView] = useState<"methods" | "phone">(
-    "methods",
+  const [sessionMessage, setSessionMessage] = useState("");
+  const [session, setSession] = useState<Wallet | null>(null);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const router = useRouter();
+  const eligible = organizations.filter((o) =>
+    purpose === "company_payer"
+      ? o.role === "owner"
+      : o.issuerStatus === "authorized",
   );
-  const phone = phoneConnectionInfo(wallet);
+  const activePurpose = purpose;
+  const activeOrg = eligible.some((o) => o.id === org) ? org : "";
   useEffect(() => {
     const registry = getWallets();
-    function update() {
+    const update = () =>
       setAvailable(
         registry
           .get()
@@ -51,7 +66,6 @@ export function WalletManager({
           )
           .map((w) => w.name),
       );
-    }
     update();
     const offRegister = registry.on("register", update),
       offUnregister = registry.on("unregister", update);
@@ -60,69 +74,20 @@ export function WalletManager({
       offUnregister();
     };
   }, []);
-  // Non-secret intent only. Reown owns the encrypted session; Supabase owns login.
-  const restoredIntent = useSyncExternalStore(
-    () => () => {},
-    () => {
-      try {
-        return sessionStorage.getItem("proofpak:wallet-intent");
-      } catch {
-        return null;
-      }
-    },
-    () => null,
-  );
-  const [intentEdited, setIntentEdited] = useState(false);
-  let restored: { purpose?: string; organization?: string } = {};
-  try {
-    const parsed = restoredIntent ? JSON.parse(restoredIntent) : null;
-    if (parsed && typeof parsed === "object") restored = parsed;
-  } catch {
-    /* Ignore malformed local preferences. */
-  }
-  const storedPurpose = [
-    "account",
-    "company_payer",
-    "credential_issuer",
-  ].includes(restored.purpose ?? "")
-    ? restored.purpose!
-    : "account";
-  const activePurpose = intentEdited ? purpose : storedPurpose;
-  const eligible = organizations.filter((o) =>
-    activePurpose === "company_payer"
-      ? o.role === "owner"
-      : activePurpose === "credential_issuer"
-        ? o.issuerStatus === "authorized"
-        : true,
-  );
-  const activeOrg = intentEdited
-    ? org
-    : (eligible.find((o) => o.id === restored.organization)?.id ??
-      eligible[0]?.id ??
-      "");
-  const router = useRouter();
-  async function link(selectedWallet = wallet) {
-    try {
-      sessionStorage.setItem(
-        "proofpak:wallet-intent",
-        JSON.stringify({
-          purpose: activePurpose,
-          organization: activePurpose === "account" ? null : activeOrg,
-        }),
-      );
-    } catch {
-      /* Current-page intent remains available when storage is disabled. */
-    }
-    dialog.current?.close();
+  async function link(selectedWallet: SelectedWallet) {
+    setWallet(selectedWallet);
+    setSessionMessage("");
     setLinked(false);
     setBusy(true);
     setMessage("");
     try {
-      setMessage("Waiting for wallet connection approval…");
+      setMessage(
+        `Unlock ${selectedWallet} and approve the connection in your wallet.`,
+      );
       const w = await signingWallet(selectedWallet, SolanaSignMessage);
       if (!w)
         throw new Error(
-          `No ${selectedWallet} message-signing connection was detected. Enable the extension or open this page inside the wallet app’s browser, then try again.`,
+          `${selectedWallet} was not detected. Enable or install it, then retry.`,
         );
       const { accounts } = await withWalletTimeout(
         (
@@ -134,6 +99,7 @@ export function WalletManager({
       const account = accounts.find((a) => a.chains.includes("solana:devnet"));
       if (!account)
         throw new Error("Choose an account supporting Solana devnet.");
+      setSession(w);
       const start = await fetch("/api/wallets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -172,228 +138,257 @@ export function WalletManager({
       });
       const result = await saved.json();
       if (!saved.ok) throw new Error(result.error);
-      setMessage(
-        "Wallet ownership confirmed for this purpose. No transaction was sent.",
-      );
+      if (result.linked !== true)
+        throw new Error("ProofPak did not confirm ownership. Please retry.");
+      setMessage("Wallet linked. Ownership verified by ProofPak.");
       setLinked(true);
       router.refresh();
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Could not link wallet.");
+      const detail = e instanceof Error ? e.message : "Connection failed.";
+      setMessage(
+        /reject|declin|cancel|4001/i.test(detail)
+          ? "Request declined. Nothing was linked. You can try again when ready."
+          : detail,
+      );
     } finally {
       setBusy(false);
     }
   }
   return (
-    <section className="panel section-spacer">
-      <p className="eyebrow">MESSAGE SIGNING · NO TRANSACTION FEE</p>
-      <h2>Connect for a specific purpose</h2>
-      <p className="muted">
-        Your email account stays the same. Prove wallet control with a
-        short-lived message. Never enter a seed phrase or private key into
-        ProofPak.
-      </p>
-      <p className="muted" role="status">
-        Detected message-signing wallets:{" "}
-        {available.length ? available.join(", ") : "none"}
-      </p>
-      <p className="muted">
-        Choose Phantom or Solflare, then choose its connection method. A
-        connection is not a linked wallet until ProofPak verifies your ownership
-        signature.
-      </p>
-      <label className="field">
-        Wallet
-        <select
-          disabled={busy}
-          aria-label="Wallet"
-          value={wallet}
-          onChange={(e) => setWallet(e.target.value as SelectedWallet)}
-        >
-          <option>Phantom</option>
-          <option>Solflare</option>
-        </select>
-      </label>
-      <label className="field">
-        Purpose
-        <select
-          disabled={busy}
-          aria-label="Purpose"
-          value={activePurpose}
-          onChange={(e) => {
-            setIntentEdited(true);
-            const next = e.target.value;
-            setPurpose(next);
-            setOrg(
-              organizations.find((o) =>
-                next === "company_payer"
-                  ? o.role === "owner"
-                  : o.issuerStatus === "authorized",
-              )?.id ?? "",
-            );
-          }}
-        >
-          <option value="account">
-            My account / receive milestone payments
-          </option>
-          <option value="credential_issuer">
-            Organization credential signing
-          </option>
-          <option value="company_payer">
-            Company payment signing (owner only)
-          </option>
-        </select>
-      </label>
-      <p className="wallet-purpose-note">
-        {activePurpose === "account"
-          ? "Personal wallet: associate your account and receive approved milestone payments. Your passport needs no wallet."
-          : activePurpose === "company_payer"
-            ? "Company payer: an organization owner authorizes this wallet for signing devnet payments. This does not authorize credential issuance."
-            : "Credential issuer: an authorized organization member proves control of a signing wallet. Issuer authorization is still checked separately."}
-      </p>
-      {activePurpose !== "account" && (
-        <label className="field">
-          Organization
-          <select
-            disabled={busy}
-            aria-label="Organization"
-            value={activeOrg}
-            onChange={(e) => {
-              setIntentEdited(true);
-              setPurpose(activePurpose);
-              setOrg(e.target.value);
+    <section className="wallet-connect-section section-spacer">
+      <h2>Connect a wallet</h2>
+      <fieldset className="wallet-purpose-picker" disabled={busy}>
+        <legend>Use this wallet for</legend>
+        <label>
+          <input
+            type="radio"
+            name="wallet-context"
+            checked={purpose === "account"}
+            onChange={() => {
+              setPurpose("account");
+              setOrg("");
+              setLinked(false);
+              setMessage("");
             }}
-          >
-            <option value="">Select organization</option>
-            {organizations
-              .filter((o) =>
-                activePurpose === "company_payer"
-                  ? o.role === "owner"
-                  : o.issuerStatus === "authorized",
-              )
-              .map((o) => (
-                <option value={o.id} key={o.id}>
+          />{" "}
+          Personal
+        </label>
+        {organizations.length > 0 && (
+          <label>
+            <input
+              type="radio"
+              name="wallet-context"
+              checked={purpose !== "account"}
+              onChange={() => {
+                setPurpose("company_payer");
+                setOrg("");
+                setLinked(false);
+                setMessage("");
+              }}
+            />{" "}
+            Organization
+          </label>
+        )}
+      </fieldset>
+      {purpose !== "account" && (
+        <div className="wallet-context-fields">
+          <label className="field">
+            Wallet role
+            <select
+              aria-label="Wallet role"
+              value={purpose}
+              disabled={busy}
+              onChange={(e) => {
+                setPurpose(e.target.value as WalletPurpose);
+                setOrg("");
+                setLinked(false);
+                setMessage("");
+              }}
+            >
+              <option value="company_payer">Make organization payments</option>
+              <option value="credential_issuer">
+                Sign organization credentials
+              </option>
+            </select>
+          </label>
+          <label className="field">
+            Organization
+            <select
+              aria-label="Organization"
+              value={activeOrg}
+              disabled={busy}
+              onChange={(e) => {
+                setOrg(e.target.value);
+                setLinked(false);
+                setMessage("");
+              }}
+            >
+              <option value="">Choose an organization</option>
+              {eligible.map((o) => (
+                <option key={o.id} value={o.id}>
                   {o.name}
                 </option>
               ))}
-          </select>
-        </label>
+            </select>
+          </label>
+          {!eligible.length && (
+            <p className="notice">
+              {purpose === "company_payer"
+                ? "Only organization owners can link payment wallets."
+                : "Credential signing requires an approved organization you belong to."}
+            </p>
+          )}
+        </div>
       )}
-      <ol className="wallet-instructions">
-        <li>Connect the account you intend to use.</li>
-        <li>Read and sign ProofPak’s short-lived ownership message.</li>
-        <li>
-          Wait for the server to verify ownership and show the linked wallet.
-        </li>
-      </ol>
+      <p className="muted">
+        {purpose === "account"
+          ? "Personal · Receive supported payments. Your profile does not need a wallet."
+          : purpose === "company_payer"
+            ? "Organization payments · Owner permission required. This does not allow credential signing."
+            : "Organization credentials · Organization approval and signing permission are checked separately."}
+      </p>
       <button
         className="button"
-        disabled={busy || (activePurpose !== "account" && !activeOrg)}
+        disabled={busy || (purpose !== "account" && !activeOrg)}
         onClick={() => {
-          setConnectionView("methods");
+          setWallet(null);
+          setMessage("");
+          setLinked(false);
           dialog.current?.showModal();
         }}
       >
-        {busy ? "Verifying…" : "Connect and prove ownership"}
+        Connect Wallet
       </button>
       <dialog
         ref={dialog}
+        aria-label={wallet ? `Connect ${wallet}` : "Choose your wallet"}
+        aria-busy={busy}
         className="confirmation-dialog wallet-connect-dialog"
-        onCancel={() => dialog.current?.close()}
-      >
-        <h2>
-          {connectionView === "phone" ? phone.title : `Connect ${wallet}`}
-        </h2>
-        <p>
-          Purpose:{" "}
-          {activePurpose === "account"
-            ? "Personal"
-            : activePurpose === "company_payer"
-              ? "Company payer"
-              : "Credential issuer"}
-          . No transaction or payment is requested.
-        </p>
-        {connectionView === "methods" ? (
-          <div className="wallet-methods">
-            <button
-              className="button"
-              onClick={() => void link()}
-              disabled={busy}
-            >
-              Connect {wallet} extension
-            </button>
-            <p>
-              Connect the selected wallet directly. Your ownership message is
-              verified by ProofPak after you sign it.
-            </p>
-            <button
-              className="button secondary"
-              onClick={() => setConnectionView("phone")}
-              disabled={busy}
-            >
-              Connect Phone Wallet
-            </button>
-            <p className="muted">
-              Phone pairing availability depends on {wallet}’s supported
-              protocol. No generic wallet list will open.
-            </p>
-          </div>
-        ) : (
-          <div className="wallet-methods">
-            <p>{phone.message}</p>
-            <p>{phone.alternative}</p>
-            <button
-              className="button"
-              onClick={() => void link()}
-              disabled={busy}
-            >
-              Use {wallet} extension
-            </button>
-            <button
-              className="button secondary"
-              onClick={() => setConnectionView("methods")}
-            >
-              Back to {wallet} methods
-            </button>
-          </div>
-        )}
-        <button
-          className="button secondary"
-          onClick={() => dialog.current?.close()}
-        >
-          Cancel
-        </button>
-      </dialog>
-      <button
-        className="button secondary"
-        disabled={busy}
-        onClick={async () => {
-          try {
-            await (
-              await import("@/lib/wallet-pairing")
-            ).disconnectPairedWallet();
-            setLinked(false);
-            setMessage(
-              "Pairing session disconnected. Saved ProofPak links remain unchanged; remove them explicitly below when allowed.",
-            );
-          } catch (e) {
-            setMessage(
-              e instanceof Error ? e.message : "Could not disconnect pairing.",
-            );
-          }
+        onCancel={(e) => {
+          if (busy) e.preventDefault();
         }}
       >
-        Disconnect pairing session
-      </button>
+        <h2>{wallet ? `Connect ${wallet}` : "Choose your wallet"}</h2>
+        <p>
+          {purpose === "account"
+            ? "Personal wallet"
+            : `${purpose === "company_payer" ? "Payment" : "Credential signing"} wallet · ${eligible.find((o) => o.id === activeOrg)?.name ?? "Choose organization"}`}
+        </p>
+        {!wallet ? (
+          <div className="wallet-choice-list">
+            {(["Phantom", "Solflare"] as const).map((name) => (
+              <button
+                className="button secondary"
+                key={name}
+                onClick={() => void link(name)}
+              >
+                {name}
+                <span>
+                  {available.includes(name) ? "Available" : "Check connection"}
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <>
+            <p className="muted">
+              Approve the connection, then sign the ownership message. No
+              payment or transaction is sent.
+            </p>
+            {message && (
+              <p
+                className={linked ? "success-message" : "notice"}
+                role="status"
+                aria-live="polite"
+              >
+                {message}
+              </p>
+            )}
+            {!busy && !linked && (
+              <div className="button-row">
+                <button className="button" onClick={() => void link(wallet)}>
+                  Retry {wallet}
+                </button>
+                {!available.includes(wallet) && (
+                  <a
+                    className="button secondary"
+                    href={downloads[wallet]}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Install {wallet}
+                  </a>
+                )}
+                <button
+                  className="text-link"
+                  onClick={() => {
+                    setWallet(null);
+                    setMessage("");
+                  }}
+                >
+                  Choose another wallet
+                </button>
+              </div>
+            )}
+          </>
+        )}
+        <p className="wallet-mobile-help muted">
+          On your phone, open ProofPak in Phantom’s or Solflare’s in-app browser
+          and connect there. Keep using the same ProofPak account.
+        </p>
+        <button
+          className="button secondary"
+          disabled={busy}
+          onClick={() => dialog.current?.close()}
+        >
+          {linked ? "Done" : "Close"}
+        </button>
+      </dialog>
       {linked && (
-        <p className="success-message">
-          Ownership verified and wallet linked for the selected purpose.
+        <p className="success-message" role="status">
+          Wallet linked. Ownership verified by ProofPak.
         </p>
       )}
-      {message && (
-        <p className="notice section-spacer" role="status">
-          {message}
-        </p>
+      <p className="muted wallet-security-note">
+        Sign a message only. Payments currently use devnet test tokens. Never
+        enter a recovery phrase or private key.
+      </p>
+      {session && StandardDisconnect in session.features && (
+        <details className="section-spacer">
+          <summary>Browser connection</summary>
+          <p className="muted">
+            Disconnecting this browser session keeps your verified ProofPak
+            wallet link.
+          </p>
+          <button
+            className="button secondary"
+            disabled={busy}
+            onClick={async () => {
+              try {
+                await withWalletTimeout(
+                  (
+                    session.features[
+                      StandardDisconnect
+                    ] as StandardDisconnectFeature[typeof StandardDisconnect]
+                  ).disconnect(),
+                );
+                setSession(null);
+                setLinked(false);
+                setSessionMessage(
+                  "Browser session disconnected. Your ProofPak wallet link is unchanged.",
+                );
+              } catch {
+                setSessionMessage(
+                  "Could not disconnect. Open your wallet’s connected apps settings to disconnect ProofPak.",
+                );
+              }
+            }}
+          >
+            Disconnect browser session
+          </button>
+        </details>
       )}
+      {sessionMessage && <p role="status">{sessionMessage}</p>}
     </section>
   );
 }
