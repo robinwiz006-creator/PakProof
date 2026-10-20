@@ -213,27 +213,6 @@ export default async function PaidProjectPage({
           ) : undefined
         }
       />
-      <div className="button-row">
-        <Link className="text-link" href="/paid-projects">
-          Paid projects
-        </Link>
-        <Link
-          className="text-link"
-          href={
-            isCompany && org
-              ? `/wallet?purpose=company_payer&organization=${org.id}`
-              : "/wallet"
-          }
-        >
-          My Wallet
-        </Link>
-        <Link className="text-link" href="/payments">
-          Payment history
-        </Link>
-        <Link className="text-link" href="/portal/talent/passport">
-          My passport
-        </Link>
-      </div>
       {message && (
         <p className="notice section-spacer" role="status">
           {message}

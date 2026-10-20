@@ -3584,3 +3584,377 @@ summary {
 .paid-detail > .project-skills {
   border-left: 0;
 }
+
+/* Shared application rhythm: public records and authenticated workspaces. */
+:root {
+  --control-height: 44px;
+  --control-radius: 6px;
+  --surface: #fffcf6;
+  --section-space: 28px;
+}
+.button {
+  min-height: var(--control-height);
+  padding: 10px 16px;
+  border-radius: var(--control-radius);
+  font-size: 0.95rem;
+  line-height: 1.4;
+  gap: 8px;
+  justify-content: center;
+  text-align: center;
+}
+.button.secondary {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+}
+.button.secondary:hover {
+  border-color: var(--accent);
+  background: #eee6d9;
+}
+:where(a, button, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.field :is(input, select, textarea) {
+  border-radius: var(--control-radius);
+  font-size: 1rem;
+}
+.field :is(input, select) {
+  min-height: var(--control-height);
+}
+.tag {
+  border-radius: 4px;
+  padding: 5px 9px;
+  line-height: 1.35;
+}
+:is(.workspace-body, .portal-content) .section-spacer {
+  margin-top: var(--section-space);
+}
+:is(.workspace-body, .portal-content) :is(.panel, .empty) {
+  border-radius: var(--control-radius);
+}
+:is(.workspace-body, .portal-content) h2 {
+  line-height: 1.25;
+}
+:is(.sidebar, .workspace-sidebar) {
+  min-width: 0;
+}
+:is(.sidebar, .workspace-sidebar) > .eyebrow,
+:is(.sidebar, .workspace-sidebar) .nav-secondary > .eyebrow {
+  padding-inline: 12px;
+  margin-bottom: 12px;
+  text-align: left;
+}
+:is(.sidebar, .workspace-sidebar) nav {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+:is(.sidebar, .workspace-sidebar) nav a,
+:is(.sidebar, .workspace-sidebar) .dashboard-switch > a {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  padding: 11px 12px;
+  margin: 0;
+  text-align: left;
+  border-radius: var(--control-radius);
+  font-size: 0.9rem;
+  line-height: 1.35;
+  white-space: normal;
+  text-decoration: none;
+}
+:is(.sidebar, .workspace-sidebar) a .nav-icon {
+  flex-shrink: 0;
+  color: var(--quiet);
+}
+.nav-label {
+  flex: 1;
+  min-width: 0;
+}
+:is(.sidebar, .workspace-sidebar) .dashboard-switch {
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+  margin-top: 18px;
+}
+:is(.sidebar, .workspace-sidebar) .dashboard-switch a {
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+:is(.sidebar, .workspace-sidebar) :is(nav a, .dashboard-switch a):hover {
+  background: #e7decf;
+}
+:is(.sidebar, .workspace-sidebar) a[aria-current="page"],
+:is(.sidebar, .workspace-sidebar) nav a:has([data-pending="true"]) {
+  color: #953a1c;
+  background: #eadbcd;
+  box-shadow: inset 3px 0 #c6532c;
+}
+.paid-detail > section {
+  border-left: 0;
+}
+.paid-detail .project-milestone {
+  padding: 22px 24px;
+  margin-top: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--control-radius);
+}
+.milestone-heading > strong {
+  font-size: 1rem;
+  white-space: nowrap;
+}
+.project-milestone > .muted {
+  margin-top: 10px;
+  font-size: 0.95rem;
+}
+.profile-toolbar .button-row {
+  gap: 10px;
+}
+.profile-header {
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--accent);
+  border-radius: var(--control-radius);
+  background: var(--surface);
+  margin: 16px 0 24px;
+  gap: 22px;
+}
+.profile-header :is(h1, h2) {
+  font-size: clamp(1.8rem, 3vw, 2.6rem);
+  margin-bottom: 8px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.profile-header .record-label {
+  margin-top: 14px;
+  font-size: 0.7rem;
+}
+.profile-columns > :is(aside, div) > section + section {
+  margin-top: var(--section-space);
+}
+.profile-columns .panel {
+  padding: 22px;
+}
+.profile-columns h2 {
+  margin-bottom: 14px;
+}
+.passport-trust {
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+}
+.credential-certificate {
+  border: 1px solid #bdae97;
+  border-top: 4px solid var(--accent);
+  border-radius: 8px;
+  padding: clamp(24px, 4vw, 48px);
+  background: var(--surface);
+  box-shadow: 0 6px 24px #17171706;
+  position: relative;
+}
+.credential-certificate h1 {
+  font-size: clamp(1.9rem, 4vw, 3.3rem);
+  max-width: 22ch;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+}
+.credential-recipient h2 {
+  font-size: clamp(1.45rem, 3vw, 2.1rem);
+}
+.credential-description {
+  max-width: 70ch;
+  font-size: 1rem;
+  line-height: 1.7;
+}
+.credential-issued {
+  border-top: 1px solid var(--border);
+  padding-top: 24px;
+  margin-top: 28px;
+}
+.credential-issued h3 {
+  font-size: 1.2rem;
+}
+.credential-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+  padding: 20px 0;
+  border-block: 1px solid var(--border);
+  margin-block: 24px 16px;
+}
+.credential-summary > div {
+  min-width: 0;
+}
+.credential-summary span {
+  display: block;
+  color: var(--quiet);
+  font-size: 0.8rem;
+  margin-bottom: 8px;
+}
+.credential-summary strong {
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+.credential-verification-details {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 14px;
+}
+.credential-verification-details .credential-checks {
+  margin-top: 20px;
+  padding-top: 0;
+  border: 0;
+}
+.credential-inbox-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  margin-top: 20px;
+  overflow: hidden;
+}
+.credential-inbox-item .credential-record {
+  border: 0;
+  padding: 22px;
+  margin: 0;
+  background: transparent;
+}
+.credential-record h3 {
+  font-size: 1.3rem;
+  line-height: 1.3;
+  margin-block: 12px;
+}
+.credential-view-action {
+  margin-top: 18px;
+}
+.credential-management {
+  padding: 14px 22px;
+  border-top: 1px solid var(--border);
+}
+.credential-management form {
+  max-width: 640px;
+  padding-block: 16px;
+}
+.credential-management form > label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.credential-management input[type="checkbox"] {
+  flex: 0 0 auto;
+  margin-top: 4px;
+}
+.credential-management form > br {
+  display: none;
+}
+.credential-management form > p {
+  margin-block: 16px;
+}
+.qualification-section {
+  padding-top: 28px;
+  border-top: 1px solid var(--border);
+}
+.wallet-page .wallet-connect-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 24px;
+  border-radius: var(--control-radius);
+}
+.wallet-page .wallet-purpose-picker {
+  margin-block: 18px;
+}
+.wallet-page .wallet-connect-section > .button {
+  margin-top: 16px;
+}
+.wallet-links > h2 {
+  margin-bottom: 18px;
+}
+.wallet-link-row {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 20px;
+  border-radius: var(--control-radius);
+  margin-top: 14px;
+}
+.wallet-link-row .wallet-address {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  margin-block: 14px;
+}
+.wallet-link-row details {
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+@media (max-width: 760px) {
+  :is(.sidebar, .workspace-sidebar) nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+  :is(.sidebar, .workspace-sidebar) nav a {
+    font-size: 0.82rem;
+    padding: 10px;
+    gap: 8px;
+  }
+  :is(.sidebar, .workspace-sidebar) .eyebrow {
+    display: block;
+  }
+  .nav-pending {
+    position: absolute;
+    right: 6px;
+    bottom: 1px;
+    font-size: 0.65rem;
+  }
+  :is(.sidebar, .workspace-sidebar) nav a {
+    position: relative;
+  }
+  .credential-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .profile-header {
+    padding: 20px;
+    align-items: flex-start;
+  }
+  .profile-header .avatar.large {
+    width: 56px;
+    height: 56px;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+  }
+  .paid-detail .project-milestone {
+    padding: 18px;
+  }
+  .wallet-page .wallet-connect-section {
+    padding: 18px;
+  }
+}
+@media (max-width: 390px) {
+  .profile-header {
+    flex-direction: column;
+  }
+}
+:is(.sidebar, .workspace-sidebar) nav a,
+.sidebar nav a.active,
+:is(.sidebar, .workspace-sidebar) a[aria-current="page"],
+:is(.sidebar, .workspace-sidebar) nav a:has([data-pending="true"]) {
+  border-left: 0;
+}
+@media (min-width: 761px) {
+  .portal,
+  .workspace-frame {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+  .sidebar,
+  .workspace-sidebar {
+    padding: 28px 18px 28px 0;
+  }
+}
+@media (max-width: 760px) {
+  .workspace-frame {
+    width: calc(100% - 36px);
+  }
+}

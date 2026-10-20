@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PageHeading, Empty } from "@/components/ui";
 import { Field, SubmitButton } from "@/components/forms";
-import { CredentialRecord } from "@/components/credential-record";
+import { CredentialInboxItem } from "@/components/credential-inbox-item";
 import { credentialWorkspace } from "@/lib/credential-data";
 import {
   credentialSelect,
@@ -44,22 +44,9 @@ export default async function MyCredentials({
     <div className="container page">
       <PageHeading
         eyebrow="MY PASSPORT"
-        title="Credentials"
-        description="Review credentials sent to you. Accept or decline each one, then choose whether to display it on your Skill Passport."
+        title="My Credentials"
+        description="View your credentials and choose what to share."
       />
-      <div className="button-row">
-        <Link className="text-link" href="/portal/talent/passport">
-          My Profile
-        </Link>
-        <Link className="text-link" href="/organizations">
-          Organization workspace
-        </Link>
-      </div>
-      <p className="workflow-callout">
-        Review the issuer and record → Accept or decline → Choose whether to
-        publish. Acceptance alone does not make a credential public or
-        blockchain verified.
-      </p>
       {message && (
         <p className="notice section-spacer" role="status">
           {message}
@@ -67,8 +54,7 @@ export default async function MyCredentials({
       )}
       {error ? (
         <p className="notice section-spacer">
-          Credentials are not available until the new migration is applied. Your
-          existing passport is unchanged.
+          We couldn’t load your credentials. Please try again.
         </p>
       ) : !(data ?? []).length ? (
         <Empty title="No credentials yet">
@@ -82,58 +68,19 @@ export default async function MyCredentials({
         </Empty>
       ) : (
         (data as unknown as Credential[]).map((c) => (
-          <div
+          <CredentialInboxItem
             key={c.id}
-            id={`credential-${c.id}`}
-            className="credential-inbox-item"
-          >
-            <CredentialRecord credential={c} />
-            <form className="panel" action={respondCredential}>
-              <input name="credential_id" type="hidden" value={c.id} />
-              <div className="field">
-                <label htmlFor={`accept-${c.id}`}>Your decision</label>
-                <select
-                  id={`accept-${c.id}`}
-                  name="acceptance"
-                  required
-                  defaultValue={
-                    c.credential_preferences.acceptance === "pending"
-                      ? ""
-                      : c.credential_preferences.acceptance
-                  }
-                >
-                  <option value="">Choose accept or decline</option>
-                  <option value="declined">Decline / keep off passport</option>
-                  <option value="accepted">Accept credential</option>
-                </select>
-              </div>
-              <label>
-                <input
-                  type="checkbox"
-                  name="is_public"
-                  defaultChecked={c.credential_preferences.is_public}
-                />{" "}
-                Display on my published passport
-              </label>
-              <br />
-              <label>
-                <input
-                  type="checkbox"
-                  name="share_evidence"
-                  defaultChecked={c.credential_preferences.share_evidence}
-                />{" "}
-                Also publish supporting evidence
-              </label>
-              <p className="muted">
-                A private passport keeps this credential private. Evidence URLs
-                may have their own access settings: check those before sharing.
-              </p>
-              <SubmitButton>Save my decision and visibility</SubmitButton>
-            </form>
-          </div>
+            credential={c}
+            action={respondCredential}
+          />
         ))
       )}
-      <section className="section-spacer">
+      {(orgResult.error || requestResult.error) && (
+        <p className="notice" role="status">
+          Qualification requests could not be loaded. Please try again.
+        </p>
+      )}
+      <section className="qualification-section section-spacer">
         <h2>Qualification verification</h2>
         <p className="muted">
           An uploaded or linked degree is unverified until an authorized
@@ -198,12 +145,12 @@ export default async function MyCredentials({
               <SubmitButton>Request institution review</SubmitButton>
             </form>
           </details>
-        ) : (
+        ) : !orgResult.error ? (
           <p className="notice">
             No authorized university is available for requests yet. Do not send
             private documents to an unverified organization.
           </p>
-        )}
+        ) : null}
       </section>
     </div>
   );

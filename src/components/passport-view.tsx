@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
 import { PassportPaidWork } from "./passport-paid-work";
 import { PassportCredentials } from "./passport-credentials";
 import type { Profile, Project, Achievement } from "@/lib/types";
@@ -25,7 +26,7 @@ export function EvidenceLinks({
             target="_blank"
             rel="noopener noreferrer"
           >
-            {label} ↗
+            {label} <ArrowUpRight size={15} aria-hidden="true" />
           </a>
         ))}
     </div>
@@ -76,7 +77,8 @@ export function ApprovedEvidence({
         </p>
       )}
       <Link className="text-link section-spacer" href={`/verify/${a.id}`}>
-        Check achievement and proof ↗
+        Check achievement and proof{" "}
+        <ArrowUpRight size={15} aria-hidden="true" />
       </Link>
       {a.achievement_sharing?.project_id && projectHref && (
         <a className="text-link section-spacer" href={projectHref}>
@@ -126,14 +128,14 @@ export async function PassportView({
           <span className="muted">
             {[p.university, p.location].filter(Boolean).join(" · ")}
           </span>
-          <p className="record-label">PROFILE INFORMATION ADDED BY THE OWNER</p>
+          <p className="record-label">PROFILE ADDED BY THE OWNER</p>
         </div>
       </div>
       {!preview && <SharePassport slug={p.slug} />}
       {preview && (
         <p className="notice">
-          This preview does not publish anything. Approved evidence appears here
-          only when you choose to share it.
+          Private preview. Publication and evidence sharing follow your
+          visibility settings.
         </p>
       )}
       <div className="profile-columns">
@@ -151,11 +153,14 @@ export async function PassportView({
               <Tags values={p.skills} />
             </section>
           )}
-          <p className="muted">
-            Projects and skills are added by the individual. Company approval is
-            separate. A matching Solana record does not independently prove
-            skill or issuer identity.
-          </p>
+          <details className="passport-trust">
+            <summary>About this record</summary>
+            <p className="muted">
+              Projects and skills are added by the individual. Company approval
+              is separate. A matching Solana record does not independently prove
+              skill or issuer identity.
+            </p>
+          </details>
         </aside>
         <div>
           {projects.length > 0 && (

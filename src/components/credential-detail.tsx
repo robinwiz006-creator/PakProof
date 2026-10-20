@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
 import type { Credential } from "@/lib/credentials";
 import { credentialValidity } from "@/lib/credentials";
 import type { CredentialIntegrity } from "@/lib/credential-verification";
@@ -110,7 +111,8 @@ export function CredentialDetail({
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Organization website ↗
+                Organization website{" "}
+                <ArrowUpRight size={15} aria-hidden="true" />
               </a>
             )}
           </div>
@@ -138,7 +140,8 @@ export function CredentialDetail({
         )}
         {shared && recipient && (
           <Link className="text-link" href={`/talent/${recipient.slug}`}>
-            View recipient’s Skill Passport ↗
+            View recipient’s Skill Passport{" "}
+            <ArrowUpRight size={15} aria-hidden="true" />
           </Link>
         )}
         {manageHref && (
@@ -148,99 +151,145 @@ export function CredentialDetail({
         )}
       </div>
       <section
-        className="credential-checks"
-        aria-labelledby="credential-checks-heading"
+        className="credential-summary"
+        aria-label="Credential status summary"
       >
-        <div className="credential-section-intro">
-          <p className="eyebrow">UNDERSTAND THIS RECORD</p>
-          <h2 id="credential-checks-heading">Four separate checks</h2>
-          <p className="muted">
-            Each answers a different question. None alone proves the underlying
-            achievement is true.
-          </p>
+        <div>
+          <span>Validity</span>
+          <strong
+            className={`credential-status status-${validity.toLowerCase().replaceAll(" ", "-")}`}
+          >
+            {validity}
+          </strong>
         </div>
-        <dl className="credential-check-list">
-          <div>
-            <dt>Credential validity</dt>
-            <dd>
-              <strong
-                className={`credential-status status-${validity.toLowerCase().replaceAll(" ", "-")}`}
-              >
-                {validity}
-              </strong>
-              <p className="muted">
-                {validity === "Revoked"
-                  ? "The issuing organization withdrew this credential. A historical blockchain record does not undo revocation."
-                  : validity === "Expired"
-                    ? "The expiry date has passed."
-                    : validity === "Not yet valid"
-                      ? "The issue date is in the future."
-                      : c.expiry_date
-                        ? `Valid through ${credentialDate(c.expiry_date)}, unless revoked.`
-                        : "No expiry date specified; no revocation recorded."}
-              </p>
-            </dd>
-          </div>
-          <div>
-            <dt>Recipient decision</dt>
-            <dd>
-              <strong>
-                {acceptanceLabels[c.credential_preferences.acceptance]}
-              </strong>
-              <p className="muted">
-                {c.credential_preferences.acceptance === "accepted"
-                  ? "Acceptance does not automatically publish a credential or verify its contents."
-                  : c.credential_preferences.acceptance === "declined"
-                    ? "The recipient declined this credential. It cannot appear on their public passport."
-                    : "The recipient has not accepted this credential. It is not public."}
-              </p>
-            </dd>
-          </div>
-          <div>
-            <dt>Organization approval</dt>
-            <dd>
-              <strong>
-                {issuerLabels[c.organizations?.issuer_status ?? ""] ??
-                  "Current approval unavailable"}
-              </strong>
-              <p>
-                {c.authorization_id
-                  ? "ProofPak approval recorded at issuance."
-                  : "Approval at issuance is unavailable."}
-              </p>
-              <p className="muted">
-                ProofPak approval is not independent proof of an organization’s
-                legal identity.
-              </p>
-            </dd>
-          </div>
-          <div>
-            <dt>Blockchain integrity</dt>
-            <dd>
-              <strong
-                className={`credential-status integrity-${integrity.state}`}
-              >
-                {integrityLabel(integrity.state, Boolean(proof))}
-              </strong>
-              <p className="muted">{integrityDescriptions[integrity.state]}</p>
-              {proof && (
-                <a
-                  className="text-link"
-                  href={explorerLink(proof.signature)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Inspect transaction on Solana Explorer ↗
-                </a>
-              )}
-              <p className="muted">
-                Solana devnet · checks record integrity, not the truth of the
-                achievement.
-              </p>
-            </dd>
-          </div>
-        </dl>
+        <div>
+          <span>Recipient</span>
+          <strong>
+            {acceptanceLabels[c.credential_preferences.acceptance]}
+          </strong>
+        </div>
+        <div>
+          <span>Organization</span>
+          <strong>
+            {issuerLabels[c.organizations?.issuer_status ?? ""] ??
+              "Approval unavailable"}
+          </strong>
+        </div>
+        <div>
+          <span>Blockchain integrity</span>
+          <strong className={`credential-status integrity-${integrity.state}`}>
+            {integrityLabel(integrity.state, Boolean(proof))}
+          </strong>
+        </div>
       </section>
+      {(["failed", "mismatch", "missing"] as string[]).includes(
+        integrity.state,
+      ) && (
+        <p className="notice credential-integrity-alert" role="alert">
+          Blockchain check: {integrityLabel(integrity.state, Boolean(proof))}.{" "}
+          {integrityDescriptions[integrity.state]}
+        </p>
+      )}
+      <details className="credential-verification-details">
+        <summary>Verification Details</summary>
+        <section
+          className="credential-checks"
+          aria-labelledby="credential-checks-heading"
+        >
+          <div className="credential-section-intro">
+            <p className="eyebrow">UNDERSTAND THIS RECORD</p>
+            <h2 id="credential-checks-heading">Four separate checks</h2>
+            <p className="muted">
+              Each answers a different question. None alone proves the
+              underlying achievement is true.
+            </p>
+          </div>
+          <dl className="credential-check-list">
+            <div>
+              <dt>Credential validity</dt>
+              <dd>
+                <strong
+                  className={`credential-status status-${validity.toLowerCase().replaceAll(" ", "-")}`}
+                >
+                  {validity}
+                </strong>
+                <p className="muted">
+                  {validity === "Revoked"
+                    ? "The issuing organization withdrew this credential. A historical blockchain record does not undo revocation."
+                    : validity === "Expired"
+                      ? "The expiry date has passed."
+                      : validity === "Not yet valid"
+                        ? "The issue date is in the future."
+                        : c.expiry_date
+                          ? `Valid through ${credentialDate(c.expiry_date)}, unless revoked.`
+                          : "No expiry date specified; no revocation recorded."}
+                </p>
+              </dd>
+            </div>
+            <div>
+              <dt>Recipient decision</dt>
+              <dd>
+                <strong>
+                  {acceptanceLabels[c.credential_preferences.acceptance]}
+                </strong>
+                <p className="muted">
+                  {c.credential_preferences.acceptance === "accepted"
+                    ? "Acceptance does not automatically publish a credential or verify its contents."
+                    : c.credential_preferences.acceptance === "declined"
+                      ? "The recipient declined this credential. It cannot appear on their public passport."
+                      : "The recipient has not accepted this credential. It is not public."}
+                </p>
+              </dd>
+            </div>
+            <div>
+              <dt>Organization approval</dt>
+              <dd>
+                <strong>
+                  {issuerLabels[c.organizations?.issuer_status ?? ""] ??
+                    "Current approval unavailable"}
+                </strong>
+                <p>
+                  {c.authorization_id
+                    ? "ProofPak approval recorded at issuance."
+                    : "Approval at issuance is unavailable."}
+                </p>
+                <p className="muted">
+                  ProofPak approval is not independent proof of an
+                  organization’s legal identity.
+                </p>
+              </dd>
+            </div>
+            <div>
+              <dt>Blockchain integrity</dt>
+              <dd>
+                <strong
+                  className={`credential-status integrity-${integrity.state}`}
+                >
+                  {integrityLabel(integrity.state, Boolean(proof))}
+                </strong>
+                <p className="muted">
+                  {integrityDescriptions[integrity.state]}
+                </p>
+                {proof && (
+                  <a
+                    className="text-link"
+                    href={explorerLink(proof.signature)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Inspect transaction on Solana Explorer{" "}
+                    <ArrowUpRight size={15} aria-hidden="true" />
+                  </a>
+                )}
+                <p className="muted">
+                  Solana devnet · checks record integrity, not the truth of the
+                  achievement.
+                </p>
+              </dd>
+            </div>
+          </dl>
+        </section>
+      </details>
       {c.credential_events.map((event, index) => (
         <aside
           className="notice section-spacer"
@@ -264,14 +313,13 @@ export function CredentialDetail({
             target="_blank"
             rel="noopener noreferrer"
           >
-            Open supporting evidence ↗
+            Open supporting evidence{" "}
+            <ArrowUpRight size={15} aria-hidden="true" />
           </a>
         </section>
       ) : (
         <p className="muted section-spacer">
-          Supporting evidence is not available for public viewing. When evidence
-          is private, the integrity check covers its committed digest without
-          revealing its contents.
+          Supporting evidence has not been shared publicly.
         </p>
       )}
       <details className="credential-technical">
@@ -280,7 +328,8 @@ export function CredentialDetail({
           Identifiers and transaction data for inspecting this record. No
           private documents are written to Solana. The displayed name comes from
           the recipient’s current profile; the claim binds their account
-          identifier.
+          identifier. Private evidence is covered by its committed digest
+          without revealing its contents.
         </p>
         <dl>
           <dt>Credential ID</dt>

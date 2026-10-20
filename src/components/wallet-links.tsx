@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { ArrowUpRight } from "lucide-react";
 import { ConfirmForm } from "@/components/confirm-form";
 import { SubmitButton } from "@/components/forms";
 import { disconnectWallet } from "@/lib/credential-actions";
@@ -69,7 +70,8 @@ export function WalletLinks({
               target="_blank"
               rel="noopener noreferrer"
             >
-              View on Solana Explorer ↗
+              View on Solana Explorer{" "}
+              <ArrowUpRight size={15} aria-hidden="true" />
             </a>
           </div>
           <details>

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { credentialWorkspace } from "@/lib/credential-data";
 import { PageHeading } from "@/components/ui";
 import { WalletManager } from "@/components/wallet-manager";
@@ -61,26 +60,12 @@ export default async function Wallet({
           o.issuerStatus === "authorized"),
   );
   return (
-    <div className="container page narrow">
+    <div className="container page narrow wallet-page">
       <PageHeading
         eyebrow="OPTIONAL WALLET"
         title="My Wallet"
         description="Connect a wallet to receive supported payments and sign blockchain records. A wallet is optional for most ProofPak features."
       />
-      <div className="button-row">
-        <Link className="text-link" href="/portal/talent/passport">
-          My passport
-        </Link>
-        <Link className="text-link" href="/organizations">
-          Organizations
-        </Link>
-        <Link className="text-link" href="/payments">
-          Payment history
-        </Link>
-        <Link className="text-link" href="/paid-projects?view=mine">
-          My paid projects
-        </Link>
-      </div>
       {message && (
         <p className="notice" role="status">
           {message}
@@ -93,17 +78,17 @@ export default async function Wallet({
         </p>
       ) : (
         <>
-          <WalletLinks
-            links={links ?? []}
-            organizationNames={Object.fromEntries(
-              organizations.map((o) => [o.id, o.name]),
-            )}
-          />
           <WalletManager
             key={`${requestedPurpose}:${selectedOrganization?.id ?? ""}`}
             organizations={organizations}
             initialPurpose={requestedPurpose}
             initialOrganization={selectedOrganization?.id ?? ""}
+          />
+          <WalletLinks
+            links={links ?? []}
+            organizationNames={Object.fromEntries(
+              organizations.map((o) => [o.id, o.name]),
+            )}
           />
         </>
       )}

@@ -2,7 +2,7 @@
 import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { PortalNav } from "./portal-nav";
-import { Fingerprint } from "lucide-react";
+import { Fingerprint, ShieldCheck, Building2, UserRound } from "lucide-react";
 function Pending() {
   const { pending } = useLinkStatus();
   return (
@@ -59,7 +59,14 @@ export function WorkspaceFrame({
                     : undefined
                 }
               >
-                {label}
+                {href === "/issuer-admin" ? (
+                  <ShieldCheck size={18} aria-hidden="true" />
+                ) : href === "/organizations" ? (
+                  <Building2 size={18} aria-hidden="true" />
+                ) : (
+                  <UserRound size={18} aria-hidden="true" />
+                )}
+                <span className="nav-label">{label}</span>
                 <Pending />
               </Link>
             ))}

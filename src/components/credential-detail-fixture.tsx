@@ -1,9 +1,15 @@
 "use client";
 import { useState } from "react";
 import type { Credential } from "@/lib/credentials";
+import { CredentialInboxItem } from "./credential-inbox-item";
 import { CredentialDetail } from "./credential-detail";
 import type { ProofState } from "@/lib/proof-status";
-export function CredentialDetailFixture() {
+export function CredentialDetailFixture({
+  inbox = false,
+}: {
+  inbox?: boolean;
+}) {
+  const [saved, setSaved] = useState("");
   const [acceptance, setAcceptance] = useState<
     "accepted" | "pending" | "declined"
   >("accepted");
@@ -76,6 +82,32 @@ export function CredentialDetailFixture() {
             },
           ],
   };
+  if (inbox)
+    return (
+      <div className="container page">
+        <h1>My Credentials</h1>
+        <p className="notice">
+          Offline credential inbox fixture. No credential is accepted or
+          published.
+        </p>
+        <CredentialInboxItem
+          credential={sample}
+          action={async (data) =>
+            setSaved(
+              `${data.get("acceptance")} · public: ${data.has("is_public")} · evidence: ${data.has("share_evidence")}`,
+            )
+          }
+        />
+        {saved && <p role="status">Offline decision captured: {saved}</p>}
+        <section className="qualification-section section-spacer">
+          <h2>Qualification verification</h2>
+          <p>
+            Private institution review requests remain separate from received
+            credentials.
+          </p>
+        </section>
+      </div>
+    );
   return (
     <section
       className="container page credential-page"

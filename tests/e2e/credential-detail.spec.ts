@@ -25,6 +25,7 @@ test("credential presents the actual facts, with separate checks and collapsed m
   await expect(
     page.getByRole("link", { name: "Organization website" }),
   ).toHaveAttribute("href", "https://example.com/");
+  await page.getByText("Verification Details", { exact: true }).click();
   const checks = page.getByRole("region", { name: "Four separate checks" });
   for (const label of [
     "Credential validity",
@@ -80,6 +81,7 @@ test("revocation, expiry, organization approval and integrity remain independent
   page,
 }) => {
   await page.goto(fixture);
+  await page.getByText("Verification Details", { exact: true }).click();
   const checks = page.getByRole("region", { name: "Four separate checks" });
   await page.getByLabel("Fixture transaction recorded").check();
   await expect(

@@ -211,9 +211,11 @@ export default async function Portal({
         eyebrow={role === "company" ? "ORGANIZATION DASHBOARD" : "MY DASHBOARD"}
         title={titles[`${role}:${section}`]}
         description={
-          role === "company"
-            ? "Manage your organization, create opportunities and recognize people’s work."
-            : `Welcome${live ? `, ${profile.full_name.split(" ")[0]}` : " to the demo"}. Your Skill Passport brings your work and credentials together. Start with your profile.`
+          role === "talent" && (section === "passport" || section === "preview")
+            ? "Your professional profile and the records you choose to share."
+            : role === "company"
+              ? "Manage your organization, create opportunities and recognize people’s work."
+              : `Welcome${live ? `, ${profile.full_name.split(" ")[0]}` : " to the demo"}. Your Skill Passport brings your work and credentials together. Start with your profile.`
         }
         action={
           live ? (
@@ -647,7 +649,9 @@ export default async function Portal({
                     ? "Manage visibility"
                     : "Publish Skill Passport"}
                 </ButtonLink>
-                <Link href="/portal/talent/projects">Manage projects</Link>
+                <ButtonLink secondary href="/portal/talent/projects">
+                  Manage projects
+                </ButtonLink>
                 {profile.is_public && <SharePassport slug={profile.slug} />}
               </div>
             </div>
