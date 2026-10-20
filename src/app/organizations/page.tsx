@@ -177,6 +177,13 @@ export default async function Organizations({
                         Issue a credential
                       </Link>
                     )}
+                    {o.issuer_status === "authorized" && (
+                      <Link
+                        href={`/wallet?purpose=credential_issuer&organization=${o.id}`}
+                      >
+                        Credential signing wallet
+                      </Link>
+                    )}
                   </div>
                   {o.issuer_status !== "authorized" && (
                     <p className="muted">

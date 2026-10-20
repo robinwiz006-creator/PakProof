@@ -235,7 +235,9 @@ export function MilestonePayment({
                 >
                   <option>Phantom</option>
                   <option>Solflare</option>
-                  <option value={REMOTE_WALLET}>Mobile / QR session</option>
+                  <option value={REMOTE_WALLET}>
+                    Existing signing session
+                  </option>
                 </select>
               </label>
               <button className="button" disabled={busy} onClick={pay}>

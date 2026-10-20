@@ -194,8 +194,15 @@ export default async function PaidProjectPage({
         <Link className="text-link" href="/paid-projects">
           Paid projects
         </Link>
-        <Link className="text-link" href="/wallet">
-          Wallet ownership
+        <Link
+          className="text-link"
+          href={
+            isCompany && org
+              ? `/wallet?purpose=company_payer&organization=${org.id}`
+              : "/wallet"
+          }
+        >
+          My Wallet
         </Link>
         <Link className="text-link" href="/payments">
           Payment history

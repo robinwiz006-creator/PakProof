@@ -1,3 +1,5 @@
+> Release update: [Wallet simplification](WALLET-SIMPLIFICATION-DELIVERY.md) removes phone/QR options entirely. The research below is retained as historical context.
+
 # Wallet-specific connection correction
 
 ## Verified protocol findings

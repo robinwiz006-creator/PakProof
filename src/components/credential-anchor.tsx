@@ -265,7 +265,7 @@ export function CredentialAnchor({ achievementId }: { achievementId: string }) {
         >
           <option>Phantom</option>
           <option>Solflare</option>
-          <option value={REMOTE_WALLET}>Mobile / QR session</option>
+          <option value={REMOTE_WALLET}>Existing signing session</option>
         </select>
       </label>
       <div className="button-row section-spacer">
