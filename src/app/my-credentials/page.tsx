@@ -82,7 +82,11 @@ export default async function MyCredentials({
         </Empty>
       ) : (
         (data as unknown as Credential[]).map((c) => (
-          <div key={c.id}>
+          <div
+            key={c.id}
+            id={`credential-${c.id}`}
+            className="credential-inbox-item"
+          >
             <CredentialRecord credential={c} />
             <form className="panel" action={respondCredential}>
               <input name="credential_id" type="hidden" value={c.id} />

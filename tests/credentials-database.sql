@@ -70,6 +70,33 @@ do $$begin if (select count(*) from public.credential_evidence)<>1 then raise ex
 set local role authenticated;
 set local request.jwt.claim.sub='50000000-0000-4000-8000-000000000001';
 update public.profiles set is_public=false where id=auth.uid();
+-- Each publication condition must independently protect credentials AND evidence.
+set local role anon;
+set local request.jwt.claim.sub='';
+do $$begin
+ if exists(select 1 from public.credentials) or exists(select 1 from public.credential_evidence) then raise exception 'Private passport exposed credentials or evidence';end if;
+end$$;
+set local role authenticated;
+set local request.jwt.claim.sub='50000000-0000-4000-8000-000000000001';
+update public.profiles set is_public=true where id=auth.uid();
+select public.respond_credential(:'credential_id','declined',true,true);
+set local role anon;
+set local request.jwt.claim.sub='';
+do $$begin
+ if exists(select 1 from public.credentials) or exists(select 1 from public.credential_evidence) then raise exception 'Declined credential exposed publicly';end if;
+end$$;
+set local role authenticated;
+set local request.jwt.claim.sub='50000000-0000-4000-8000-000000000001';
+select public.respond_credential(:'credential_id','accepted',false,true);
+set local role anon;
+set local request.jwt.claim.sub='';
+do $$begin
+ if exists(select 1 from public.credentials) or exists(select 1 from public.credential_evidence) then raise exception 'Unpublished accepted credential exposed publicly';end if;
+end$$;
+set local role authenticated;
+set local request.jwt.claim.sub='50000000-0000-4000-8000-000000000001';
+select public.respond_credential(:'credential_id','accepted',true,true);
+update public.profiles set is_public=false where id=auth.uid();
 select public.request_qualification_verification(:'organization_id','BSc Computer Science','Please confirm this qualification against the institution records.',current_date,'https://example.com/private-degree') as request_id \gset
 select set_config('test.request_id',:'request_id',true);
 set local role anon;
