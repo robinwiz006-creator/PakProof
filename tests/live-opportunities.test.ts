@@ -129,3 +129,19 @@ test("real listing presentation keeps routes, payment types, amounts and failure
   assert.ok(partial.includes('href="/challenges/challenges-fixture"'));
   assert.ok(!partial.includes("No open paid projects right now"));
 });
+
+test("discovery queries at most 100 per type with public descriptions while homepage remains small", async () => {
+  const { db, calls } = fixture();
+  await loadLiveOpportunities(db, "2026-10-20", true);
+  for (const call of calls) {
+    assert.equal(call.limit, 100);
+    assert.ok(call.fields?.includes("description"));
+    assert.ok(
+      !/\*|profiles|applications|offers|wallet|submissions/.test(call.fields!),
+    );
+    assert.deepEqual(call.filters, [
+      "status=published",
+      "deadline>=2026-10-20",
+    ]);
+  }
+});

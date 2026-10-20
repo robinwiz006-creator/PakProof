@@ -55,7 +55,7 @@ for (const width of [320, 390, 1280]) {
     ).not.toBeVisible();
     await nav.getByRole("link", { name: "Opportunities", exact: true }).click();
     await expect(
-      page.getByRole("heading", { name: "Open opportunities", exact: true }),
+      page.getByRole("heading", { name: "Find opportunities", exact: true }),
     ).toBeVisible();
     expect(
       await page.evaluate(

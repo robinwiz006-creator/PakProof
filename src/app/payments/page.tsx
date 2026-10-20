@@ -20,8 +20,8 @@ export default async function Payments() {
     <div className="container page">
       <PageHeading
         eyebrow="PRIVATE PAYMENT WORKSPACE"
-        title="Milestone payments"
-        description="Keep work approval separate from payment. Only an independently checked, finalized token transfer is marked Paid."
+        title="Payments"
+        description="Track milestone payments and transaction receipts."
       />
       <div className="button-row">
         <Link className="text-link" href="/paid-projects?view=mine">
@@ -31,7 +31,7 @@ export default async function Payments() {
           Company projects
         </Link>
         <Link className="text-link" href="/wallet">
-          Wallet ownership
+          My Wallet
         </Link>
       </div>
       <p className="notice section-spacer">
@@ -41,7 +41,7 @@ export default async function Payments() {
       </p>
       {error ? (
         <p className="notice">
-          Payment history requires the new payment migration.
+          We couldn’t load your payments. Please try again.
         </p>
       ) : !(data ?? []).length ? (
         <Empty title="No payment preparations yet">

@@ -63,7 +63,7 @@ export default async function PaidProjects({
               ? "My paid projects"
               : "Optional paid projects"
         }
-        description="Build experience through clearly scoped work. Direct payments follow company approval; funds are not locked or guaranteed."
+        description="Find work with clear scope and milestones."
         action={
           signedIn ? (
             view === "company" ? (
@@ -112,8 +112,9 @@ export default async function PaidProjects({
         </Link>
       </div>
       <p className="notice section-spacer">
-        Solana devnet · test USDC only · not real money. Payment completion does
-        not verify someone’s skills or automatically issue a credential.
+        Solana devnet test USDC has no monetary value. Payment is not
+        guaranteed; funds are not locked. Payment alone does not verify a skill
+        or issue a credential.
       </p>
       {message && (
         <p className="notice" role="status">
@@ -121,13 +122,11 @@ export default async function PaidProjects({
         </p>
       )}
       <p className="muted section-spacer">
-        Showing up to 100 newest accessible projects. Search and filters apply
-        to this list.
+        Search covers up to 100 newest accessible projects.
       </p>
       {unavailable ? (
         <p className="notice">
-          We could not load paid projects. Please try again later. No projects
-          or payments are being simulated.
+          We could not load paid projects. Please try again later.
         </p>
       ) : !projects.length ? (
         <Empty title="No paid projects here yet">

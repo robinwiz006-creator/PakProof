@@ -11,12 +11,12 @@ for (const width of [320, 390, 1280]) {
       page.getByRole("heading", { name: "Find opportunities" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("link", { name: "Explore paid projects ↗" }),
-    ).toHaveAttribute("href", "/paid-projects");
+      page.getByRole("button", { name: "Paid Projects", exact: true }),
+    ).toBeVisible();
     await page.goto("/paid-projects");
     await expect(
       page.getByText(
-        "We could not load paid projects. Please try again later. No projects or payments are being simulated.",
+        "We could not load paid projects. Please try again later.",
       ),
     ).toBeVisible();
     expect(

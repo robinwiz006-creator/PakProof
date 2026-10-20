@@ -73,7 +73,7 @@ export default async function Organizations({
       <PageHeading
         eyebrow="PROOFPAK ORGANIZATIONS"
         title="Organization & credentials"
-        description="Start with your organization profile. Approval allows you to issue credentials; challenges and paid projects are separate ways to offer work."
+        description="Manage your organization, credentials and opportunities."
         action={
           <Link className="button secondary" href="/portal/company/profile">
             Organization profile

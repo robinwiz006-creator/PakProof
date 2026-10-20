@@ -1,65 +1,82 @@
+import Link from "next/link";
+import { UserRound, BadgeCheck, ArrowUpRight } from "lucide-react";
 import { ButtonLink, PageHeading } from "@/components/ui";
 export default function How() {
   return (
-    <div className="container page">
+    <div className="container page how-simple">
       <PageHeading
-        eyebrow="HOW PROOFPAK WORKS"
-        title="Start with the work you can show."
-        description="Your skill passport brings your profile, projects, evidence, and recognition together. Credentials are issued separately from your own projects. Challenges and paid work are optional."
+        eyebrow="HOW IT WORKS"
+        title="Your work. One professional record."
+        description="Start with your profile. Add proof as you grow."
       />
-      {[
-        [
-          "01",
-          "Complete your profile",
-          "Add a headline, introduction, location, and skills. These are self-reported. Optional details can wait.",
-        ],
-        [
-          "02",
-          "Add projects and evidence",
-          "Show personal, university, or freelance work through repositories, demos, and supporting links. You can edit your projects later.",
-        ],
-        [
-          "03",
-          "Preview, publish, and share",
-          "Preview your passport privately, choose to publish it, and copy its link. You can build a useful passport without completing a challenge.",
-        ],
-        [
-          "04",
-          "Earn recognition over time",
-          "An authorized organization can issue a credential for you to accept or decline. An optional company challenge can also lead to an approved achievement. Choose what to publish and whether to share evidence.",
-        ],
-        [
-          "05",
-          "Check the record",
-          "Issuers can separately record their credential or achievement on Solana devnet. Verification checks a finalized transaction and matching claim. It does not independently verify the issuer’s identity or your skill level.",
-        ],
-        [
-          "06",
-          "Optional paid work",
-          "Agree on fixed milestones with a company, submit evidence and receive review. Approved work can be paid in devnet test USDC after wallet ownership checks. Test tokens are not real money, and direct payments are not guaranteed. Completed work can join your passport with consent; payment alone is not a skill credential.",
-        ],
-      ].map(([n, title, text]) => (
-        <div className="how-step" key={n}>
-          <span className="step-number">{n}</span>
-          <div>
+      <ol className="simple-steps">
+        {[
+          {
+            title: "Build your Skill Passport",
+            text: "Add your skills, projects and evidence. Preview your profile, then publish and share it.",
+            Icon: UserRound,
+          },
+          {
+            title: "Prove your work",
+            text: "Show what you’ve made. Accept credentials from approved organizations and choose what to publish.",
+            Icon: BadgeCheck,
+          },
+          {
+            title: "Find opportunities",
+            text: "Explore challenges and projects. Apply when the work fits your skills — participation is optional.",
+            Icon: ArrowUpRight,
+          },
+        ].map(({ title, text, Icon }, index) => (
+          <li key={title}>
+            <div className="simple-step-mark">
+              <Icon size={24} aria-hidden="true" />
+              <span>0{index + 1}</span>
+            </div>
             <h2>{title}</h2>
-            <p>{text}</p>
-          </div>
-        </div>
-      ))}
+            <p className="muted">{text}</p>
+          </li>
+        ))}
+      </ol>
       <div className="button-row section-spacer">
         <ButtonLink href="/sign-up?role=talent">
-          Build Your Skill Passport
+          Create my Skill Passport
         </ButtonLink>
-        <ButtonLink secondary href="/sign-up?role=company">
-          Open company workspace
-        </ButtonLink>
+        <Link className="text-link" href="/sign-up?role=company">
+          For organizations →
+        </Link>
       </div>
-      <p className="muted section-spacer">
-        Institution verification requires an authorized human representative;
-        ProofPak does not access university databases automatically. Devnet is a
-        testing network whose history can reset.
-      </p>
+      <details className="trust-help section-spacer">
+        <summary>Trust &amp; Verification</summary>
+        <ul>
+          <li>
+            Projects and skills added by individuals are self-reported.
+            Credentials and company-approved achievements are separate records.
+          </li>
+          <li>
+            ProofPak organization approval is not independent proof of legal
+            identity. Institution verification requires an approved human
+            representative; ProofPak does not automatically access university
+            databases.
+          </li>
+          <li>
+            For eligible records, Solana verification checks matching data in a
+            finalized transaction. It does not independently prove an
+            achievement is true. Acceptance, issuer approval, expiry and
+            revocation remain separate checks.
+          </li>
+          <li>
+            Solana devnet is a test network and its history can reset. Paid
+            projects use test USDC with no monetary value. Funds are not locked,
+            and payment is not guaranteed. Payment alone does not verify a skill
+            or issue a credential.
+          </li>
+          <li>
+            A wallet is optional for creating and sharing a passport. Public
+            work and evidence require your publication choices; blockchain
+            transactions themselves can be publicly discoverable.
+          </li>
+        </ul>
+      </details>
     </div>
   );
 }
