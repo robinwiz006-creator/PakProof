@@ -43,18 +43,34 @@ export default async function PaidProjectPage({
   if (!z.uuid().safeParse(id).success || !isConfigured()) notFound();
   const db = await supabase();
   const user = await currentUser();
-  const { data, error } = await db
-    .from("paid_projects")
-    .select("*,companies(name)")
-    .eq("id", id)
-    .maybeSingle();
-  if (error || !data) notFound();
-  const p = projectData(data);
+  // Raw records are RLS-limited to project parties. Other visitors use only
+  // the database's fixed public projection, never a client-side privacy filter.
+  const privateResult = user
+    ? await db
+        .from("paid_projects")
+        .select("*,companies(name)")
+        .eq("id", id)
+        .maybeSingle()
+    : { data: null, error: null };
+  if (privateResult.error)
+    throw new Error("Project access could not be checked.");
+  const privateProject = privateResult.data;
+  const publicResult = privateProject
+    ? { data: privateProject, error: null }
+    : await db
+        .from("public_paid_projects")
+        .select("*,companies(name)")
+        .eq("id", id)
+        .maybeSingle();
+  if (publicResult.error)
+    throw new Error("Project details could not be loaded.");
+  if (!publicResult.data) notFound();
+  const p = projectData(publicResult.data);
   const { message } = await searchParams;
   const [milestoneResult, memberResult, appResult, offerResult] =
     await Promise.all([
       db
-        .from("paid_milestones")
+        .from(privateProject ? "paid_milestones" : "public_paid_milestones")
         .select("*")
         .eq("project_id", id)
         .order("position"),
@@ -73,11 +89,11 @@ export default async function PaidProjectPage({
             .eq("project_id", id)
             .order("created_at")
         : Promise.resolve({ data: [], error: null }),
-      user && p.current_offer_id
+      user && privateProject?.current_offer_id
         ? db
             .from("paid_project_offers")
             .select("*")
-            .eq("id", p.current_offer_id)
+            .eq("id", privateProject.current_offer_id)
             .maybeSingle()
         : Promise.resolve({ data: null, error: null }),
     ]);
@@ -89,7 +105,9 @@ export default async function PaidProjectPage({
   const member = memberResult.data,
     apps = appResult.data;
   const isCompany = Boolean(member),
-    isWorker = user?.id === p.worker_id;
+    isWorker = Boolean(
+      user && privateProject && user.id === privateProject.worker_id,
+    );
   const ownApp = (apps ?? []).find((a) => a.worker_id === user?.id);
   const offer = offerResult.data as unknown as PaidOffer | null;
   const ids = ms.map((m) => m.id),
@@ -132,11 +150,11 @@ export default async function PaidProjectPage({
           .eq("user_id", user.id)
           .is("disconnected_at", null)
       : Promise.resolve({ data: [], error: null }),
-    party && data.payout_authorization_id
+    party && privateProject?.payout_authorization_id
       ? db
           .from("paid_payout_authorizations")
           .select("wallet_address")
-          .eq("id", data.payout_authorization_id)
+          .eq("id", privateProject.payout_authorization_id)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
     party && ids.length

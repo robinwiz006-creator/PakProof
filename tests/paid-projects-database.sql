@@ -11,7 +11,7 @@ select public.create_paid_project(:'company_id','Dashboard project','Build and d
 select set_config('test.paid_project',:'project_id',true);
 set local role anon;
 set local request.jwt.claim.sub='';
-do $$begin if exists(select 1 from public.paid_projects) then raise exception 'Draft leaked publicly';end if;end$$;
+do $$begin if exists(select 1 from public.public_paid_projects) then raise exception 'Draft leaked publicly';end if;end$$;
 set local role authenticated;
 set local request.jwt.claim.sub='a0000000-0000-4000-8000-000000000001';
 select public.publish_paid_project(:'project_id');

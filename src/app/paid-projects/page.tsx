@@ -20,7 +20,7 @@ export default async function PaidProjects({
     signedIn = Boolean(user);
     if ((view === "mine" || view === "company") && !user) redirect("/sign-in");
     let query = db
-      .from("paid_projects")
+      .from(view === "company" ? "paid_projects" : "public_paid_projects")
       .select(
         "id,title,description,skills,deadline,budget_units,status,companies(name)",
       )
