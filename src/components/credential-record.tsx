@@ -1,3 +1,4 @@
+import { issuanceTrustLabel } from "@/lib/issuer-permissions";
 import Link from "next/link";
 import { credentialDate } from "@/lib/credential-presentation";
 import { credentialValidity, type Credential } from "@/lib/credentials";
@@ -11,6 +12,7 @@ export function CredentialRecord({
       <p className="eyebrow">
         ORGANIZATION-ISSUED · {c.credential_type.replaceAll("_", " ")}
       </p>
+      <p className="muted">{issuanceTrustLabel(c)}</p>
       <h3>
         <Link href={`/credentials/${c.id}`}>{c.title}</Link>
       </h3>
@@ -22,7 +24,7 @@ export function CredentialRecord({
         <span className="tag">
           Organization{" "}
           {c.organizations?.issuer_status === "authorized"
-            ? "approved"
+            ? "approved on ProofPak"
             : c.organizations?.issuer_status === "pending"
               ? "awaiting approval"
               : (c.organizations?.issuer_status ?? "unverified")}

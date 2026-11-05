@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { IssuerTypeFields } from "@/components/issuer-type-fields";
+import { credentialTypeLabels } from "@/lib/issuer-permissions";
 import { ConfirmForm } from "@/components/confirm-form";
 import { CredentialAnchor } from "@/components/credential-anchor";
 import { PageHeading, Empty } from "@/components/ui";
@@ -7,7 +9,6 @@ import { CredentialRecord } from "@/components/credential-record";
 import { credentialWorkspace } from "@/lib/credential-data";
 import {
   organizationTypes,
-  credentialTypes,
   credentialSelect,
   type Organization,
   type Credential,
@@ -44,7 +45,7 @@ export default async function Organizations({
     : { data: [], error: null };
   const organizations = (orgs ?? []) as unknown as Organization[];
   const orgIds = organizations.map((o) => o.id);
-  const [credentialResult, requestResult] = await Promise.all([
+  const [credentialResult, requestResult, auditResult] = await Promise.all([
     orgIds.length
       ? db
           .from("credentials")
@@ -62,11 +63,21 @@ export default async function Organizations({
           .in("organization_id", orgIds)
           .order("created_at", { ascending: false })
       : Promise.resolve({ data: [], error: null, count: 0 }),
+    view === "issued" && orgIds.length
+      ? db
+          .from("credential_issuance_audit")
+          .select("credential_id,representative_id,issued_at,authorization_id")
+          .in("organization_id", orgIds)
+      : Promise.resolve({ data: [], error: null }),
   ]);
+  if (auditResult.error)
+    throw new Error("Private issuance records could not be loaded.");
   const credentials = credentialResult.data;
   const requests = requestResult.data;
   const eligible = organizations.filter(
-    (o) => o.issuer_status === "authorized",
+    (o) =>
+      o.issuer_status === "authorized" &&
+      (o.allowed_credential_types?.length ?? 0) > 0,
   );
   return (
     <div className="container page">
@@ -80,6 +91,23 @@ export default async function Organizations({
           </Link>
         }
       />
+      {view === "overview" &&
+        organizations.map((o) => (
+          <p className="notice section-spacer" key={`permissions-${o.id}`}>
+            <strong>{o.companies.name}: </strong>Registered on ProofPak ·{" "}
+            {o.issuer_status === "authorized"
+              ? "Authorized by ProofPak"
+              : o.issuer_status === "suspended"
+                ? "Issuance suspended"
+                : "Awaiting approval"}
+            . Approved categories:{" "}
+            {(o.allowed_credential_types ?? [])
+              .map((t) => credentialTypeLabels[t] ?? t)
+              .join(", ") || "None — administrator category review required"}
+            . Approval does not establish government accreditation or guarantee
+            a credential’s truth.
+          </p>
+        ))}
       <nav className="workspace-tabs" aria-label="Organization sections">
         {[
           ["overview", "Overview"],
@@ -126,7 +154,7 @@ export default async function Organizations({
               <strong>{organizations.length}</strong>
             </div>
             <div className="stat">
-              <span>Approved organizations</span>
+              <span>Ready to issue</span>
               <strong>{eligible.length}</strong>
             </div>
             <div className="stat">
@@ -278,14 +306,15 @@ export default async function Organizations({
         </details>
       )}
       {view === "issue" && !eligible.length && (
-        <Empty title="Organization approval is needed to issue credentials">
+        <Empty title="Credential category approval is needed">
           Create your organization first, then contact the ProofPak
           administrator with your official website and evidence that you
           represent it.{" "}
           <Link href="/organizations?view=overview">
             Check organization status
           </Link>
-          . You cannot approve your own organization.
+          . An administrator must explicitly approve the credential categories
+          you may issue. You cannot approve your own organization.
         </Empty>
       )}
       {view === "issue" && eligible.length > 0 && (
@@ -301,16 +330,13 @@ export default async function Organizations({
             chooses to share it.
           </p>
           <form action={issueCredential}>
-            <div className="field">
-              <label htmlFor="issuer">Issuing organization</label>
-              <select id="issuer" name="organization_id">
-                {eligible.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.companies.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <IssuerTypeFields
+              organizations={eligible.map((o) => ({
+                id: o.id,
+                name: o.companies.name,
+                types: o.allowed_credential_types ?? [],
+              }))}
+            />
             <Field
               name="recipient_slug"
               label="Recipient passport slug or URL"
@@ -323,16 +349,6 @@ export default async function Organizations({
               minLength={3}
               maxLength={160}
             />
-            <div className="field">
-              <label htmlFor="ctype">Credential type</label>
-              <select id="ctype" name="credential_type">
-                {credentialTypes.map((t) => (
-                  <option key={t} value={t}>
-                    {t.replaceAll("_", " ")}
-                  </option>
-                ))}
-              </select>
-            </div>
             <Field
               name="description"
               label="Description"
@@ -373,6 +389,23 @@ export default async function Organizations({
             (credentials as unknown as Credential[]).map((c) => (
               <div key={c.id}>
                 <CredentialRecord credential={c} />
+                <details className="section-spacer">
+                  <summary>Private issuing representative</summary>
+                  {auditResult.data
+                    ?.filter((a) => a.credential_id === c.id)
+                    .map((a) => (
+                      <p className="muted hash" key={a.credential_id}>
+                        Representative {a.representative_id} · Recorded{" "}
+                        {a.issued_at} · Approval reference {a.authorization_id}
+                      </p>
+                    ))}
+                  {!auditResult.data?.some((a) => a.credential_id === c.id) && (
+                    <p className="muted">
+                      Historical record: issuing representative was not
+                      captured.
+                    </p>
+                  )}
+                </details>
                 {c.credential_preferences.acceptance === "pending" && (
                   <p className="notice">
                     Waiting for the recipient to accept or decline. They choose
@@ -383,9 +416,11 @@ export default async function Organizations({
                 {c.credential_preferences.acceptance === "accepted" &&
                   !c.credential_proofs?.length &&
                   !c.credential_events.length &&
-                  eligible.some((o) => o.id === c.organization_id) && (
-                    <CredentialAnchor achievementId={c.id} />
-                  )}
+                  organizations.some(
+                    (o) =>
+                      o.id === c.organization_id &&
+                      o.issuer_status === "authorized",
+                  ) && <CredentialAnchor achievementId={c.id} />}
                 {!c.credential_events.length && (
                   <details className="panel">
                     <summary>Revoke or correct this credential</summary>

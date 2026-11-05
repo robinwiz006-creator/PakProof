@@ -77,6 +77,7 @@ export type Organization = {
   organization_type: string;
   issuer_status: "pending" | "authorized" | "suspended";
   authorization_id: string | null;
+  allowed_credential_types?: string[];
   companies: { name: string; description: string; website: string };
 };
 export type Credential = {
@@ -94,6 +95,20 @@ export type Credential = {
   award: string;
   evidence_digest: string;
   created_at: string;
+  credential_issuance_provenance?:
+    | {
+        authorization_id: string;
+        authorized_credential_type: string;
+        issued_at: string;
+        representative_recorded: boolean;
+      }[]
+    | {
+        authorization_id: string;
+        authorized_credential_type: string;
+        issued_at: string;
+        representative_recorded: boolean;
+      }
+    | null;
   organizations?: Organization;
   credential_preferences: {
     acceptance: "pending" | "accepted" | "declined";
@@ -114,7 +129,7 @@ export type Credential = {
   }[];
 };
 export const credentialSelect =
-  "*, organizations(*, companies(name,description,website)), credential_preferences(*), credential_evidence(*), credential_events(*), credential_proofs(*)";
+  "*, organizations(*, companies(name,description,website)), credential_preferences(*), credential_evidence(*), credential_events(*), credential_proofs(*), credential_issuance_provenance(*)";
 export function credentialValidity(
   c: Pick<Credential, "expiry_date" | "credential_events"> & {
     issue_date?: string;

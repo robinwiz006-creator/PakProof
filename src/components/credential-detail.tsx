@@ -1,4 +1,8 @@
 import Link from "next/link";
+import {
+  issuanceTrustLabel,
+  issuanceProvenance,
+} from "@/lib/issuer-permissions";
 import { ArrowUpRight } from "lucide-react";
 import type { Credential } from "@/lib/credentials";
 import { credentialValidity } from "@/lib/credentials";
@@ -190,6 +194,12 @@ export function CredentialDetail({
           {integrityDescriptions[integrity.state]}
         </p>
       )}
+      <p className="muted section-spacer">
+        {issuanceTrustLabel(c)}.{" "}
+        {issuanceProvenance(c)?.representative_recorded
+          ? "Issuing representative recorded privately by ProofPak; this staff attribution is not part of the v3 blockchain claim."
+          : "Historical issuing representative was not recorded; no attribution has been invented."}
+      </p>
       <details className="credential-verification-details">
         <summary>Verification Details</summary>
         <section

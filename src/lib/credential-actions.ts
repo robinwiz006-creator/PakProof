@@ -4,7 +4,11 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { supabase, isConfigured } from "./supabase/server";
-import { credentialInput, organizationTypes } from "./credentials";
+import {
+  credentialInput,
+  organizationTypes,
+  credentialTypes,
+} from "./credentials";
 function go(path: string, message: string): never {
   redirect(messageLink(path, message));
 }
@@ -154,6 +158,7 @@ export async function authorizeIssuer(form: FormData) {
       organization_id: z.uuid(),
       note: z.string().trim().min(20).max(2000),
       decision: z.enum(["authorize", "suspend"]),
+      expected_authorization: z.union([z.literal(""), z.uuid()]),
       reviewed_name: z.string(),
       reviewed_description: z.string(),
       reviewed_website: z.string(),
@@ -162,7 +167,14 @@ export async function authorizeIssuer(form: FormData) {
     path,
   );
   const db = await context();
-  const { error } = await db.rpc("authorize_issuer", {
+  const types = z
+    .array(z.enum(credentialTypes))
+    .safeParse(form.getAll("credential_types"));
+  if (!types.success)
+    go(path, "Choose supported credential categories and try again.");
+  const { error } = await db.rpc("review_issuer_authorization", {
+    p_types: types.data,
+    p_expected_authorization: v.expected_authorization || null,
     p_organization: v.organization_id,
     p_note: v.note,
     p_authorize: v.decision === "authorize",

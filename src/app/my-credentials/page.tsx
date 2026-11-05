@@ -30,7 +30,8 @@ export default async function MyCredentials({
       .from("organizations")
       .select("*,companies(name)")
       .eq("organization_type", "university")
-      .eq("issuer_status", "authorized"),
+      .eq("issuer_status", "authorized")
+      .contains("allowed_credential_types", ["degree"]),
     db
       .from("qualification_requests")
       .select("*")

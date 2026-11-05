@@ -312,3 +312,248 @@ test("real REST workflow preserves the boundary through draft, publication, sele
   );
   await boundary("active", true);
 });
+
+async function issuerRpc(name, args, role) {
+  const response = await fetch(`${base}/rpc/${name}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${jwt(role)}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(args),
+  });
+  return {
+    status: response.status,
+    data: await response.json().catch(() => null),
+  };
+}
+async function issueArgs(type) {
+  const org = (await read("organizations?select=id", 1)).data[0];
+  return {
+    p_organization: org.id,
+    p_recipient: uid(2),
+    p_title: "Scoped REST fixture",
+    p_type: type,
+    p_description: "A synthetic credential used to test direct API issuance.",
+    p_issue_date: new Date().toISOString().slice(0, 10),
+    p_expiry_date: null,
+    p_program: "",
+    p_award: "",
+    p_evidence: "",
+  };
+}
+test("issuer REST: permitted type succeeds and private representative attribution is server-derived", async () => {
+  const r = await issuerRpc("issue_credential", await issueArgs("course"), 1);
+  assert.equal(r.status, 200, JSON.stringify(r));
+  const audit = await read(
+    `credential_issuance_audit?credential_id=eq.${r.data}`,
+    1,
+  );
+  assert.equal(audit.data[0].representative_id, uid(1));
+  assert.equal(audit.data[0].authorized_credential_type, "course");
+});
+test("issuer REST: permitted organization reviewer is attributed to their own identity", async () => {
+  const issued = await issuerRpc(
+    "issue_credential",
+    await issueArgs("course"),
+    4,
+  );
+  assert.equal(issued.status, 200, JSON.stringify(issued));
+  const row = (
+    await read(`credential_issuance_audit?credential_id=eq.${issued.data}`, 4)
+  ).data[0];
+  assert.equal(row.representative_id, uid(4));
+});
+test("issuer REST: degree escalation, unrelated issuance and direct credential inserts are denied", async () => {
+  assert.equal(
+    (await issuerRpc("issue_credential", await issueArgs("degree"), 1)).status,
+    400,
+  );
+  assert.equal(
+    (await issuerRpc("issue_credential", await issueArgs("course"), 3)).status,
+    400,
+  );
+  assert.ok([401, 403].includes((await read("credentials", 1, "POST")).status));
+});
+test("issuer REST: public provenance embeds correctly without exposing staff or private reviews", async () => {
+  const r = await read(
+    "credentials?select=id,credential_issuance_provenance(*)",
+  );
+  assert.equal(r.status, 200, JSON.stringify(r));
+  assert.equal(r.data.length, 1);
+  const row = r.data[0].credential_issuance_provenance;
+  const p = Array.isArray(row) ? row[0] : row;
+  assert.equal(p.representative_recorded, true);
+  assert.equal(p.authorized_credential_type, "course");
+  assert.deepEqual(
+    Object.keys(p).sort(),
+    [
+      "credential_id",
+      "authorization_id",
+      "authorized_credential_type",
+      "issued_at",
+      "representative_recorded",
+    ].sort(),
+  );
+  assert.equal((await read("credential_issuance_audit?select=*")).status, 401);
+  assert.deepEqual(
+    (await read("credential_issuance_audit?select=*", 2)).data,
+    [],
+  );
+  assert.deepEqual(
+    (await read("credential_issuance_audit?select=*", 3)).data,
+    [],
+  );
+  assert.deepEqual((await read("issuer_authorizations?select=*", 1)).data, []);
+  const history = await read(
+    "issuer_authorizations?select=decision,allowed_credential_types",
+    5,
+  );
+  assert.equal(history.data[0].decision, "approval");
+});
+test("issuer REST: withdrawing publication hides provenance as well as the credential", async () => {
+  const id = (await read("credentials?select=id")).data[0].id;
+  const args = {
+    p_credential: id,
+    p_acceptance: "accepted",
+    p_public: false,
+    p_share_evidence: false,
+  };
+  assert.equal((await issuerRpc("respond_credential", args, 2)).status, 204);
+  assert.deepEqual(
+    (await read("credential_issuance_provenance?select=*")).data,
+    [],
+  );
+  assert.deepEqual((await read("credentials?select=id")).data, []);
+  assert.equal(
+    (await issuerRpc("respond_credential", { ...args, p_public: true }, 2))
+      .status,
+    204,
+  );
+  assert.equal(
+    (await read("credential_issuance_provenance?select=*")).data.length,
+    1,
+  );
+});
+test("issuer REST: members cannot change permissions or forge attribution through raw writes", async () => {
+  for (const table of [
+    "organizations",
+    "issuer_authorizations",
+    "credential_issuance_audit",
+    "credential_issuance_provenance",
+  ])
+    for (const method of ["POST", "PATCH", "DELETE"]) {
+      const r = await read(table, 1, method);
+      assert.ok(
+        [400, 401, 403, 405].includes(r.status),
+        JSON.stringify({ table, method, ...r }),
+      );
+    }
+  const org = (await read("organizations?select=id,authorization_id", 1))
+    .data[0];
+  const r = await issuerRpc(
+    "review_issuer_authorization",
+    {
+      p_organization: org.id,
+      p_note: "An ordinary member must not authorize their own issuer.",
+      p_authorize: true,
+      p_name: "Privacy Fixture",
+      p_description: "Disposable local privacy test organization.",
+      p_website: "https://example.com",
+      p_types: ["degree"],
+      p_expected_authorization: org.authorization_id,
+    },
+    1,
+  );
+  assert.equal(r.status, 400);
+});
+
+test("issuer REST: administrator scope changes and suspension are enforced; legacy approval cannot restore broad permissions", async () => {
+  let org = (await read("organizations?select=id,authorization_id", 5)).data[0];
+  const args = {
+    p_organization: org.id,
+    p_note: "Synthetic independent administrator lifecycle review.",
+    p_name: "Privacy Fixture",
+    p_description: "Disposable local privacy test organization.",
+    p_website: "https://example.com",
+  };
+  assert.equal(
+    (
+      await issuerRpc(
+        "review_issuer_authorization",
+        {
+          ...args,
+          p_authorize: false,
+          p_types: [],
+          p_expected_authorization: org.authorization_id,
+        },
+        5,
+      )
+    ).status,
+    204,
+  );
+  assert.equal(
+    (await issuerRpc("issue_credential", await issueArgs("course"), 1)).status,
+    400,
+  );
+  const old = org.authorization_id;
+  org = (await read("organizations?select=id,authorization_id", 5)).data[0];
+  assert.equal(
+    (
+      await issuerRpc(
+        "review_issuer_authorization",
+        {
+          ...args,
+          p_authorize: true,
+          p_types: ["degree"],
+          p_expected_authorization: old,
+        },
+        5,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "review_issuer_authorization",
+        {
+          ...args,
+          p_authorize: true,
+          p_types: ["workshop"],
+          p_expected_authorization: org.authorization_id,
+        },
+        5,
+      )
+    ).status,
+    204,
+  );
+  assert.equal(
+    (await issuerRpc("issue_credential", await issueArgs("course"), 1)).status,
+    400,
+  );
+  assert.equal(
+    (await issuerRpc("issue_credential", await issueArgs("workshop"), 1))
+      .status,
+    200,
+  );
+  const history = (
+    await read("issuer_authorizations?select=decision", 5)
+  ).data.map((r) => r.decision);
+  assert.ok(history.includes("suspension"));
+  assert.ok(history.includes("reinstatement"));
+  assert.equal(
+    (await issuerRpc("authorize_issuer", { ...args, p_authorize: true }, 5))
+      .status,
+    204,
+  );
+  assert.deepEqual(
+    (await read("organizations?select=allowed_credential_types", 1)).data[0]
+      .allowed_credential_types,
+    [],
+  );
+  assert.equal(
+    (await issuerRpc("issue_credential", await issueArgs("degree"), 1)).status,
+    400,
+  );
+});
