@@ -1,4 +1,6 @@
 export type Profile = {
+  is_discoverable?: boolean;
+  allow_contact_requests?: boolean;
   passport_previewed_at?: string | null;
   id: string;
   slug: string;
@@ -77,6 +79,7 @@ export type Achievement = {
     digest_salt: string;
   } | null;
   achievement_sharing?: {
+    share_assessment?: boolean;
     share_evidence: boolean;
     project_id: string | null;
   } | null;

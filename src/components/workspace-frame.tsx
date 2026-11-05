@@ -22,6 +22,7 @@ export function WorkspaceFrame({
   const workspace = [
     "/organizations",
     "/my-credentials",
+    "/contact-requests",
     "/wallet",
     "/payments",
     "/issuer-admin",

@@ -2,7 +2,7 @@ import test, { before } from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 const base = process.env.PRIVACY_API_URL;
-const uid = (n) => `a0000000-0000-4000-8000-00000000000${n}`;
+const uid = (n) => `a0000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 function jwt(n) {
   const head = Buffer.from(
     JSON.stringify({ alg: "HS256", typ: "JWT" }),
@@ -317,7 +317,7 @@ async function issuerRpc(name, args, role) {
   const response = await fetch(`${base}/rpc/${name}`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${jwt(role)}`,
+      ...(role ? { Authorization: `Bearer ${jwt(role)}` } : {}),
       "Content-Type": "application/json",
     },
     body: JSON.stringify(args),
@@ -831,5 +831,402 @@ test("assessment REST: publication and evidence consent independently protect as
       )
     ).data,
     [],
+  );
+});
+
+let employerCompany, employerRequest;
+async function employerSearch(overrides = {}, role = 1) {
+  if (!employerCompany)
+    employerCompany = (await read("paid_projects?select=company_id&limit=1", 1))
+      .data[0].company_id;
+  return issuerRpc(
+    "search_passports",
+    {
+      p_company: employerCompany,
+      p_query: "",
+      p_skill: "",
+      p_credentials: false,
+      p_assessed: false,
+      p_saved: false,
+      p_page: 1,
+      ...overrides,
+    },
+    role,
+  );
+}
+test("discovery REST: server pages contain only opt-ins with stable alphabetical order", async () => {
+  const first = await employerSearch();
+  const second = await employerSearch({ p_page: 2 });
+  assert.equal(first.status, 200, JSON.stringify(first));
+  assert.equal(first.data.total, 24);
+  assert.equal(first.data.items.length, 20);
+  assert.equal(second.data.items.length, 4);
+  assert.ok(
+    first.data.items.every(
+      (x) => !second.data.items.some((y) => y.id === x.id),
+    ),
+  );
+  const match = await employerSearch({ p_query: "energy", p_skill: "react" });
+  assert.equal(match.data.total, 1);
+  assert.equal(match.data.items[0].id, uid(10));
+  assert.equal(
+    match.data.items[0].projects[0].title,
+    "Public Discovery Project",
+  );
+  for (const q of [
+    "Hidden Directory",
+    "Private Directory",
+    "Undiscoverable",
+    "private-assessment-evidence",
+    "%",
+  ])
+    assert.equal((await employerSearch({ p_query: q })).data.total, 0, q);
+  assert.equal((await employerSearch({}, 3)).status, 400);
+  assert.equal((await employerSearch({}, null)).status, 401);
+});
+test("discovery REST: credentials and unshared assessments cannot reveal hidden existence", async () => {
+  assert.equal((await employerSearch({ p_credentials: true })).data.total, 0);
+  assert.equal((await employerSearch({ p_assessed: true })).data.total, 0);
+  assert.equal(
+    (
+      await issuerRpc(
+        "set_discovery_preferences",
+        { p_discoverable: true, p_contact: true },
+        2,
+      )
+    ).status,
+    204,
+  );
+  assert.equal((await employerSearch({ p_credentials: true })).data.total, 1);
+  assert.equal((await employerSearch({ p_assessed: true })).data.total, 0);
+  const achievement = (await read("achievements?select=id", 2)).data[0];
+  const r = await fetch(`${base}/achievement_sharing`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${jwt(2)}`,
+      "Content-Type": "application/json",
+      Prefer: "resolution=merge-duplicates",
+    },
+    body: JSON.stringify({
+      achievement_id: achievement.id,
+      share_assessment: true,
+    }),
+  });
+  assert.ok(r.ok);
+  const visible = await employerSearch({ p_assessed: true });
+  assert.equal(visible.data.total, 1);
+  assert.equal(visible.data.items[0].achievements[0].assessed, true);
+  assert.ok(!JSON.stringify(visible.data).includes("Private submission"));
+});
+test("shortlist REST: company isolation, note updates and direct write denial", async () => {
+  assert.equal(
+    (
+      await issuerRpc(
+        "save_candidate",
+        {
+          p_company: employerCompany,
+          p_candidate: uid(10),
+          p_note: "Private team note",
+        },
+        1,
+      )
+    ).status,
+    204,
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "save_candidate",
+        {
+          p_company: employerCompany,
+          p_candidate: uid(10),
+          p_note: "Updated team note",
+        },
+        1,
+      )
+    ).status,
+    204,
+  );
+  const saved = await employerSearch({ p_saved: true });
+  assert.equal(saved.data.total, 1);
+  assert.equal(saved.data.items[0].internal_note, "Updated team note");
+  assert.deepEqual((await read("employer_shortlists?select=*", 3)).data, []);
+  assert.deepEqual((await read("employer_shortlists?select=*", 10)).data, []);
+  assert.equal((await read("employer_shortlists?select=*")).status, 401);
+  for (const method of ["POST", "PATCH", "DELETE"])
+    assert.ok(
+      [400, 401, 403].includes(
+        (await read("employer_shortlists", 1, method)).status,
+      ),
+    );
+  assert.equal(
+    (
+      await issuerRpc(
+        "remove_saved_candidate",
+        { p_company: employerCompany, p_candidate: uid(10) },
+        3,
+      )
+    ).status,
+    400,
+  );
+});
+test("contact REST: concurrent duplicate attempts create only one request without exposing staff details", async () => {
+  const args = {
+    p_company: employerCompany,
+    p_candidate: uid(10),
+    p_purpose: "We would like to discuss your public accessibility work.",
+  };
+  const responses = await Promise.all([
+    issuerRpc("create_contact_request", args, 1),
+    issuerRpc("create_contact_request", args, 1),
+  ]);
+  assert.deepEqual(responses.map((r) => r.status).sort(), [200, 400]);
+  employerRequest = responses.find((r) => r.status === 200).data;
+  const inbox = await read(
+    `visible_contact_requests?id=eq.${employerRequest}&select=*,companies(name)`,
+    10,
+  );
+  assert.equal(inbox.status, 200, JSON.stringify(inbox));
+  assert.equal(inbox.data.length, 1);
+  assert.ok(!("created_by" in inbox.data[0]));
+  assert.equal(
+    (await read("visible_contact_requests?select=created_by", 10)).status,
+    400,
+  );
+  assert.deepEqual((await read("contact_requests?select=*", 10)).data, []);
+  assert.deepEqual(
+    (await read("visible_contact_requests?select=*", 3)).data,
+    [],
+  );
+  assert.equal((await read("visible_contact_requests?select=*")).status, 401);
+  assert.ok(
+    [400, 401, 403].includes(
+      (await read("contact_requests", 1, "PATCH")).status,
+    ),
+  );
+});
+test("contact REST: only recipient accepts/withdraws; no contact information is shared", async () => {
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_contact_request",
+        { p_request: employerRequest, p_decision: "accepted" },
+        1,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_contact_request",
+        { p_request: employerRequest, p_decision: "accepted" },
+        10,
+      )
+    ).status,
+    204,
+  );
+  let row = (await read(`visible_contact_requests?id=eq.${employerRequest}`, 1))
+    .data[0];
+  assert.equal(row.status, "accepted");
+  assert.ok(!("email" in row));
+  assert.ok(!("phone" in row));
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_contact_request",
+        { p_request: employerRequest, p_decision: "declined" },
+        10,
+      )
+    ).status,
+    204,
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_contact_request",
+        { p_request: employerRequest, p_decision: "accepted" },
+        10,
+      )
+    ).status,
+    400,
+  );
+});
+test("discovery REST: privacy withdrawal hides search, saved notes and company contact access immediately", async () => {
+  assert.equal(
+    (
+      await issuerRpc(
+        "set_discovery_preferences",
+        { p_discoverable: false, p_contact: false },
+        10,
+      )
+    ).status,
+    204,
+  );
+  assert.equal((await employerSearch({ p_saved: true })).data.total, 0);
+  assert.deepEqual((await read("employer_shortlists?select=*", 1)).data, []);
+  assert.deepEqual(
+    (await read(`visible_contact_requests?id=eq.${employerRequest}`, 1)).data,
+    [],
+  );
+  assert.equal(
+    (await read(`visible_contact_requests?id=eq.${employerRequest}`, 10)).data
+      .length,
+    1,
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "create_contact_request",
+        {
+          p_company: employerCompany,
+          p_candidate: uid(10),
+          p_purpose: "Another attempt cannot bypass candidate opt-out.",
+        },
+        1,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "set_discovery_preferences",
+        { p_discoverable: true, p_contact: true },
+        10,
+      )
+    ).status,
+    204,
+  );
+  assert.equal((await employerSearch({ p_saved: true })).data.total, 1);
+  assert.equal(
+    (
+      await issuerRpc(
+        "remove_saved_candidate",
+        { p_company: employerCompany, p_candidate: uid(10) },
+        1,
+      )
+    ).status,
+    204,
+  );
+  assert.equal((await employerSearch({ p_saved: true })).data.total, 0);
+});
+test("contact REST: invalid opportunity links and daily spam limits are enforced server-side", async () => {
+  const privateProject = (
+    await read("paid_projects?status=eq.draft&select=id", 1)
+  ).data[0];
+  assert.equal(
+    (
+      await issuerRpc(
+        "create_contact_request",
+        {
+          p_company: employerCompany,
+          p_candidate: uid(11),
+          p_purpose: "A private draft must not be advertised in a request.",
+          p_paid_project: privateProject.id,
+        },
+        1,
+      )
+    ).status,
+    400,
+  );
+  for (let n = 11; n <= 19; n++)
+    assert.equal(
+      (
+        await issuerRpc(
+          "create_contact_request",
+          {
+            p_company: employerCompany,
+            p_candidate: uid(n),
+            p_purpose:
+              "Synthetic bounded outreach for real local quota testing.",
+          },
+          1,
+        )
+      ).status,
+      200,
+    );
+  const limit = await issuerRpc(
+    "create_contact_request",
+    {
+      p_company: employerCompany,
+      p_candidate: uid(20),
+      p_purpose: "The eleventh request must be blocked by quota.",
+    },
+    1,
+  );
+  assert.equal(limit.status, 400);
+  assert.match(limit.data.message, /Daily contact limit/);
+  const other = await issuerRpc(
+    "create_company",
+    {
+      p_name: "Other employer fixture",
+      p_description: "Synthetic company to test the per-actor daily quota.",
+      p_website: "https://example.com",
+      p_location: "Karachi",
+    },
+    1,
+  );
+  assert.equal(other.status, 200);
+  assert.equal(
+    (
+      await issuerRpc(
+        "create_contact_request",
+        {
+          p_company: other.data,
+          p_candidate: uid(20),
+          p_purpose: "New company ownership cannot bypass per-person quotas.",
+        },
+        1,
+      )
+    ).status,
+    400,
+  );
+});
+
+test("contact REST: contact opt-out preserves directory listing but blocks acceptance and company access", async () => {
+  const row = (
+    await read(
+      `visible_contact_requests?candidate_id=eq.${uid(11)}&select=id`,
+      1,
+    )
+  ).data[0];
+  assert.ok(row);
+  assert.equal(
+    (
+      await issuerRpc(
+        "set_discovery_preferences",
+        { p_discoverable: true, p_contact: false },
+        11,
+      )
+    ).status,
+    204,
+  );
+  const search = await employerSearch({ p_query: "Directory REST Fixture 11" });
+  assert.equal(search.data.total, 1);
+  assert.equal(search.data.items[0].allow_contact_requests, false);
+  assert.deepEqual(
+    (await read(`visible_contact_requests?id=eq.${row.id}`, 1)).data,
+    [],
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_contact_request",
+        { p_request: row.id, p_decision: "accepted" },
+        11,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_contact_request",
+        { p_request: row.id, p_decision: "declined" },
+        11,
+      )
+    ).status,
+    204,
   );
 });

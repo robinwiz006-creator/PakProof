@@ -1,3 +1,6 @@
+import { EmployerDirectory } from "@/components/employer-directory";
+import { DiscoverySettings } from "@/components/discovery-settings";
+import { saveDiscoveryPreferences } from "@/lib/employer-actions";
 import { portalDataNeeds } from "@/lib/portal-data-needs";
 import { ProfileSetupForm } from "@/components/profile-setup-form";
 import { setupSteps, setupStep } from "@/lib/profile-setup";
@@ -67,12 +70,23 @@ export default async function Portal({
   searchParams,
 }: {
   params: Promise<{ section: string[] }>;
-  searchParams: Promise<{ message?: string; step?: string; company?: string }>;
+  searchParams: Promise<{
+    message?: string;
+    step?: string;
+    company?: string;
+    q?: string;
+    skill?: string;
+    page?: string;
+    credentials?: string;
+    assessed?: string;
+    saved?: string;
+  }>;
 }) {
   const { section: parts } = await params;
   const role = parts[0];
   const section = parts[1] ?? "";
   if (parts.length > 2 || !titles[`${role}:${section}`]) notFound();
+  const directoryParams = await searchParams;
   const {
     message,
     step: requestedStep,
@@ -88,7 +102,6 @@ export default async function Portal({
     ownChallenges: Challenge[] = [],
     submissions: Submission[] = [],
     achievements: Achievement[] = [],
-    directory: Profile[] = [demoProfile],
     membershipIds: string[] = [],
     canManageCompany = false;
   if (live) {
@@ -197,16 +210,6 @@ export default async function Portal({
       ownChallenges = (ch.data ?? []) as Challenge[];
       submissions = (su.data ?? []) as Submission[];
       achievements = ah.data ?? [];
-    }
-    if (section === "directory") {
-      const { data: d, error } = await db
-        .from("profiles")
-        .select("*")
-        .eq("is_public", true)
-        .order("created_at", { ascending: false })
-        .limit(100);
-      if (error) throw new Error("Talent directory could not be loaded.");
-      directory = d ?? [];
     }
   }
   let rubrics: {
@@ -733,6 +736,24 @@ export default async function Portal({
                     public passport
                   </label>
                   <label className="field">
+                    <span>
+                      <input
+                        type="checkbox"
+                        name="share_assessment"
+                        defaultChecked={
+                          a.achievement_sharing?.share_assessment ?? false
+                        }
+                      />{" "}
+                      Allow this achievement’s assessed-work summary in employer
+                      discovery
+                    </span>
+                    <span className="muted">
+                      Only applies to structured approved reviews, with your
+                      directory opt-in. Does not publish reviewer notes or
+                      private evidence.
+                    </span>
+                  </label>
+                  <label className="field">
                     Related portfolio project (optional)
                     <select
                       name="project_id"
@@ -763,6 +784,14 @@ export default async function Portal({
             </Empty>
           )}
         </>
+      )}
+      {live && role === "talent" && section === "settings" && (
+        <DiscoverySettings
+          isPublic={profile.is_public}
+          discoverable={profile.is_discoverable}
+          contact={profile.allow_contact_requests}
+          action={saveDiscoveryPreferences}
+        />
       )}
       {role === "talent" && section === "settings" && (
         <section className="panel">
@@ -1057,43 +1086,19 @@ export default async function Portal({
           )}
         </>
       )}
-      {role === "company" && section === "directory" && (
-        <>
-          {directory.map((p) => (
-            <Link
-              className="panel list-row"
-              href={`/talent/${p.slug}`}
-              key={p.id}
-            >
-              <div className="profile-header" style={{ margin: 0 }}>
-                <div className="avatar">
-                  {p.full_name
-                    .split(" ")
-                    .slice(0, 2)
-                    .map((s) => s[0])
-                    .join("")}
-                </div>
-                <div>
-                  <h3>{p.full_name}</h3>
-                  <p className="muted">{p.headline}</p>
-                  <p className="muted">{p.location}</p>
-                  <Tags values={p.skills} />
-                </div>
-              </div>
-              <span className="text-link">View evidence ↗</span>
-            </Link>
-          ))}
-          {!directory.length && (
-            <Empty title="Talent is on its way">
-              Only people who publish their profile are listed here.
-            </Empty>
-          )}
-          <p className="muted section-spacer">
-            Showing up to 100 public profiles. Skills are self-reported; open
-            each passport to inspect project evidence and company achievements.
-          </p>
-        </>
-      )}
+      {role === "company" &&
+        section === "directory" &&
+        (live ? (
+          <EmployerDirectory
+            companyId={company?.id ?? null}
+            params={directoryParams}
+          />
+        ) : (
+          <Empty title="Employer directory needs a real account">
+            Connect Supabase and sign in as a company member to search opted-in
+            Passports.
+          </Empty>
+        ))}
     </div>
   );
 }

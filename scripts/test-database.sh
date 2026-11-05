@@ -27,6 +27,7 @@ docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < supabase/migra
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < supabase/migrations/202611050001_paid_project_public_privacy.sql
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < supabase/migrations/202611050002_issuer_trust.sql
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < supabase/migrations/202611050003_challenge_assessments.sql
+docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < supabase/migrations/202611050004_employer_discovery.sql
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < tests/paid-projects-database.sql
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < tests/payment-database.sql
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < tests/database.sql
@@ -34,20 +35,21 @@ docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < tests/credenti
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < tests/wallet-database.sql
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < tests/issuer-trust-database.sql
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < tests/challenge-assessments-database.sql
+docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < tests/employer-discovery-database.sql
 
 # A separate local DB proves upgrading a populated v1 schema retains its data.
 docker exec "$container" createdb -U postgres proofpak_legacy_test
-for sql in tests/database-bootstrap.sql supabase/migrations/202610110001_initial.sql tests/legacy-before.sql supabase/migrations/202610120001_passport_foundation.sql supabase/migrations/202610120002_organizations_credentials.sql supabase/migrations/202610120003_credential_proofs.sql supabase/migrations/202610120004_wallet_ownership.sql supabase/migrations/202610120005_paid_projects.sql supabase/migrations/202610120006_milestone_payments.sql supabase/migrations/202610120007_paid_work_history.sql supabase/migrations/202610120008_payment_workflow_guards.sql supabase/migrations/202611050001_paid_project_public_privacy.sql supabase/migrations/202611050002_issuer_trust.sql supabase/migrations/202611050003_challenge_assessments.sql tests/legacy-after.sql; do
+for sql in tests/database-bootstrap.sql supabase/migrations/202610110001_initial.sql tests/legacy-before.sql supabase/migrations/202610120001_passport_foundation.sql supabase/migrations/202610120002_organizations_credentials.sql supabase/migrations/202610120003_credential_proofs.sql supabase/migrations/202610120004_wallet_ownership.sql supabase/migrations/202610120005_paid_projects.sql supabase/migrations/202610120006_milestone_payments.sql supabase/migrations/202610120007_paid_work_history.sql supabase/migrations/202610120008_payment_workflow_guards.sql supabase/migrations/202611050001_paid_project_public_privacy.sql supabase/migrations/202611050002_issuer_trust.sql supabase/migrations/202611050003_challenge_assessments.sql supabase/migrations/202611050004_employer_discovery.sql tests/legacy-after.sql; do
  docker exec -i "$container" psql -U postgres -d proofpak_legacy_test -v ON_ERROR_STOP=1 < "$sql"
 done
 
 # A populated pre-trust schema proves existing v3 claims/proofs remain unchanged.
 docker exec "$container" createdb -U postgres proofpak_issuer_legacy_test
 for sql in tests/database-bootstrap.sql supabase/migrations/*.sql; do
- if [[ "$sql" != *202611050002* && "$sql" != *202611050003* ]]; then
+ if [[ "$sql" != *202611050002* && "$sql" != *202611050003* && "$sql" != *202611050004* ]]; then
   docker exec -i "$container" psql -U postgres -d proofpak_issuer_legacy_test -v ON_ERROR_STOP=1 < "$sql"
  fi
 done
-for sql in tests/issuer-trust-legacy-before.sql supabase/migrations/202611050002_issuer_trust.sql supabase/migrations/202611050003_challenge_assessments.sql tests/issuer-trust-legacy-after.sql; do
+for sql in tests/issuer-trust-legacy-before.sql supabase/migrations/202611050002_issuer_trust.sql supabase/migrations/202611050003_challenge_assessments.sql supabase/migrations/202611050004_employer_discovery.sql tests/issuer-trust-legacy-after.sql; do
  docker exec -i "$container" psql -U postgres -d proofpak_issuer_legacy_test -v ON_ERROR_STOP=1 < "$sql"
 done

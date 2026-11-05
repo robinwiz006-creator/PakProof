@@ -332,6 +332,7 @@ export async function saveAchievementSharing(form: FormData) {
   const { error } = await db.from("achievement_sharing").upsert({
     achievement_id: id,
     share_evidence: form.get("share_evidence") === "on",
+    share_assessment: form.get("share_assessment") === "on",
     project_id: project || null,
   });
   databaseError("/portal/talent/achievements", error);

@@ -7,6 +7,8 @@ import {
   UserRound,
   Compass,
   Activity,
+  UsersRound,
+  Inbox,
   BadgeCheck,
   Building2,
   Layers3,
@@ -93,7 +95,11 @@ export function PortalNav({ workspace = false }: { workspace?: boolean }) {
       </nav>
       <div className="nav-secondary">
         <p className="eyebrow">ACCOUNT</p>
-        <nav aria-label="Account navigation">{render(secondaryNavigation)}</nav>
+        <nav aria-label="Account navigation">
+          {role === "company" &&
+            render([["/portal/company/directory", "Find candidates"]])}
+          {render(secondaryNavigation)}
+        </nav>
       </div>
       <div className="switch dashboard-switch">
         <Link
@@ -125,6 +131,10 @@ function NavLabel({ label }: { label: string }) {
 }
 
 function NavIcon({ href }: { href: string }) {
+  if (href === "/contact-requests")
+    return <Inbox aria-hidden="true" size={18} />;
+  if (href === "/portal/company/directory")
+    return <UsersRound aria-hidden="true" size={18} />;
   const Icon = href.includes("passport")
     ? UserRound
     : href.includes("opportunities")
