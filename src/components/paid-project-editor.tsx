@@ -1,15 +1,27 @@
 "use client";
+import { tokenAmount, type PaidProject, type Milestone } from "@/lib/payments";
 import { useState } from "react";
 import { Field, SubmitButton } from "./forms";
 import { createPaidProject } from "@/lib/paid-actions";
 export function PaidProjectEditor({
   companies,
+  initial,
+  milestones: original,
+  expected,
 }: {
   companies: { id: string; name: string }[];
+  initial?: PaidProject;
+  milestones?: Milestone[];
+  expected?: string;
 }) {
-  const [milestones, setMilestones] = useState([
-    { title: "", deliverables: "", deadline: "", amount: "" },
-  ]);
+  const [milestones, setMilestones] = useState(
+    original?.map((m) => ({
+      title: m.title,
+      deliverables: m.deliverables,
+      deadline: m.deadline,
+      amount: tokenAmount(m.amount_units),
+    })) ?? [{ title: "", deliverables: "", deadline: "", amount: "" }],
+  );
   function change(i: number, key: string, value: string) {
     setMilestones((rows) =>
       rows.map((m, n) => (n === i ? { ...m, [key]: value } : m)),
@@ -17,6 +29,12 @@ export function PaidProjectEditor({
   }
   return (
     <form className="panel form" action={createPaidProject}>
+      {initial && (
+        <>
+          <input type="hidden" name="project_id" value={initial.id} />
+          <input type="hidden" name="expected" value={expected} />
+        </>
+      )}
       <label className="field">
         Company
         <select name="company_id" required>
@@ -29,6 +47,7 @@ export function PaidProjectEditor({
       </label>
       <Field
         name="title"
+        value={initial?.title}
         label="Project title"
         required
         minLength={3}
@@ -36,6 +55,7 @@ export function PaidProjectEditor({
       />
       <Field
         name="description"
+        value={initial?.description}
         label="Work description"
         type="textarea"
         required
@@ -44,6 +64,7 @@ export function PaidProjectEditor({
       />
       <Field
         name="requirements"
+        value={initial?.requirements}
         label="Requirements and working arrangements"
         type="textarea"
         required
@@ -53,12 +74,20 @@ export function PaidProjectEditor({
       />
       <Field
         name="skills"
+        value={initial?.skills.join(", ")}
         label="Skills used (separate with commas)"
         maxLength={500}
       />
-      <Field name="deadline" label="Project deadline" type="date" required />
+      <Field
+        name="deadline"
+        value={initial?.deadline}
+        label="Project deadline"
+        type="date"
+        required
+      />
       <Field
         name="budget"
+        value={initial ? tokenAmount(initial.budget_units) : undefined}
         label="Total budget in devnet test USDC"
         required
         hint="Test tokens only, not real money. Use up to six decimal places."
@@ -66,7 +95,8 @@ export function PaidProjectEditor({
       <h2>Milestones</h2>
       <p className="muted">
         Milestone amounts must equal the total budget. Terms cannot be edited
-        after creation in this MVP; review the draft before publishing.
+        after publication. Existing draft milestones can be corrected without
+        replacing their records.
       </p>
       {milestones.map((m, i) => (
         <fieldset className="panel section-spacer" key={i}>
@@ -100,7 +130,7 @@ export function PaidProjectEditor({
               )}
             </label>
           ))}
-          {milestones.length > 1 && (
+          {!initial && milestones.length > 1 && (
             <button
               type="button"
               className="text-link"
@@ -119,7 +149,7 @@ export function PaidProjectEditor({
         value={JSON.stringify(milestones)}
       />
       <div className="button-row section-spacer">
-        {milestones.length < 20 && (
+        {!initial && milestones.length < 20 && (
           <button
             className="button secondary"
             type="button"
@@ -133,7 +163,9 @@ export function PaidProjectEditor({
             Add milestone
           </button>
         )}
-        <SubmitButton>Create draft</SubmitButton>
+        <SubmitButton>
+          {initial ? "Save draft corrections" : "Create draft"}
+        </SubmitButton>
       </div>
     </form>
   );

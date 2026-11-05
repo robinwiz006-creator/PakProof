@@ -1230,3 +1230,129 @@ test("contact REST: contact opt-out preserves directory listing but blocks accep
     204,
   );
 });
+
+test("lifecycle endpoints deny anonymous and unrelated project cancellation; private history stays private", async () => {
+  const project = (await read("public_paid_projects?select=id&limit=1"))
+    .data[0];
+  assert.ok(project);
+  for (const role of [undefined, 3]) {
+    const r = await issuerRpc(
+      "change_paid_lifecycle",
+      {
+        p_project: project.id,
+        p_action: "cancel",
+        p_reason: "Unrelated cancellation through the direct API.",
+      },
+      role,
+    );
+    assert.ok(r.status >= 400);
+  }
+  for (const table of ["paid_project_events", "paid_cancellation_requests"]) {
+    const anon = await read(`${table}?select=*`);
+    assert.ok(anon.status >= 400);
+    const other = await read(`${table}?select=*`, 3);
+    assert.equal(other.status, 200);
+    assert.deepEqual(other.data, []);
+    const insert = await read(table, 3, "POST");
+    assert.ok(insert.status >= 400);
+  }
+});
+test("lifecycle REST: draft edits preserve milestone IDs and publication locks terms; withdrawal removes only the public projection", async () => {
+  const membership = (
+    await read(
+      `company_memberships?select=company_id&user_id=eq.${uid(1)}&role=eq.owner&limit=1`,
+      1,
+    )
+  ).data[0];
+  assert.ok(membership);
+  const fields = {
+    p_title: "Lifecycle fixture project",
+    p_description:
+      "An isolated lifecycle fixture with accessible dashboard deliverables.",
+    p_requirements:
+      "Deliver accessible source and an independently reviewable preview.",
+    p_skills: ["React"],
+    p_deadline: "2030-12-01",
+    p_budget: "1250000",
+    p_milestones: [
+      {
+        title: "Dashboard milestone",
+        deliverables:
+          "An accessible deployed dashboard and documented source code.",
+        deadline: "2030-11-01",
+        amount_units: "1250000",
+      },
+    ],
+  };
+  const created = await issuerRpc(
+    "create_paid_project",
+    { p_company: membership.company_id, ...fields },
+    1,
+  );
+  assert.equal(created.status, 200);
+  const id = created.data;
+  const original = (await read(`paid_projects?id=eq.${id}&select=*`, 1))
+    .data[0];
+  const ms = (
+    await read(`paid_milestones?project_id=eq.${id}&select=*&order=position`, 1)
+  ).data;
+  const expected = {
+    title: original.title,
+    description: original.description,
+    requirements: original.requirements,
+    skills: original.skills,
+    deadline: original.deadline,
+    budget_units: String(original.budget_units),
+    milestones: ms,
+  };
+  const edit = {
+    p_project: id,
+    ...fields,
+    p_title: "Corrected lifecycle fixture",
+    p_expected: expected,
+  };
+  assert.equal((await issuerRpc("edit_paid_project", edit, 3)).status, 400);
+  assert.equal((await issuerRpc("edit_paid_project", edit, 1)).status, 204);
+  assert.equal(
+    (await read(`paid_milestones?project_id=eq.${id}&select=id`, 1)).data[0].id,
+    ms[0].id,
+  );
+  assert.ok((await issuerRpc("edit_paid_project", edit, 1)).status >= 400);
+  assert.equal(
+    (await issuerRpc("publish_paid_project", { p_project: id }, 1)).status,
+    204,
+  );
+  assert.ok((await issuerRpc("edit_paid_project", edit, 1)).status >= 400);
+  assert.equal(
+    (
+      await issuerRpc(
+        "change_paid_lifecycle",
+        {
+          p_project: id,
+          p_action: "withdraw",
+          p_reason:
+            "Withdraw this isolated opportunity without erasing its history.",
+        },
+        1,
+      )
+    ).status,
+    204,
+  );
+  assert.deepEqual(
+    (await read(`public_paid_projects?id=eq.${id}&select=*`)).data,
+    [],
+  );
+  assert.equal(
+    (await read(`paid_projects?id=eq.${id}&select=status`, 1)).data[0].status,
+    "withdrawn",
+  );
+  assert.equal(
+    (await read(`paid_project_events?project_id=eq.${id}&select=id`, 1)).data
+      .length,
+    2,
+  );
+  assert.deepEqual(
+    (await read(`paid_project_events?project_id=eq.${id}&select=*`, 3)).data,
+    [],
+  );
+});

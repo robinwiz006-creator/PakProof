@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Buffer } from "buffer";
 import { Connection, Transaction } from "@solana/web3.js";
@@ -17,6 +17,7 @@ import { DEVNET_GENESIS, explorerLink } from "@/lib/proof";
 import {
   tokenAmount,
   paymentStatusLabel,
+  paymentRecoveryGuidance,
   type PaymentIntent,
   type PaymentAttempt,
 } from "@/lib/payments";
@@ -51,7 +52,14 @@ export function MilestonePayment({
   const router = useRouter();
   async function prepare() {
     setBusy(true);
+    setMessage(
+      "Checking the approved milestone and preparing the exact payment. Nothing has been signed or sent.",
+    );
     try {
+      if (localStorage.getItem(`proofpak:milestone-signed:${milestoneId}`))
+        throw new Error(
+          "This browser saved a signed attempt for this milestone. Recover it in Payment History before preparing another transfer.",
+        );
       setPrepared(
         await paymentAction({
           action: "prepare",
@@ -69,7 +77,11 @@ export function MilestonePayment({
   async function pay() {
     if (!prepared || prepared.recovery || prepared.attempt.signature) return;
     setBusy(true);
+    let signedLocally = false;
     try {
+      setMessage(
+        "Waiting for your wallet. Unlock it and approve the ownership-authorized paying account.",
+      );
       const w = await signingWallet(walletName, SolanaSignTransaction);
       if (!w)
         throw new Error(
@@ -96,6 +108,9 @@ export function MilestonePayment({
       );
       if ((await rpc.getGenesisHash()) !== DEVNET_GENESIS)
         throw new Error("The browser RPC is not devnet. Nothing sent.");
+      setMessage(
+        "Awaiting your wallet signature. Nothing has been broadcast by ProofPak yet.",
+      );
       const [signed] = await (
         w.features[
           SolanaSignTransaction
@@ -109,9 +124,15 @@ export function MilestonePayment({
       const decoded = Transaction.from(signed.signedTransaction);
       if (!decoded.signature)
         throw new Error("Wallet returned an unsigned transaction.");
+      signedLocally = true;
       const signature = getBase58Decoder().decode(decoded.signature);
       const signedBase64 = Buffer.from(signed.signedTransaction).toString(
         "base64",
+      );
+      setPrepared({ ...prepared, recovery: true });
+      localStorage.setItem(
+        `proofpak:milestone-signed:${milestoneId}`,
+        prepared.attempt.id,
       );
       localStorage.setItem(
         `proofpak:payment:${prepared.attempt.id}`,
@@ -162,14 +183,14 @@ export function MilestonePayment({
         attempt_id: prepared.attempt.id,
       });
       setMessage(`${paymentStatusLabel(result.status)}: ${result.note}`);
-      if (result.status === "paid")
+      if (result.status === "paid") {
         localStorage.removeItem(`proofpak:payment:${prepared.attempt.id}`);
+        localStorage.removeItem(`proofpak:milestone-signed:${milestoneId}`);
+      }
       router.refresh();
     } catch (e) {
       setMessage(
-        e instanceof Error
-          ? e.message
-          : "Payment outcome unknown. Inspect the registered signature; do not pay again.",
+        `${e instanceof Error ? e.message : "Payment did not finish."} ${signedLocally ? "A signature may exist. Recover the original attempt from Payment History; do not create another transfer." : "No transaction was broadcast by ProofPak in this attempt. You can retry signing or cancel the unsigned preparation in Payment History."}`,
       );
       router.refresh();
     } finally {
@@ -279,6 +300,52 @@ export function PaymentRecovery({
   const [busy, setBusy] = useState(false),
     [message, setMessage] = useState("");
   const router = useRouter();
+  useEffect(() => {
+    try {
+      if (attempt && ["paid", "failed"].includes(attempt.status)) {
+        localStorage.removeItem(`proofpak:payment:${attempt.id}`);
+        for (const key of Object.keys(localStorage)) {
+          if (
+            key.startsWith("proofpak:milestone-signed:") &&
+            localStorage.getItem(key) === attempt.id
+          )
+            localStorage.removeItem(key);
+        }
+      }
+    } catch {
+      // Storage can be unavailable; server records remain authoritative.
+    }
+  }, [attempt]);
+  async function recoverSaved() {
+    if (!attempt || !canResume) return;
+    setBusy(true);
+    try {
+      const saved = JSON.parse(
+        localStorage.getItem(`proofpak:payment:${attempt.id}`) ?? "null",
+      );
+      if (!saved?.signed_base64)
+        throw new Error(
+          "Saved signed bytes are unavailable. Keep the original attempt ID for support.",
+        );
+      await paymentAction({
+        action: "register",
+        attempt_id: attempt.id,
+        signed_base64: saved.signed_base64,
+      });
+      setMessage(
+        "Original signature saved on the server. Check the original transaction below; no transfer was broadcast by this recovery action.",
+      );
+      router.refresh();
+    } catch (e) {
+      setMessage(
+        e instanceof Error
+          ? e.message
+          : "Recovery unavailable. Do not send a replacement.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
   async function action(mode: "reconcile" | "cancel") {
     setBusy(true);
     try {
@@ -335,7 +402,26 @@ export function PaymentRecovery({
   }
   return (
     <>
+      <p className="muted" role="status">
+        {paymentRecoveryGuidance(
+          attempt?.status ?? "prepared",
+          attempt?.signature ?? null,
+        )}
+      </p>
+      <p className="hash">
+        Payment ID: {intentId}
+        {attempt ? ` · Attempt: ${attempt.id}` : ""}
+      </p>
       <div className="button-row section-spacer">
+        {canResume && !attempt?.signature && attempt?.status === "prepared" && (
+          <button
+            className="button secondary"
+            disabled={busy}
+            onClick={recoverSaved}
+          >
+            Recover saved signed payment
+          </button>
+        )}
         {attempt?.signature && attempt.status !== "paid" && (
           <button
             className="button secondary"

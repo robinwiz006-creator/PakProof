@@ -22,7 +22,7 @@ export default async function PaidProjects({
     let query = db
       .from(view === "company" ? "paid_projects" : "public_paid_projects")
       .select(
-        "id,title,description,skills,deadline,budget_units,status,companies(name)",
+        "id,title,description,skills,deadline,budget_units,status,created_at,companies(name)",
       )
       .order("created_at", { ascending: false })
       .limit(100);
@@ -50,7 +50,25 @@ export default async function PaidProjects({
         .gte("deadline", new Date().toISOString().slice(0, 10));
     const { data, error } = await query;
     unavailable = Boolean(error);
-    projects = (data ?? []).map(projectListing);
+    const closed =
+      view === "mine" && user
+        ? await db
+            .from("paid_projects")
+            .select(
+              "id,title,description,skills,deadline,budget_units,status,created_at,companies(name)",
+            )
+            .eq("worker_id", user.id)
+            .in("status", ["withdrawn", "cancelled"])
+            .order("created_at", { ascending: false })
+            .limit(100)
+        : { data: [], error: null };
+    unavailable = unavailable || Boolean(closed.error);
+    // Closed records are not public opportunities. Only the selected worker's
+    // RLS-protected records are added back to their own activity listing.
+    projects = [...(data ?? []), ...(closed.data ?? [])]
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+      .slice(0, 100)
+      .map(projectListing);
   } else unavailable = true;
   return (
     <div className="container page">

@@ -74,6 +74,16 @@ end$$;
 set local role service_role;
 select public.record_payment_result(:'attempt_id','pending','Fixture pending transaction, not a real transfer');
 select public.record_payment_result(:'attempt_id','needs_review','Fixture historical metadata unavailable');
+set local role authenticated;
+set local request.jwt.claim.sub='b0000000-0000-4000-8000-000000000001';
+select public.change_paid_lifecycle(:'project_id','request','A cancellation request cannot waive an unknown transfer.');
+set local request.jwt.claim.sub='b0000000-0000-4000-8000-000000000002';
+do $$begin
+ begin perform public.change_paid_lifecycle(current_setting('test.payment_project')::uuid,'accept','Attempt cancellation while payment outcome is unknown.');raise exception 'Unknown transfer cancellation allowed';exception when raise_exception then if sqlerrm='Unknown transfer cancellation allowed' then raise;end if;end;
+end$$;
+select public.change_paid_lifecycle(:'project_id','decline','Resolve the original transaction before discussing cancellation.');
+set local role service_role;
+
 do $$begin
  if exists(select 1 from public.payment_receipts) then raise exception 'Unknown outcome incorrectly credited';end if;
  if not exists(select 1 from public.wallet_connections where lock_reason is not null) then raise exception 'Unknown outcome released wallet lock';end if;
