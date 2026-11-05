@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { z } from "zod";
+import { workCredentialTypes } from "@/lib/challenge-assessment";
 import { IssuerTypeFields } from "@/components/issuer-type-fields";
 import { credentialTypeLabels } from "@/lib/issuer-permissions";
 import { ConfirmForm } from "@/components/confirm-form";
@@ -23,10 +25,14 @@ export const dynamic = "force-dynamic";
 export default async function Organizations({
   searchParams,
 }: {
-  searchParams: Promise<{ message?: string; view?: string }>;
+  searchParams: Promise<{
+    message?: string;
+    view?: string;
+    submission?: string;
+  }>;
 }) {
   const { db, user } = await credentialWorkspace();
-  const { message, view: requestedView } = await searchParams;
+  const { message, view: requestedView, submission } = await searchParams;
   const view = ["overview", "issue", "issued", "requests", "register"].includes(
     requestedView ?? "",
   )
@@ -74,10 +80,50 @@ export default async function Organizations({
     throw new Error("Private issuance records could not be loaded.");
   const credentials = credentialResult.data;
   const requests = requestResult.data;
+  let source: { id: string; company_id: string; title: string } | null = null;
+  if (submission && z.uuid().safeParse(submission).success) {
+    const { data, error } = await db
+      .from("achievements")
+      .select("submission_id,company_id,title")
+      .eq("submission_id", submission)
+      .maybeSingle();
+    if (error) throw new Error("Approved work could not be loaded.");
+    if (data)
+      source = {
+        id: data.submission_id,
+        company_id: data.company_id,
+        title: data.title,
+      };
+  }
+  let sourceAssessment: {
+    criteria: { title: string; description: string }[];
+    outcomes: string[];
+  } | null = null;
+  if (source) {
+    const { data, error } = await db
+      .from("submission_reviews")
+      .select("id,challenge_assessments(criteria,outcomes)")
+      .eq("submission_id", source.id)
+      .eq("decision", "approved")
+      .maybeSingle();
+    if (error) throw new Error("The approved assessment could not be loaded.");
+    const value = data?.challenge_assessments;
+    sourceAssessment = (Array.isArray(value) ? value[0] : value) ?? null;
+  }
   const eligible = organizations.filter(
     (o) =>
       o.issuer_status === "authorized" &&
-      (o.allowed_credential_types?.length ?? 0) > 0,
+      (o.allowed_credential_types?.length ?? 0) > 0 &&
+      (!submission ||
+        Boolean(
+          source &&
+          source.company_id === o.company_id &&
+          o.allowed_credential_types?.some((t) =>
+            workCredentialTypes.includes(
+              t as (typeof workCredentialTypes)[number],
+            ),
+          ),
+        )),
   );
   return (
     <div className="container page">
@@ -296,6 +342,11 @@ export default async function Organizations({
               name="description"
               label="Description"
               type="textarea"
+              value={
+                source
+                  ? `Recognition of approved work for ${source.title}. Issued following a separate organization decision.`
+                  : undefined
+              }
               required
               minLength={20}
               maxLength={4000}
@@ -317,6 +368,12 @@ export default async function Organizations({
           you may issue. You cannot approve your own organization.
         </Empty>
       )}
+      {view === "issue" && submission && !source && (
+        <p className="notice">
+          This approved work is unavailable. Return to challenge reviews and
+          choose work your organization owns.
+        </p>
+      )}
       {view === "issue" && eligible.length > 0 && (
         <section className="panel section-spacer">
           <h2>Issue a credential</h2>
@@ -325,26 +382,83 @@ export default async function Organizations({
             Publishing and Solana anchoring are separate next steps.
           </p>
           <p className="muted">
-            Use an existing recipient’s published passport URL or slug. No email
-            search is available. Evidence stays private unless the recipient
-            chooses to share it.
+            {source
+              ? "The recipient comes from the approved submission; a public passport is not required to receive this credential."
+              : "Use an existing recipient’s published passport URL or slug. No email search is available."}{" "}
+            Evidence stays private unless the recipient chooses to share it.
           </p>
+          {source && (
+            <p className="notice">
+              Recognizing: {source.title}. Recipient and evidence come from the
+              approved submission. Review the credential before issuing it;
+              nothing is accepted or published automatically.
+            </p>
+          )}
+          {source && (
+            <details className="section-spacer">
+              <summary>Review assessment before issuing</summary>
+              {sourceAssessment?.criteria.length ? (
+                <ul>
+                  {sourceAssessment.criteria.map((c, i) => (
+                    <li key={i}>
+                      {c.title}:{" "}
+                      {sourceAssessment!.outcomes[i]?.replaceAll("_", " ")}
+                      <p className="muted">{c.description}</p>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>
+                  This review has no structured rubric. No criterion outcomes
+                  will be invented.
+                </p>
+              )}
+            </details>
+          )}
           <form action={issueCredential}>
+            {source && (
+              <input type="hidden" name="submission_id" value={source.id} />
+            )}
             <IssuerTypeFields
               organizations={eligible.map((o) => ({
                 id: o.id,
                 name: o.companies.name,
-                types: o.allowed_credential_types ?? [],
+                types: (o.allowed_credential_types ?? []).filter(
+                  (t) =>
+                    !source ||
+                    workCredentialTypes.includes(
+                      t as (typeof workCredentialTypes)[number],
+                    ),
+                ),
               }))}
             />
-            <Field
-              name="recipient_slug"
-              label="Recipient passport slug or URL"
-              required
-            />
+            {source ? (
+              <>
+                <input
+                  type="hidden"
+                  name="recipient_slug"
+                  value="reviewed-recipient"
+                />
+                <p className="muted">
+                  Recipient: the owner of the approved submission. A private
+                  passport stays private.
+                </p>
+              </>
+            ) : (
+              <Field
+                name="recipient_slug"
+                label="Recipient passport slug or URL"
+                required
+              />
+            )}
             <Field
               name="title"
               label="Credential title"
+              value={
+                source
+                  ? `Recognition: ${source.title}`.slice(0, 160)
+                  : undefined
+              }
               required
               minLength={3}
               maxLength={160}
@@ -353,6 +467,11 @@ export default async function Organizations({
               name="description"
               label="Description"
               type="textarea"
+              value={
+                source
+                  ? `Recognition of approved work for ${source.title}. Issued following a separate organization decision.`
+                  : undefined
+              }
               required
               minLength={20}
               maxLength={4000}
@@ -363,21 +482,41 @@ export default async function Organizations({
               label="Expiry date (optional)"
               type="date"
             />
-            <Field
-              name="program_name"
-              label="Course, program, or event (optional)"
-              maxLength={200}
-            />
+            {source ? (
+              <>
+                <input name="program_name" type="hidden" value="" />
+                <p className="muted">
+                  The work-assessment integrity reference will be set
+                  automatically.
+                </p>
+              </>
+            ) : (
+              <Field
+                name="program_name"
+                label="Course, program, or event (optional)"
+                maxLength={200}
+              />
+            )}
             <Field
               name="award"
               label="Award or rank (optional)"
               maxLength={200}
             />
-            <Field
-              name="evidence_url"
-              label="Supporting evidence URL (optional)"
-              type="url"
-            />
+            {source ? (
+              <>
+                <input name="evidence_url" type="hidden" value="" />
+                <p className="muted">
+                  Approved work evidence stays private unless the recipient
+                  chooses to share it.
+                </p>
+              </>
+            ) : (
+              <Field
+                name="evidence_url"
+                label="Supporting evidence URL (optional)"
+                type="url"
+              />
+            )}
             <SubmitButton>Issue for recipient acceptance</SubmitButton>
           </form>
         </section>

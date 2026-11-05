@@ -1,3 +1,4 @@
+import { workContext } from "@/lib/challenge-assessment";
 import { issuanceTrustLabel } from "@/lib/issuer-permissions";
 import Link from "next/link";
 import { credentialDate } from "@/lib/credential-presentation";
@@ -19,6 +20,12 @@ export function CredentialRecord({
       <p className="muted">
         Issued by {c.issuer_name} · {credentialDate(c.issue_date)}
       </p>
+      {workContext(c.credential_challenge_context) && (
+        <p className="muted">
+          Assessed work:{" "}
+          {workContext(c.credential_challenge_context)!.challenge_title}
+        </p>
+      )}
       <div className="tags">
         <span className="tag">Validity: {credentialValidity(c)}</span>
         <span className="tag">

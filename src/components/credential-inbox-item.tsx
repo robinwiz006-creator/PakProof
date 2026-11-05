@@ -1,3 +1,4 @@
+import { workContext } from "@/lib/challenge-assessment";
 import type { Credential } from "@/lib/credentials";
 import { CredentialRecord } from "./credential-record";
 import { SubmitButton } from "./forms";
@@ -47,7 +48,9 @@ export function CredentialInboxItem({
               name="share_evidence"
               defaultChecked={c.credential_preferences.share_evidence}
             />{" "}
-            Also publish supporting evidence
+            {workContext(c.credential_challenge_context)
+              ? "Also publish supporting evidence and assessment results"
+              : "Also publish supporting evidence"}
           </label>
           <p className="muted">
             A private passport keeps this credential private. Evidence URLs may

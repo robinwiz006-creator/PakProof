@@ -35,6 +35,7 @@ after_hash=$(docker exec "$name-db" psql -U postgres -Atc "$fingerprint_sql")
 echo 'PASS: populated paid project migration preserves all fixture records'
 docker exec -i "$name-db" psql -U postgres -v ON_ERROR_STOP=1 < tests/paid-project-privacy-grants.sql >/dev/null
 docker exec -i "$name-db" psql -U postgres -v ON_ERROR_STOP=1 < tests/issuer-trust-rest-fixtures.sql >/dev/null
+docker exec -i "$name-db" psql -U postgres -v ON_ERROR_STOP=1 < tests/challenge-assessments-rest-fixtures.sql >/dev/null
 # The authenticator can assume only the same API roles used by Supabase.
 docker exec -i "$name-db" psql -U postgres -v ON_ERROR_STOP=1 <<'SQL' >/dev/null
 create role privacy_authenticator login password 'local-fixture-only' noinherit;
@@ -50,4 +51,4 @@ docker run -d --name "$name-api" --network "$name" -p 127.0.0.1::3000 \
  -e PGRST_JWT_SECRET=proofpak-local-test-secret-at-least-32-characters \
  postgrest/postgrest:v12.2.3 >/dev/null
 port=$(docker port "$name-api" 3000/tcp | cut -d: -f2)
-PRIVACY_API_URL="http://127.0.0.1:$port" node --test tests/paid-project-privacy-rest.mjs
+PRIVACY_API_URL="http://127.0.0.1:$port" node --import tsx --test tests/paid-project-privacy-rest.mjs

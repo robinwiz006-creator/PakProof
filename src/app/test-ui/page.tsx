@@ -1,3 +1,4 @@
+import { ChallengeAssessmentFixture } from "@/components/challenge-assessment-fixture";
 import { IssuerTypeFields } from "@/components/issuer-type-fields";
 import { notFound } from "next/navigation";
 import { isConfigured } from "@/lib/supabase/server";
@@ -14,6 +15,7 @@ export default async function TestUI({
   // Isolated component fixtures only. Never available with configured Supabase.
   if (process.env.PROOFPAK_E2E !== "1" || isConfigured()) notFound();
   const { fixture } = await searchParams;
+  if (fixture === "challenge-assessment") return <ChallengeAssessmentFixture />;
   if (fixture === "issuer-permissions")
     return (
       <main className="container page narrow">

@@ -557,3 +557,279 @@ test("issuer REST: administrator scope changes and suspension are enforced; lega
     400,
   );
 });
+
+// Task 5: real local PostgREST assessment/issuance boundary, synthetic records only.
+let workFixture;
+async function workState() {
+  if (workFixture) return workFixture;
+  const org = (await read("organizations?select=id,authorization_id", 1))
+    .data[0];
+  assert.equal(
+    (
+      await issuerRpc(
+        "review_issuer_authorization",
+        {
+          p_organization: org.id,
+          p_note: "Synthetic explicit approval for assessed work recognition.",
+          p_authorize: true,
+          p_name: "Privacy Fixture",
+          p_description: "Disposable local privacy test organization.",
+          p_website: "https://example.com",
+          p_types: ["company_achievement"],
+          p_expected_authorization: org.authorization_id,
+        },
+        5,
+      )
+    ).status,
+    204,
+  );
+  const c = (
+    await read(
+      "challenges?title=eq.REST%20assessed%20work%20fixture&select=id",
+      1,
+    )
+  ).data[0];
+  const s = (
+    await read(`challenge_submissions?challenge_id=eq.${c.id}&select=id`, 1)
+  ).data[0];
+  const rubric = (
+    await read(`challenge_public_rubrics?challenge_id=eq.${c.id}&select=*`)
+  ).data[0];
+  workFixture = {
+    org: org.id,
+    challenge: c.id,
+    submission: s.id,
+    rubric: rubric.id,
+  };
+  return workFixture;
+}
+async function workArgs() {
+  const w = await workState();
+  return {
+    p_submission: w.submission,
+    p_organization: w.org,
+    p_title: "Assessed work recognition",
+    p_type: "company_achievement",
+    p_description:
+      "Separate explicit recognition for reviewed accessible interface work.",
+    p_issue_date: new Date().toISOString().slice(0, 10),
+    p_expiry_date: null,
+    p_award: "",
+  };
+}
+test("assessment REST: public criteria exclude staff attribution; unrelated users cannot edit versions", async () => {
+  const w = await workState();
+  const pub = await read(`challenge_public_rubrics?id=eq.${w.rubric}&select=*`);
+  assert.equal(pub.status, 200);
+  assert.deepEqual(
+    Object.keys(pub.data[0]).sort(),
+    ["id", "challenge_id", "version", "criteria"].sort(),
+  );
+  assert.equal((await read("challenge_rubrics?select=*")).status, 401);
+  assert.equal(
+    (await read("challenge_public_rubrics?select=created_by")).status,
+    400,
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "set_challenge_rubric",
+        { p_challenge: w.challenge, p_criteria: [] },
+        3,
+      )
+    ).status,
+    400,
+  );
+});
+test("assessment REST: unreviewed work and legacy review bypass do not qualify", async () => {
+  const w = await workState();
+  assert.equal(
+    (await issuerRpc("issue_challenge_credential", await workArgs(), 1)).status,
+    400,
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "review_submission",
+        {
+          p_submission_id: w.submission,
+          p_decision: "approved",
+          p_feedback: "A legacy RPC must not skip a rubric.",
+        },
+        1,
+      )
+    ).status,
+    400,
+  );
+  const args = {
+    p_submission_id: w.submission,
+    p_decision: "approved",
+    p_feedback: "Every defined criterion must be assessed.",
+    p_outcomes: ["met"],
+    p_expected_rubric: w.rubric,
+  };
+  assert.equal(
+    (await issuerRpc("review_assessed_submission", args, 3)).status,
+    400,
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "review_assessed_submission",
+        { ...args, p_outcomes: ["not_assessed"] },
+        1,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (await issuerRpc("review_assessed_submission", args, 1)).status,
+    200,
+  );
+  assert.deepEqual(
+    (await read("credential_challenge_context?select=*", 1)).data,
+    [],
+  );
+  const assessment = await read(
+    `challenge_assessments?submission_id=eq.${w.submission}&select=*`,
+    2,
+  );
+  assert.deepEqual(assessment.data[0].outcomes, ["met"]);
+});
+test("assessment REST: explicit issuance links approved work and authenticated representative privately", async () => {
+  const w = await workState();
+  const r = await issuerRpc("issue_challenge_credential", await workArgs(), 1);
+  assert.equal(r.status, 200, JSON.stringify(r));
+  w.credential = r.data;
+  const { credentialSelect } = await import("../src/lib/credentials.ts");
+  const c = await read(
+    `credentials?id=eq.${r.data}&select=${encodeURIComponent(credentialSelect)}`,
+    1,
+  );
+  assert.equal(c.status, 200, JSON.stringify(c));
+  const value = c.data[0].credential_challenge_context;
+  const context = Array.isArray(value) ? value[0] : value;
+  const { credentialEvidenceDigest } =
+    await import("../src/lib/credential-proof.ts");
+  assert.equal(
+    await credentialEvidenceDigest(c.data[0].credential_evidence),
+    c.data[0].evidence_digest,
+  );
+  assert.equal(context.assessment.submission_id, w.submission);
+  assert.equal(context.assessment.organization_id, w.org);
+  assert.equal(
+    c.data[0].program_name,
+    `Assessed work · sha256:${context.context_digest}`,
+  );
+  const { assessmentHash } = await import("../src/lib/challenge-assessment.ts");
+  assert.equal(
+    await assessmentHash(context.assessment),
+    context.context_digest,
+  );
+  const audit = (
+    await read(`credential_issuance_audit?credential_id=eq.${r.data}`, 1)
+  ).data[0];
+  assert.equal(audit.representative_id, uid(1));
+  assert.equal(audit.authorization_id, c.data[0].authorization_id);
+  assert.deepEqual(
+    (await read(`credentials?id=eq.${r.data}&select=id`)).data,
+    [],
+  );
+});
+test("assessment REST: duplicate, unauthorized type, academic type and unrelated issuer attempts fail", async () => {
+  const args = await workArgs();
+  assert.equal(
+    (await issuerRpc("issue_challenge_credential", args, 1)).status,
+    409,
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "issue_challenge_credential",
+        { ...args, p_type: "certification" },
+        1,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "issue_challenge_credential",
+        { ...args, p_type: "degree" },
+        1,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (await issuerRpc("issue_challenge_credential", args, 3)).status,
+    400,
+  );
+  for (const table of ["challenge_assessments", "challenge_credential_sources"])
+    assert.deepEqual((await read(`${table}?select=*`, 3)).data, []);
+});
+test("assessment REST: publication and evidence consent independently protect assessment details", async () => {
+  const w = await workState();
+  const args = {
+    p_credential: w.credential,
+    p_acceptance: "accepted",
+    p_public: true,
+    p_share_evidence: false,
+  };
+  assert.equal((await issuerRpc("respond_credential", args, 2)).status, 204);
+  let row = (
+    await read(
+      `credential_challenge_context?credential_id=eq.${w.credential}&select=*`,
+    )
+  ).data[0];
+  assert.equal(row.assessment, null);
+  assert.equal(row.challenge_title, "REST assessed work fixture");
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_credential",
+        { ...args, p_share_evidence: true },
+        2,
+      )
+    ).status,
+    204,
+  );
+  row = (
+    await read(
+      `credential_challenge_context?credential_id=eq.${w.credential}&select=*`,
+    )
+  ).data[0];
+  assert.deepEqual(row.assessment.outcomes, ["met"]);
+  for (const field of [
+    "feedback",
+    "explanation",
+    "reviewer_id",
+    "project_url",
+    "github_url",
+  ])
+    assert.ok(!(field in row.assessment));
+  assert.equal((await read("challenge_assessments?select=*")).status, 401);
+  assert.equal(
+    (await read("challenge_credential_sources?select=*")).status,
+    401,
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_credential",
+        { ...args, p_acceptance: "declined", p_public: false },
+        2,
+      )
+    ).status,
+    204,
+  );
+  assert.deepEqual(
+    (
+      await read(
+        `credential_challenge_context?credential_id=eq.${w.credential}&select=*`,
+      )
+    ).data,
+    [],
+  );
+});

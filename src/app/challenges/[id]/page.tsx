@@ -1,6 +1,7 @@
+import type { Criterion } from "@/lib/challenge-assessment";
 import { notFound } from "next/navigation";
 import { challenge } from "@/lib/data";
-import { isConfigured, currentUser } from "@/lib/supabase/server";
+import { isConfigured, currentUser, supabase } from "@/lib/supabase/server";
 import { PageHeading, Tags, DemoNotice, ButtonLink } from "@/components/ui";
 import { Field, SubmitButton } from "@/components/forms";
 import { submitWork } from "@/lib/actions";
@@ -13,6 +14,18 @@ export default async function ChallengeDetail({
   const c = await challenge(id);
   if (!c) notFound();
   const user = isConfigured() ? await currentUser() : null;
+  let criteria: Criterion[] = [];
+  if (isConfigured()) {
+    const db = await supabase();
+    const { data, error } = await db
+      .from("challenge_public_rubrics")
+      .select("criteria")
+      .eq("challenge_id", id)
+      .order("version", { ascending: false })
+      .limit(1);
+    if (error) throw new Error("Challenge criteria could not be loaded.");
+    criteria = (data?.[0]?.criteria ?? []) as Criterion[];
+  }
   const closed =
     c.status !== "published" ||
     new Date(c.deadline + "T23:59:59Z") < new Date();
@@ -37,6 +50,24 @@ export default async function ChallengeDetail({
             <h2>Expected deliverables</h2>
             <p>{c.deliverables}</p>
             <Tags values={c.skills} />
+            {criteria.length > 0 && (
+              <section className="section-spacer">
+                <h2>How your work will be assessed</h2>
+                <ol>
+                  {criteria.map((r, i) => (
+                    <li key={i}>
+                      <strong>{r.title}</strong>
+                      <p>{r.description}</p>
+                    </li>
+                  ))}
+                </ol>
+                <p className="muted">
+                  Each review keeps its assessment version. Approval earns an
+                  achievement; a credential requires a separate authorized
+                  decision.
+                </p>
+              </section>
+            )}
           </section>
           <section className="panel" id="submit">
             <h2>Submit your work</h2>

@@ -1,3 +1,4 @@
+import type { CredentialWorkContext } from "./challenge-assessment";
 import { z } from "zod";
 export const organizationTypes = [
   "university",
@@ -109,6 +110,8 @@ export type Credential = {
         representative_recorded: boolean;
       }
     | null;
+  credential_challenge_context?:
+    CredentialWorkContext[] | CredentialWorkContext | null;
   organizations?: Organization;
   credential_preferences: {
     acceptance: "pending" | "accepted" | "declined";
@@ -129,7 +132,7 @@ export type Credential = {
   }[];
 };
 export const credentialSelect =
-  "*, organizations(*, companies(name,description,website)), credential_preferences(*), credential_evidence(*), credential_events(*), credential_proofs(*), credential_issuance_provenance(*)";
+  "*, organizations(*, companies(name,description,website)), credential_preferences(*), credential_evidence(*), credential_events(*), credential_proofs(*), credential_issuance_provenance(*), credential_challenge_context(*)";
 export function credentialValidity(
   c: Pick<Credential, "expiry_date" | "credential_events"> & {
     issue_date?: string;

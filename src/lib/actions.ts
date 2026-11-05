@@ -1,4 +1,5 @@
 "use server";
+import { rubricSchema } from "./challenge-assessment";
 import { messageLink } from "./navigation-message";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -183,11 +184,17 @@ export async function createChallenge(form: FormData) {
   const path = "/portal/company/create";
   const values = validate(challengeSchema, raw(form), path);
   const company_id = validate(z.string().uuid(), form.get("company_id"), path);
-  const { error } = await db.from("challenges").insert({
-    ...values,
-    skills: skillsList(values.skills),
-    company_id,
-    status: "published",
+  let criteria;
+  try {
+    criteria = rubricSchema.parse(
+      JSON.parse(String(form.get("criteria") ?? "[]")),
+    );
+  } catch {
+    go(path, "Add valid criteria or remove optional empty rows.");
+  }
+  const { error } = await db.rpc("create_challenge_with_rubric", {
+    p_fields: { ...values, skills: skillsList(values.skills), company_id },
+    p_criteria: criteria,
   });
   databaseError(path, error);
   revalidatePath("/", "layout");
@@ -222,18 +229,32 @@ export async function reviewSubmission(form: FormData) {
   const { db } = await context();
   const path = "/portal/company/reviews";
   const values = validate(reviewSchema, raw(form), path);
-  const { error } = await db.rpc("review_submission", {
+  const { error } = await db.rpc("review_assessed_submission", {
+    p_outcomes: form.getAll("outcomes"),
+    p_expected_rubric: form.get("rubric_id") || null,
     p_submission_id: values.submission_id,
     p_decision: values.decision,
     p_feedback: values.feedback,
   });
+  if (error?.message.includes("criteria changed"))
+    go(
+      path,
+      "Assessment criteria changed. Reload this page and review the current version.",
+    );
+  if (error?.message.includes("Approval requires"))
+    go(
+      path,
+      "Approval requires every defined criterion to be met. Request improvements if work is incomplete.",
+    );
+  if (error?.message.includes("Assess each criterion"))
+    go(path, "Choose an outcome for every criterion before saving.");
   databaseError(path, error);
   revalidatePath("/", "layout");
   go(
     path,
     values.decision === "approved"
-      ? "Submission approved. The achievement is issued; its Solana proof is pending."
-      : "Feedback sent. The candidate can revise and resubmit.",
+      ? "Submission approved. An achievement was created. A credential requires a separate authorized issuance decision."
+      : "Review saved. The candidate can read it, revise and resubmit.",
   );
 }
 
@@ -436,5 +457,29 @@ export async function saveProfileStep(
         ? "Your Skill Passport is published. You can copy its link and share it."
         : "Your profile is private. Only you can preview it."
       : "Saved. Continue below or return later.",
+  );
+}
+
+export async function saveChallengeRubric(form: FormData) {
+  const { db } = await context();
+  const path = "/portal/company/challenges";
+  const id = validate(z.uuid(), form.get("challenge_id"), path);
+  let criteria;
+  try {
+    criteria = rubricSchema.parse(
+      JSON.parse(String(form.get("criteria") ?? "[]")),
+    );
+  } catch {
+    go(path, "Check criterion titles and descriptions.");
+  }
+  const { error } = await db.rpc("set_challenge_rubric", {
+    p_challenge: id,
+    p_criteria: criteria,
+  });
+  databaseError(path, error);
+  revalidatePath("/", "layout");
+  go(
+    path,
+    "New assessment version saved. Completed reviews retain their original criteria.",
   );
 }

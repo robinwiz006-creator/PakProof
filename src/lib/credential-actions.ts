@@ -71,6 +71,31 @@ export async function issueCredential(form: FormData) {
   const path = "/organizations?view=issue";
   const v = parse(credentialInput, form, path);
   const db = await context();
+  const source = String(form.get("submission_id") ?? "");
+  if (source) {
+    if (!z.uuid().safeParse(source).success)
+      go(path, "Choose valid approved work.");
+    const { error } = await db.rpc("issue_challenge_credential", {
+      p_submission: source,
+      p_organization: v.organization_id,
+      p_title: v.title,
+      p_type: v.credential_type,
+      p_description: v.description,
+      p_issue_date: v.issue_date,
+      p_expiry_date: v.expiry_date || null,
+      p_award: v.award,
+    });
+    if (error?.code === "23505")
+      go(
+        "/organizations?view=issued",
+        "This work already has a credential of that type. No duplicate was created.",
+      );
+    result(error, path);
+    go(
+      "/organizations?view=issued",
+      "Work credential issued privately. The recipient must accept and choose publication; challenge approval alone did not issue it.",
+    );
+  }
   const { data: recipient, error: lookupError } = await db
     .from("profiles")
     .select("id")

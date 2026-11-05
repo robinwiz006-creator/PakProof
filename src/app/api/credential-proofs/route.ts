@@ -1,3 +1,7 @@
+import {
+  assessmentContextMatches,
+  workContext,
+} from "@/lib/challenge-assessment";
 import { sameRequestOrigin } from "@/lib/request-origin";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -53,6 +57,15 @@ async function authorized(id: string) {
       c.evidence_digest
   )
     throw new Error("Evidence snapshot mismatch.");
+  if (
+    !(await assessmentContextMatches(
+      c.program_name,
+      workContext(c.credential_challenge_context),
+    ))
+  )
+    throw new Error(
+      "Assessment commitment mismatch. Do not anchor this record.",
+    );
   return { db, c, user };
 }
 export async function GET(request: Request) {

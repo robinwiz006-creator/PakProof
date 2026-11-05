@@ -2,6 +2,12 @@ import { portalDataNeeds } from "@/lib/portal-data-needs";
 import { ProfileSetupForm } from "@/components/profile-setup-form";
 import { setupSteps, setupStep } from "@/lib/profile-setup";
 import Link from "next/link";
+import {
+  RubricEditor,
+  AssessmentFields,
+} from "@/components/challenge-assessment";
+import type { Criterion } from "@/lib/challenge-assessment";
+import { saveChallengeRubric } from "@/lib/actions";
 
 import { ProjectEditor } from "@/components/project-editor";
 import { RemoveProject, SharePassport } from "@/components/passport-actions";
@@ -122,7 +128,7 @@ export default async function Portal({
             .select(
               section === ""
                 ? "id,talent_id,status"
-                : "*,challenges(*,companies(name)),submission_reviews(*)",
+                : "*,challenges(*,companies(name)),submission_reviews(*),challenge_assessments(review_id,criteria,outcomes)",
             )
             .eq("talent_id", user.id)
             .order("created_at", { ascending: false })
@@ -171,7 +177,7 @@ export default async function Portal({
               .select(
                 section === ""
                   ? "id,talent_id,status,challenges!inner(company_id)"
-                  : "*,challenges!inner(*),profiles(*),submission_reviews(*)",
+                  : "*,challenges!inner(*),profiles(*),submission_reviews(*),challenge_assessments(review_id,criteria,outcomes)",
               )
               .in("challenges.company_id", membershipIds)
               .order("created_at", { ascending: false })
@@ -202,6 +208,32 @@ export default async function Portal({
       if (error) throw new Error("Talent directory could not be loaded.");
       directory = d ?? [];
     }
+  }
+  let rubrics: {
+    id: string;
+    challenge_id: string;
+    version: number;
+    criteria: Criterion[];
+  }[] = [];
+  if (
+    live &&
+    role === "company" &&
+    ["reviews", "challenges"].includes(section)
+  ) {
+    const db = await supabase();
+    const relevantChallenges = [
+      ...new Set([
+        ...ownChallenges.map((c) => c.id),
+        ...submissions.map((s) => s.challenge_id),
+      ]),
+    ];
+    const { data, error } = await db
+      .from("challenge_public_rubrics")
+      .select("id,challenge_id,version,criteria")
+      .in("challenge_id", relevantChallenges)
+      .order("version", { ascending: false });
+    if (error) throw new Error("Assessment criteria could not be loaded.");
+    rubrics = data ?? [];
   }
   const canWrite = live;
   const approved = submissions.filter((s) => s.status === "approved");
@@ -599,6 +631,17 @@ export default async function Portal({
                   <div className="notice section-spacer" key={i}>
                     <strong>{r.decision.replaceAll("_", " ")}</strong>
                     <p>{r.feedback}</p>
+                    {s.challenge_assessments
+                      ?.filter((a) => a.review_id === r.id)
+                      .map((a) => (
+                        <ul key={a.review_id}>
+                          {a.criteria.map((c, n) => (
+                            <li key={n}>
+                              {c.title}: {a.outcomes[n]?.replaceAll("_", " ")}
+                            </li>
+                          ))}
+                        </ul>
+                      ))}
                   </div>
                 ))}
               {s.status === "approved" && (
@@ -801,6 +844,7 @@ export default async function Portal({
                   required
                   minLength={20}
                 />
+                <RubricEditor />
                 <p className="muted">
                   Use a fair, time-bounded brief. Don’t request private
                   information or unpaid production work.
@@ -832,6 +876,21 @@ export default async function Portal({
                   View brief ↗
                 </Link>
               </div>
+              {live && (
+                <details className="section-spacer">
+                  <summary>Assessment criteria</summary>
+                  <form action={saveChallengeRubric}>
+                    <input type="hidden" name="challenge_id" value={c.id} />
+                    <RubricEditor
+                      initial={
+                        rubrics.find((r) => r.challenge_id === c.id)
+                          ?.criteria ?? []
+                      }
+                    />
+                    <SubmitButton>Save new assessment version</SubmitButton>
+                  </form>
+                </details>
+              )}
               {live && c.status === "published" && (
                 <form className="section-spacer" action={closeChallenge}>
                   <input type="hidden" name="challenge_id" value={c.id} />
@@ -910,9 +969,39 @@ export default async function Portal({
                   </Link>
                 )}
               </div>
+              {!!s.challenge_assessments?.length && (
+                <details className="section-spacer">
+                  <summary>Assessment history</summary>
+                  {s.challenge_assessments.map((a) => (
+                    <div key={a.review_id}>
+                      <p className="muted">Review reference {a.review_id}</p>
+                      {a.criteria.length ? (
+                        <ul>
+                          {a.criteria.map((c, i) => (
+                            <li key={i}>
+                              {c.title}: {a.outcomes[i]?.replaceAll("_", " ")}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p>Reviewed without structured criteria.</p>
+                      )}
+                    </div>
+                  ))}
+                </details>
+              )}
               {s.status === "pending" && (
                 <form className="form section-spacer" action={reviewSubmission}>
                   <input type="hidden" name="submission_id" value={s.id} />
+                  <AssessmentFields
+                    criteria={
+                      rubrics.find((r) => r.challenge_id === s.challenge_id)
+                        ?.criteria ?? []
+                    }
+                    rubricId={
+                      rubrics.find((r) => r.challenge_id === s.challenge_id)?.id
+                    }
+                  />
                   <Field
                     label="Feedback for the candidate"
                     name="feedback"
@@ -941,6 +1030,17 @@ export default async function Portal({
                   .map((a) => (
                     <div className="section-spacer" key={a.id}>
                       <AchievementCard achievement={a} />
+                      <p className="muted">
+                        An approved challenge creates this achievement. A
+                        credential is a separate decision by an organization
+                        with category permission.
+                      </p>
+                      <Link
+                        className="button secondary"
+                        href={`/organizations?view=issue&submission=${s.id}`}
+                      >
+                        Issue credential for this work
+                      </Link>
                       {!a.blockchain_proofs?.length && (
                         <ProofAnchor achievementId={a.id} />
                       )}

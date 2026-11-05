@@ -49,7 +49,13 @@ export type Submission = {
   status: string;
   challenges?: Challenge | null;
   profiles?: Profile | null;
+  challenge_assessments?: {
+    review_id: string;
+    criteria: { title: string; description: string }[];
+    outcomes: string[];
+  }[];
   submission_reviews?: {
+    id?: string;
     feedback: string;
     decision: string;
     created_at: string;

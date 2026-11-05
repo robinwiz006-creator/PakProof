@@ -1,3 +1,5 @@
+import { CredentialWorkContextView } from "./credential-work-context";
+import { workContext } from "@/lib/challenge-assessment";
 import Link from "next/link";
 import {
   issuanceTrustLabel,
@@ -93,7 +95,9 @@ export function CredentialDetail({
             {c.program_name && (
               <p>
                 <span>Program / event</span>
-                {c.program_name}
+                {workContext(c.credential_challenge_context)
+                  ? "Challenge-based recognition"
+                  : c.program_name}
               </p>
             )}
             {c.award && (
@@ -133,6 +137,11 @@ export function CredentialDetail({
           </div>
         </footer>
       </article>
+      {workContext(c.credential_challenge_context) && (
+        <CredentialWorkContextView
+          context={workContext(c.credential_challenge_context)!}
+        />
+      )}
       <div className="credential-actions-row">
         {shared ? (
           <CredentialShare id={c.id} />
