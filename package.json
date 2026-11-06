@@ -49,5 +49,8 @@
   },
   "engines": {
     "node": ">=24.19.0 <25"
+  },
+  "overrides": {
+    "jayson": "5.0.0"
   }
 }
