@@ -1356,3 +1356,269 @@ test("lifecycle REST: draft edits preserve milestone IDs and publication locks t
     [],
   );
 });
+
+// Revocation privacy: real PostgREST roles, no hosted data or wallet activity.
+let revoked;
+let revokedRaw;
+let revokedClaimHash;
+const revocationReason =
+  "Public fixture explanation: event results were corrected.";
+async function revocationCredential(role) {
+  const { credentialSelect } = await import("../src/lib/credentials.ts");
+  return read(
+    `credentials?id=eq.${revoked}&select=${encodeURIComponent(credentialSelect)}`,
+    role,
+  );
+}
+test("revocation REST: anonymous status projection retains public explanation/date and application embedding", async () => {
+  const orgs = (
+    await read(
+      "organizations?select=*,companies(name,description,website)&issuer_status=eq.authorized",
+      1,
+    )
+  ).data;
+  const members = (await read("company_memberships?select=company_id", 1)).data;
+  const org = orgs.find(
+    (o) =>
+      members.some((m) => m.company_id === o.company_id) &&
+      o.allowed_credential_types.length,
+  );
+  assert.ok(org);
+  const issued = await issuerRpc(
+    "issue_credential",
+    {
+      ...(await issueArgs(org.allowed_credential_types[0])),
+      p_organization: org.id,
+      p_title: "Revocation privacy fixture",
+    },
+    1,
+  );
+  assert.equal(issued.status, 200, JSON.stringify(issued));
+  revoked = issued.data;
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_credential",
+        {
+          p_credential: revoked,
+          p_acceptance: "accepted",
+          p_public: true,
+          p_share_evidence: false,
+        },
+        2,
+      )
+    ).status,
+    204,
+  );
+  const { credentialClaim, credentialHash } =
+    await import("../src/lib/credential-proof.ts");
+  revokedClaimHash = await credentialHash(
+    credentialClaim((await revocationCredential(1)).data[0]),
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "revoke_credential",
+        { p_credential: revoked, p_reason: revocationReason },
+        1,
+      )
+    ).status,
+    204,
+  );
+  const publicEvent = await read(
+    `public_credential_events?credential_id=eq.${revoked}&select=*`,
+  );
+  assert.equal(publicEvent.status, 200, JSON.stringify(publicEvent));
+  assert.equal(publicEvent.data.length, 1);
+  assert.deepEqual(
+    Object.keys(publicEvent.data[0]).sort(),
+    ["credential_id", "event_type", "reason", "created_at"].sort(),
+  );
+  assert.equal(publicEvent.data[0].event_type, "revoked");
+  assert.equal(publicEvent.data[0].reason, revocationReason);
+  assert.ok(publicEvent.data[0].created_at);
+  const embedded = await revocationCredential();
+  assert.equal(embedded.status, 200, JSON.stringify(embedded));
+  assert.equal(embedded.data[0].credential_events[0].event_type, "revoked");
+  const { credentialValidity } = await import("../src/lib/credentials.ts");
+  assert.equal(credentialValidity(embedded.data[0]), "Revoked");
+});
+test("revocation REST: anonymous raw column reads, filters and metadata queries are denied", async () => {
+  for (const path of [
+    "credential_events?select=*",
+    "credential_events?select=actor_id",
+    `credential_events?actor_id=eq.${uid(1)}&select=credential_id`,
+    `credential_events?select=id&order=actor_id`,
+  ]) {
+    assert.ok((await read(path)).status >= 400, path);
+  }
+  for (const query of [
+    "select=actor_id",
+    "select=id",
+    "select=administrator_id",
+    "select=review_note",
+    `actor_id=eq.${uid(1)}&select=credential_id`,
+    `order=actor_id`,
+  ]) {
+    assert.ok(
+      (await read(`public_credential_events?${query}`)).status >= 400,
+      query,
+    );
+  }
+  const rawEmbed = await read(
+    `credentials?id=eq.${revoked}&select=id,credential_events(actor_id)`,
+  );
+  assert.ok(rawEmbed.status >= 400, JSON.stringify(rawEmbed));
+  assert.ok(
+    (await read("issuer_authorizations?select=administrator_id,review_note"))
+      .status >= 400,
+  );
+});
+test("revocation REST: unrelated authenticated callers cannot retrieve attribution directly or by embedding", async () => {
+  for (const path of [
+    "credential_events?select=*",
+    `credential_events?actor_id=eq.${uid(1)}&select=*`,
+  ]) {
+    const r = await read(path, 3);
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.data, []);
+  }
+  const embedded = await read(
+    `credentials?id=eq.${revoked}&select=id,credential_events(*)`,
+    3,
+  );
+  assert.equal(embedded.status, 200);
+  assert.deepEqual(embedded.data[0].credential_events, []);
+  assert.deepEqual(
+    (await read("issuer_authorizations?select=review_note,administrator_id", 3))
+      .data,
+    [],
+  );
+  const safe = await revocationCredential(3);
+  assert.equal(safe.status, 200);
+  assert.equal(safe.data[0].credential_events.length, 1);
+});
+test("revocation REST: issuer staff and administrator retain complete attributable immutable audit", async () => {
+  for (const role of [1, 4, 5]) {
+    const r = await read(
+      `credential_events?credential_id=eq.${revoked}&select=*`,
+      role,
+    );
+    assert.equal(r.status, 200);
+    assert.equal(r.data.length, 1);
+    assert.equal(r.data[0].actor_id, uid(1));
+    assert.ok(r.data[0].id);
+    if (role === 1) revokedRaw = r.data[0];
+  }
+  const history = await read(
+    "issuer_authorizations?select=administrator_id,review_note",
+    5,
+  );
+  assert.equal(history.status, 200);
+  assert.ok(history.data.some((h) => h.review_note));
+});
+test("revocation REST: recipient retains status without staff IDs; publication and acceptance remain independent", async () => {
+  assert.deepEqual(
+    (await read(`credential_events?credential_id=eq.${revoked}`, 2)).data,
+    [],
+  );
+  for (const [acceptance, publish] of [
+    ["accepted", false],
+    ["declined", true],
+  ]) {
+    assert.equal(
+      (
+        await issuerRpc(
+          "respond_credential",
+          {
+            p_credential: revoked,
+            p_acceptance: acceptance,
+            p_public: publish,
+            p_share_evidence: false,
+          },
+          2,
+        )
+      ).status,
+      204,
+    );
+    assert.deepEqual(
+      (await read(`public_credential_events?credential_id=eq.${revoked}`)).data,
+      [],
+    );
+    assert.deepEqual(
+      (await read(`public_credential_events?credential_id=eq.${revoked}`, 3))
+        .data,
+      [],
+    );
+    const owner = await read(
+      `public_credential_events?credential_id=eq.${revoked}`,
+      2,
+    );
+    assert.equal(owner.data.length, 1);
+    assert.equal(
+      (await read(`credential_events?credential_id=eq.${revoked}`, 5)).data
+        .length,
+      1,
+    );
+  }
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_credential",
+        {
+          p_credential: revoked,
+          p_acceptance: "accepted",
+          p_public: true,
+          p_share_evidence: false,
+        },
+        2,
+      )
+    ).status,
+    204,
+  );
+});
+test("revocation REST: public and private records cannot be written or unrevoked through either API surface", async () => {
+  for (const role of [undefined, 1, 2, 3, 5])
+    for (const table of ["credential_events", "public_credential_events"])
+      for (const method of ["PATCH", "DELETE", "POST"]) {
+        const r = await fetch(`${base}/${table}?credential_id=eq.${revoked}`, {
+          method,
+          headers: {
+            ...(role ? { Authorization: `Bearer ${jwt(role)}` } : {}),
+            "Content-Type": "application/json",
+          },
+          ...(method !== "DELETE"
+            ? {
+                body: JSON.stringify(
+                  method === "POST"
+                    ? {
+                        credential_id: revoked,
+                        actor_id: uid(3),
+                        event_type: "revoked",
+                        reason: "Forged lifecycle event must be denied.",
+                      }
+                    : {
+                        reason:
+                          "Attempt to overwrite historical public explanation.",
+                      },
+                ),
+              }
+            : {}),
+        });
+        assert.ok(r.status >= 400, `${role}:${table}:${method}:${r.status}`);
+      }
+  assert.deepEqual(
+    (await read(`credential_events?credential_id=eq.${revoked}&select=*`, 1))
+      .data[0],
+    revokedRaw,
+  );
+});
+test("revocation REST: revocation projection does not alter the historical v3 claim commitment", async () => {
+  const { credentialClaim, credentialHash } =
+    await import("../src/lib/credential-proof.ts");
+  const { credentialValidity } = await import("../src/lib/credentials.ts");
+  const c = (await revocationCredential()).data[0];
+  assert.equal(credentialValidity(c), "Revoked");
+  assert.equal(await credentialHash(credentialClaim(c)), revokedClaimHash);
+  assert.equal(c.credential_events[0].reason, revocationReason);
+});

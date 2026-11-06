@@ -132,7 +132,7 @@ export type Credential = {
   }[];
 };
 export const credentialSelect =
-  "*, organizations(*, companies(name,description,website)), credential_preferences(*), credential_evidence(*), credential_events(*), credential_proofs(*), credential_issuance_provenance(*), credential_challenge_context(*)";
+  "*, organizations(*, companies(name,description,website)), credential_preferences(*), credential_evidence(*), credential_events:public_credential_events(event_type,reason,created_at), credential_proofs(*), credential_issuance_provenance(*), credential_challenge_context(*)";
 export function credentialValidity(
   c: Pick<Credential, "expiry_date" | "credential_events"> & {
     issue_date?: string;

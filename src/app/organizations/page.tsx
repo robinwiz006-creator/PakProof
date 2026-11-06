@@ -577,7 +577,8 @@ export default async function Organizations({
                       <input type="hidden" name="credential_id" value={c.id} />
                       <Field
                         name="reason"
-                        label="Reason for revocation or correction"
+                        label="Public explanation for revocation or correction"
+                        hint="This explanation may appear on the published credential. Do not include staff details or private investigation notes."
                         type="textarea"
                         required
                         minLength={10}
