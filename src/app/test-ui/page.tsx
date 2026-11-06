@@ -1,3 +1,4 @@
+import { TransactionRecoveryFixture } from "@/components/transaction-recovery-fixture";
 import { PaidProjectEditor } from "@/components/paid-project-editor";
 import {
   PaymentRecovery,
@@ -21,6 +22,15 @@ export default async function TestUI({
   // Isolated component fixtures only. Never available with configured Supabase.
   if (process.env.PROOFPAK_E2E !== "1" || isConfigured()) notFound();
   const { fixture } = await searchParams;
+  if (
+    fixture === "transaction-recovery" ||
+    fixture === "transaction-recovery-cancelled"
+  )
+    return (
+      <TransactionRecoveryFixture
+        cancelled={fixture === "transaction-recovery-cancelled"}
+      />
+    );
   if (fixture === "paid-lifecycle")
     return (
       <main className="container page narrow">

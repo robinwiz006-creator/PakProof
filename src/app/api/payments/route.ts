@@ -375,7 +375,21 @@ export async function POST(request: Request) {
         throw new PaymentError(
           "Only the worker or a company owner may cancel a preparation with no registered signature.",
         );
-      return NextResponse.json({ cancelled: true });
+      const { data: attempts, error: readError } = await db
+        .from("payment_attempts")
+        .select("id,intent_id,status,signature")
+        .eq("intent_id", v.intent_id)
+        .eq("status", "cancelled")
+        .is("signature", null);
+      if (readError)
+        throw new PaymentError(
+          "Cancellation may have completed, but its receipt is unavailable. Refresh Payment History; preserve all saved signatures.",
+        );
+      return NextResponse.json({
+        cancelled: true,
+        intent_id: v.intent_id,
+        unsigned_attempts: attempts ?? [],
+      });
     }
     throw new PaymentError("Unknown payment action.");
   } catch (e) {

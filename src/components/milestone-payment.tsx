@@ -1,5 +1,15 @@
 "use client";
-import { useState, useEffect } from "react";
+import {
+  paymentBlocked,
+  preparePaymentContext,
+  paymentSigning,
+  paymentRejection,
+  saveSignedPayment,
+  clearUnsignedPayment,
+  clearSettledPayment,
+  paymentLocalRisk,
+} from "@/lib/transaction-recovery";
+import { useState, useEffect, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { Buffer } from "buffer";
 import { Connection, Transaction } from "@solana/web3.js";
@@ -56,17 +66,27 @@ export function MilestonePayment({
       "Checking the approved milestone and preparing the exact payment. Nothing has been signed or sent.",
     );
     try {
-      if (localStorage.getItem(`proofpak:milestone-signed:${milestoneId}`))
+      if (paymentBlocked(localStorage, milestoneId))
         throw new Error(
           "This browser saved a signed attempt for this milestone. Recover it in Payment History before preparing another transfer.",
         );
-      setPrepared(
-        await paymentAction({
-          action: "prepare",
-          milestone_id: milestoneId,
-          payer_connection_id: connection,
-        }),
-      );
+      const result = await paymentAction({
+        action: "prepare",
+        milestone_id: milestoneId,
+        payer_connection_id: connection,
+      });
+      if (!result.recovery && result.attempt && !result.attempt.signature)
+        preparePaymentContext(localStorage, {
+          schema: 1,
+          attemptId: result.attempt.id,
+          intentId: result.intent.id,
+          milestoneId,
+          recipient: result.intent.recipient_wallet,
+          mint: result.intent.mint,
+          amount: String(result.intent.amount_units),
+          stage: "unsigned",
+        });
+      setPrepared(result);
       setMessage("Review the amount and destination below before signing.");
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Could not prepare payment.");
@@ -111,15 +131,28 @@ export function MilestonePayment({
       setMessage(
         "Awaiting your wallet signature. Nothing has been broadcast by ProofPak yet.",
       );
-      const [signed] = await (
-        w.features[
-          SolanaSignTransaction
-        ] as SolanaSignTransactionFeature[typeof SolanaSignTransaction]
-      ).signTransaction({
-        account,
-        chain: "solana:devnet",
-        transaction: Buffer.from(prepared.attempt.template_base64, "base64"),
-      });
+      paymentSigning(localStorage, prepared.attempt.id);
+      setPrepared({ ...prepared, recovery: true });
+      let signed;
+      try {
+        [signed] = await (
+          w.features[
+            SolanaSignTransaction
+          ] as SolanaSignTransactionFeature[typeof SolanaSignTransaction]
+        ).signTransaction({
+          account,
+          chain: "solana:devnet",
+          transaction: Buffer.from(prepared.attempt.template_base64, "base64"),
+        });
+      } catch (e) {
+        const rejected = paymentRejection(localStorage, prepared.attempt.id, e);
+        if (rejected) setPrepared({ ...prepared, recovery: false });
+        if (rejected)
+          setMessage(
+            "Signature rejected. Nothing sent; retry signing or cancel the unsigned preparation.",
+          );
+        throw e;
+      }
       if (!signed) throw new Error("Wallet returned no signed payment.");
       const decoded = Transaction.from(signed.signedTransaction);
       if (!decoded.signature)
@@ -130,13 +163,11 @@ export function MilestonePayment({
         "base64",
       );
       setPrepared({ ...prepared, recovery: true });
-      localStorage.setItem(
-        `proofpak:milestone-signed:${milestoneId}`,
+      saveSignedPayment(
+        localStorage,
         prepared.attempt.id,
-      );
-      localStorage.setItem(
-        `proofpak:payment:${prepared.attempt.id}`,
-        JSON.stringify({ signature, signed_base64: signedBase64 }),
+        signature,
+        signedBase64,
       );
       setMessage("Saving the signed attempt before sending…");
       const registration = await paymentAction({
@@ -178,19 +209,31 @@ export function MilestonePayment({
         },
         "finalized",
       );
+      setMessage(
+        "Confirmation received. Server settlement verification pending; this is not yet a verified payment.",
+      );
       const result = await paymentAction({
         action: "reconcile",
         attempt_id: prepared.attempt.id,
       });
       setMessage(`${paymentStatusLabel(result.status)}: ${result.note}`);
       if (result.status === "paid") {
-        localStorage.removeItem(`proofpak:payment:${prepared.attempt.id}`);
-        localStorage.removeItem(`proofpak:milestone-signed:${milestoneId}`);
+        clearSettledPayment(localStorage, {
+          id: prepared.attempt.id,
+          status: "paid",
+          signature,
+        });
       }
       router.refresh();
     } catch (e) {
+      let uncertain = signedLocally;
+      try {
+        uncertain = uncertain || paymentBlocked(localStorage, milestoneId);
+      } catch {
+        uncertain = true;
+      }
       setMessage(
-        `${e instanceof Error ? e.message : "Payment did not finish."} ${signedLocally ? "A signature may exist. Recover the original attempt from Payment History; do not create another transfer." : "No transaction was broadcast by ProofPak in this attempt. You can retry signing or cancel the unsigned preparation in Payment History."}`,
+        `${e instanceof Error ? e.message : "Payment interrupted."} ${uncertain ? "Outcome unknown or recovery required. Keep the original attempt; do not sign another transfer." : "No transaction was broadcast by ProofPak. You may retry signing or cancel this unsigned preparation."}`,
       );
       router.refresh();
     } finally {
@@ -300,22 +343,33 @@ export function PaymentRecovery({
   const [busy, setBusy] = useState(false),
     [message, setMessage] = useState("");
   const router = useRouter();
-  useEffect(() => {
-    try {
-      if (attempt && ["paid", "failed"].includes(attempt.status)) {
-        localStorage.removeItem(`proofpak:payment:${attempt.id}`);
-        for (const key of Object.keys(localStorage)) {
-          if (
-            key.startsWith("proofpak:milestone-signed:") &&
-            localStorage.getItem(key) === attempt.id
-          )
-            localStorage.removeItem(key);
-        }
+  const localSigned = useSyncExternalStore(
+    (notify) => {
+      window.addEventListener("proofpak-recovery", notify);
+      window.addEventListener("storage", notify);
+      return () => {
+        window.removeEventListener("proofpak-recovery", notify);
+        window.removeEventListener("storage", notify);
+      };
+    },
+    () => {
+      try {
+        return attempt ? paymentLocalRisk(localStorage, attempt.id) : false;
+      } catch {
+        return true;
       }
+    },
+    () => false,
+  );
+  useEffect(() => {
+    if (!attempt) return;
+    try {
+      clearUnsignedPayment(localStorage, { ...attempt, intent_id: intentId });
+      clearSettledPayment(localStorage, attempt);
     } catch {
-      // Storage can be unavailable; server records remain authoritative.
+      /* Unknown/corrupt browser state stays protected. */
     }
-  }, [attempt]);
+  }, [attempt, intentId]);
   async function recoverSaved() {
     if (!attempt || !canResume) return;
     setBusy(true);
@@ -354,9 +408,29 @@ export function PaymentRecovery({
           ? { action: mode, intent_id: intentId }
           : { action: mode, attempt_id: attempt?.id },
       );
+      if (
+        mode === "cancel" &&
+        result.cancelled &&
+        result.intent_id === intentId
+      ) {
+        for (const cancelled of result.unsigned_attempts ?? [])
+          clearUnsignedPayment(localStorage, cancelled);
+      }
+      let retainedRisk = localSigned;
+      if (mode === "cancel") {
+        try {
+          retainedRisk = Boolean(
+            attempt && paymentLocalRisk(localStorage, attempt.id),
+          );
+        } catch {
+          retainedRisk = true;
+        }
+      }
       setMessage(
         mode === "cancel"
-          ? "Unsigned preparation cancelled."
+          ? retainedRisk
+            ? "Server preparation cancelled, but this browser has a signed or uncertain attempt. Recovery required; do not broadcast it or prepare another transfer."
+            : "Unsigned preparation cancelled. Its unsigned local context was cleared where confirmed safe. You may prepare again."
           : `${paymentStatusLabel(result.status)}: ${result.note}`,
       );
       router.refresh();
@@ -412,6 +486,19 @@ export function PaymentRecovery({
         Payment ID: {intentId}
         {attempt ? ` · Attempt: ${attempt.id}` : ""}
       </p>
+      {localSigned && attempt?.status === "cancelled" && (
+        <p className="notice">
+          Recovery required: saved signed bytes belong to a closed preparation.
+          Do not broadcast or replace them. Keep the attempt and original
+          signature for authorized review.
+        </p>
+      )}
+      {localSigned && !attempt?.signature && (
+        <p className="notice">
+          Recovery required: a local signing attempt may exist. Preserve its
+          original reference; do not prepare or sign a replacement.
+        </p>
+      )}
       <div className="button-row section-spacer">
         {canResume && !attempt?.signature && attempt?.status === "prepared" && (
           <button
