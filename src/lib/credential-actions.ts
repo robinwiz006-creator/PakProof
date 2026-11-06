@@ -152,7 +152,12 @@ export async function respondCredential(form: FormData) {
     p_public: form.get("is_public") === "on",
     p_share_evidence: form.get("share_evidence") === "on",
   });
+  if (error?.code === "P0001") go(path, error.message);
   result(error, path);
+  revalidatePath("/my-credentials");
+  revalidatePath("/credentials", "layout");
+  revalidatePath("/talent", "layout");
+  revalidatePath("/organizations");
   go(path, "Your credential preferences were saved.");
 }
 export async function revokeCredential(form: FormData) {
@@ -173,7 +178,7 @@ export async function revokeCredential(form: FormData) {
   result(error, path);
   go(
     path,
-    "Credential revoked. Historical facts remain unchanged. To correct it, issue a replacement and include the old credential ID in the description.",
+    "Credential revoked. Historical facts remain unchanged. Use Create a corrected replacement for controlled corrections.",
   );
 }
 export async function authorizeIssuer(form: FormData) {
@@ -281,5 +286,57 @@ export async function disconnectWallet(form: FormData) {
   go(
     path,
     "Wallet link disconnected. Your email account, historical proofs, and transactions are unchanged. Any replacement requires a new ownership signature.",
+  );
+}
+
+export async function correctCredential(form: FormData) {
+  const path = "/organizations?view=issued";
+  const v = parse(
+    z.object({
+      original_id: z.uuid(),
+      reason: z.string().trim().min(10).max(2000),
+      title: z.string().trim().min(3).max(160),
+      description: z.string().trim().min(20).max(3850),
+      issue_date: z.iso.date(),
+      expiry_date: z.union([z.literal(""), z.iso.date()]),
+      program_name: z.string().max(200),
+      award: z.string().max(200),
+      evidence_url: z.union([
+        z.literal(""),
+        z
+          .url()
+          .refine((v) => /^https?:\/\//.test(v), "Use an HTTP or HTTPS URL."),
+      ]),
+    }),
+    form,
+    path,
+  );
+  if (v.expiry_date && v.expiry_date < v.issue_date)
+    go(path, "Expiry must be on or after the issue date.");
+  const db = await context();
+  const { error } = await db.rpc("correct_credential", {
+    p_original: v.original_id,
+    p_reason: v.reason,
+    p_title: v.title,
+    p_description: v.description,
+    p_issue_date: v.issue_date,
+    p_expiry_date: v.expiry_date || null,
+    p_program: v.program_name,
+    p_award: v.award,
+    p_evidence: v.evidence_url,
+  });
+  if (error)
+    go(
+      path,
+      error.code === "P0001"
+        ? error.message
+        : "Could not create a correction. Check permissions and open proposals. No partial correction was saved.",
+    );
+  revalidatePath("/organizations");
+  revalidatePath("/my-credentials");
+  revalidatePath("/credentials", "layout");
+  go(
+    path,
+    "Correction issued privately for recipient review. The original has not been superseded yet.",
   );
 }

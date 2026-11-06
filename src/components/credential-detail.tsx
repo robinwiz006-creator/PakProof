@@ -1,3 +1,4 @@
+import { CredentialCorrectionNotice } from "./credential-correction";
 import { CredentialWorkContextView } from "./credential-work-context";
 import { workContext } from "@/lib/challenge-assessment";
 import Link from "next/link";
@@ -66,9 +67,11 @@ export function CredentialDetail({
           <p>
             {validity === "Revoked"
               ? "The issuer withdrew this credential. A matching historical blockchain record does not make it current."
-              : validity === "Expired"
-                ? "This credential’s expiry date has passed."
-                : "This credential’s issue date has not arrived."}
+              : validity === "Superseded"
+                ? "An accepted correction replaces this historical record."
+                : validity === "Expired"
+                  ? "This credential’s expiry date has passed."
+                  : "This credential’s issue date has not arrived."}
           </p>
         </aside>
       )}
@@ -163,6 +166,7 @@ export function CredentialDetail({
           </Link>
         )}
       </div>
+      <CredentialCorrectionNotice credential={c} />
       <section
         className="credential-summary"
         aria-label="Credential status summary"
@@ -235,13 +239,15 @@ export function CredentialDetail({
                 <p className="muted">
                   {validity === "Revoked"
                     ? "The issuing organization withdrew this credential. A historical blockchain record does not undo revocation."
-                    : validity === "Expired"
-                      ? "The expiry date has passed."
-                      : validity === "Not yet valid"
-                        ? "The issue date is in the future."
-                        : c.expiry_date
-                          ? `Valid through ${credentialDate(c.expiry_date)}, unless revoked.`
-                          : "No expiry date specified; no revocation recorded."}
+                    : validity === "Superseded"
+                      ? "An accepted correction replaces this historical record."
+                      : validity === "Expired"
+                        ? "The expiry date has passed."
+                        : validity === "Not yet valid"
+                          ? "The issue date is in the future."
+                          : c.expiry_date
+                            ? `Valid through ${credentialDate(c.expiry_date)}, unless revoked.`
+                            : "No expiry date specified; no revocation recorded."}
                 </p>
               </dd>
             </div>

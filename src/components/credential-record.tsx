@@ -1,3 +1,4 @@
+import { CredentialCorrectionNotice } from "./credential-correction";
 import { workContext } from "@/lib/challenge-assessment";
 import { issuanceTrustLabel } from "@/lib/issuer-permissions";
 import Link from "next/link";
@@ -42,6 +43,7 @@ export function CredentialRecord({
             : c.credential_preferences.acceptance}
         </span>
       </div>
+      <CredentialCorrectionNotice credential={c} />
       <Link
         className="button secondary credential-view-action"
         href={`/credentials/${c.id}`}

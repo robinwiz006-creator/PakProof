@@ -1,5 +1,5 @@
 import { workContext } from "@/lib/challenge-assessment";
-import type { Credential } from "@/lib/credentials";
+import { correctionStatus, type Credential } from "@/lib/credentials";
 import { CredentialRecord } from "./credential-record";
 import { SubmitButton } from "./forms";
 export function CredentialInboxItem({
@@ -9,6 +9,9 @@ export function CredentialInboxItem({
   credential: Credential;
   action: (data: FormData) => Promise<void>;
 }) {
+  const closed = ["declined", "withdrawn"].includes(
+    correctionStatus(c)?.incoming_state ?? "",
+  );
   return (
     <div id={`credential-${c.id}`} className="credential-inbox-item">
       <CredentialRecord credential={c} />
@@ -30,7 +33,9 @@ export function CredentialInboxItem({
             >
               <option value="">Choose accept or decline</option>
               <option value="declined">Decline / keep off passport</option>
-              <option value="accepted">Accept credential</option>
+              <option value="accepted" disabled={closed}>
+                Accept credential
+              </option>
             </select>
           </div>
           <label>

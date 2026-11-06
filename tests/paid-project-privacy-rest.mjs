@@ -1622,3 +1622,461 @@ test("revocation REST: revocation projection does not alter the historical v3 cl
   assert.equal(await credentialHash(credentialClaim(c)), revokedClaimHash);
   assert.equal(c.credential_events[0].reason, revocationReason);
 });
+
+let correctionOriginal, correctionFirst, correctionAccepted, originalClaimHash;
+async function correctionArgs(id) {
+  const c = (
+    await read(`credentials?id=eq.${id}&select=*,credential_evidence(*)`, 1)
+  ).data[0];
+  return {
+    p_original: id,
+    p_reason: "PRIVATE correction investigation note",
+    p_title: "Corrected assessed recognition",
+    p_description: "A corrected description of the same approved work.",
+    p_issue_date: new Date().toISOString().slice(0, 10),
+    p_expiry_date: null,
+    p_program: c.program_name,
+    p_award: "",
+    p_evidence: c.credential_evidence.evidence_url,
+  };
+}
+async function correctionCredential(id, role) {
+  const { credentialSelect } = await import("../src/lib/credentials.ts");
+  return read(
+    `credentials?id=eq.${id}&select=${encodeURIComponent(credentialSelect)}`,
+    role,
+  );
+}
+test("correction REST: one initial work credential remains protected; concurrent proposals create only one replacement", async () => {
+  const source = (
+    await read(
+      "challenge_credential_sources?select=credential_id&correction_root_id=is.null",
+      1,
+    )
+  ).data[0];
+  correctionOriginal = source.credential_id;
+  const c = (await correctionCredential(correctionOriginal, 1)).data[0];
+  const { credentialHash, credentialClaim } =
+    await import("../src/lib/credential-proof.ts");
+  originalClaimHash = await credentialHash(credentialClaim(c));
+  const args = await correctionArgs(correctionOriginal);
+  const attempts = await Promise.all([
+    issuerRpc("correct_credential", args, 1),
+    issuerRpc("correct_credential", args, 1),
+  ]);
+  assert.deepEqual(
+    attempts.map((a) => a.status).sort(),
+    [200, 400],
+    JSON.stringify(attempts),
+  );
+  correctionFirst = attempts.find((a) => a.status === 200).data;
+  const dup = await issuerRpc(
+    "issue_challenge_credential",
+    await workArgs(),
+    1,
+  );
+  assert.equal(dup.status, 409, JSON.stringify(dup));
+  const next = (await correctionCredential(correctionFirst, 2)).data[0];
+  assert.equal(next.credential_preferences.acceptance, "pending");
+  assert.equal(next.credential_preferences.is_public, false);
+  assert.equal(
+    next.credential_correction_status.replaces_id,
+    correctionOriginal,
+  );
+  assert.match(next.description, /Correction reference sha256:[a-f0-9]{64}\./);
+});
+test("correction REST: assessment commitment, recipient, issuer, category and representative are preserved", async () => {
+  const a = (
+    await read(
+      `challenge_credential_sources?credential_id=eq.${correctionOriginal}&select=*`,
+      1,
+    )
+  ).data[0];
+  const b = (
+    await read(
+      `challenge_credential_sources?credential_id=eq.${correctionFirst}&select=*`,
+      1,
+    )
+  ).data[0];
+  for (const key of [
+    "manifest",
+    "context_digest",
+    "submission_id",
+    "review_id",
+    "organization_id",
+    "credential_type",
+  ])
+    assert.deepEqual(b[key], a[key]);
+  assert.equal(b.correction_root_id, correctionOriginal);
+  const audit = (
+    await read(
+      `credential_issuance_audit?credential_id=eq.${correctionFirst}`,
+      1,
+    )
+  ).data[0];
+  assert.equal(audit.representative_id, uid(1));
+  const old = (await correctionCredential(correctionOriginal, 1)).data[0],
+    fresh = (await correctionCredential(correctionFirst, 1)).data[0];
+  for (const key of ["recipient_id", "organization_id", "credential_type"])
+    assert.equal(fresh[key], old[key]);
+});
+test("correction REST: unrelated users and recipients cannot initiate corrections or forge correction rows", async () => {
+  const args = await correctionArgs(correctionOriginal);
+  for (const role of [undefined, 2, 3])
+    assert.ok(
+      (await issuerRpc("correct_credential", args, role)).status >= 400,
+    );
+  for (const role of [undefined, 2, 3])
+    for (const method of ["POST", "PATCH", "DELETE"]) {
+      const r = await fetch(
+        `${base}/credential_corrections?replacement_id=eq.${correctionFirst}`,
+        {
+          method,
+          headers: {
+            ...(role ? { Authorization: `Bearer ${jwt(role)}` } : {}),
+            "Content-Type": "application/json",
+          },
+          ...(method !== "DELETE"
+            ? { body: JSON.stringify({ state: "accepted" }) }
+            : {}),
+        },
+      );
+      assert.ok(r.status >= 400);
+    }
+});
+test("correction REST: pending replacement and private audit fields never leak through public REST", async () => {
+  for (const role of [undefined, 3]) {
+    assert.deepEqual(
+      (await correctionCredential(correctionFirst, role)).data,
+      [],
+    );
+    const raw = await read("credential_corrections?select=*", role);
+    assert.ok(raw.status >= 400 || raw.data.length === 0);
+    const safe = await read(
+      `credential_correction_status?credential_id=eq.${correctionOriginal}`,
+      role,
+    );
+    assert.equal(safe.status, 200);
+    for (const row of safe.data) {
+      assert.equal(row.pending_replacement_id, null);
+      assert.equal(row.replacement_id, null);
+      assert.ok(!("created_by" in row));
+      assert.ok(!("reason" in row));
+    }
+  }
+  assert.equal(
+    (
+      await read(
+        `credential_corrections?replacement_id=eq.${correctionFirst}`,
+        5,
+      )
+    ).data[0].reason,
+    "PRIVATE correction investigation note",
+  );
+});
+test("correction REST: decline preserves original and cannot later become accepted; a new proposal is allowed", async () => {
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_credential",
+        {
+          p_credential: correctionFirst,
+          p_acceptance: "declined",
+          p_public: false,
+          p_share_evidence: false,
+        },
+        2,
+      )
+    ).status,
+    204,
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_credential",
+        {
+          p_credential: correctionFirst,
+          p_acceptance: "accepted",
+          p_public: false,
+          p_share_evidence: false,
+        },
+        2,
+      )
+    ).status,
+    400,
+  );
+  const s = (await correctionCredential(correctionOriginal, 2)).data[0]
+    .credential_correction_status;
+  assert.equal(s.superseded, false);
+  const r = await issuerRpc(
+    "correct_credential",
+    await correctionArgs(correctionOriginal),
+    1,
+  );
+  assert.equal(r.status, 200, JSON.stringify(r));
+  correctionAccepted = r.data;
+});
+test("correction REST: accepted private replacement supersedes old record without disclosing replacement", async () => {
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_credential",
+        {
+          p_credential: correctionAccepted,
+          p_acceptance: "accepted",
+          p_public: false,
+          p_share_evidence: false,
+        },
+        2,
+      )
+    ).status,
+    204,
+  );
+  // Existing original may be private; publish it explicitly for this boundary test.
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_credential",
+        {
+          p_credential: correctionOriginal,
+          p_acceptance: "accepted",
+          p_public: true,
+          p_share_evidence: false,
+        },
+        2,
+      )
+    ).status,
+    204,
+  );
+  const old = (await correctionCredential(correctionOriginal)).data[0];
+  assert.equal(old.credential_correction_status.superseded, true);
+  assert.equal(old.credential_correction_status.replacement_id, null);
+  assert.equal(
+    (
+      await issuerRpc("credential_replacement_tip", {
+        p_credential: correctionOriginal,
+      })
+    ).data,
+    null,
+  );
+  assert.deepEqual((await correctionCredential(correctionAccepted)).data, []);
+  const { credentialClaim, credentialHash } =
+    await import("../src/lib/credential-proof.ts");
+  assert.equal(await credentialHash(credentialClaim(old)), originalClaimHash);
+});
+test("correction REST: publication enables safe lineage links, not audit details or private assessment", async () => {
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_credential",
+        {
+          p_credential: correctionAccepted,
+          p_acceptance: "accepted",
+          p_public: true,
+          p_share_evidence: false,
+        },
+        2,
+      )
+    ).status,
+    204,
+  );
+  const old = (await correctionCredential(correctionOriginal)).data[0],
+    fresh = (await correctionCredential(correctionAccepted)).data[0];
+  assert.equal(
+    old.credential_correction_status.replacement_id,
+    correctionAccepted,
+  );
+  assert.equal(
+    fresh.credential_correction_status.replaces_id,
+    correctionOriginal,
+  );
+  assert.ok(
+    !JSON.stringify(fresh).includes("PRIVATE correction investigation"),
+  );
+  const { workContext } = await import("../src/lib/challenge-assessment.ts");
+  assert.equal(
+    workContext(fresh.credential_challenge_context)?.assessment,
+    null,
+  );
+});
+test("correction REST: public replacement cannot disclose an unpublished predecessor ID", async () => {
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_credential",
+        {
+          p_credential: correctionOriginal,
+          p_acceptance: "accepted",
+          p_public: false,
+          p_share_evidence: false,
+        },
+        2,
+      )
+    ).status,
+    204,
+  );
+  const c = (await correctionCredential(correctionAccepted)).data[0];
+  assert.equal(c.credential_correction_status.replaces_id, null);
+  assert.ok(!c.description.includes(correctionOriginal));
+  assert.equal(
+    (
+      await issuerRpc("credential_replacement_tip", {
+        p_credential: correctionOriginal,
+      })
+    ).data,
+    null,
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_credential",
+        {
+          p_credential: correctionOriginal,
+          p_acceptance: "accepted",
+          p_public: true,
+          p_share_evidence: false,
+        },
+        2,
+      )
+    ).status,
+    204,
+  );
+});
+test("correction REST: revoked original stays revoked; no correction may rewrite history or create loops", async () => {
+  assert.equal(
+    (
+      await issuerRpc(
+        "revoke_credential",
+        {
+          p_credential: correctionOriginal,
+          p_reason: "Historical original explicitly revoked after correction.",
+        },
+        1,
+      )
+    ).status,
+    204,
+  );
+  const { credentialValidity } = await import("../src/lib/credentials.ts");
+  assert.equal(
+    credentialValidity(
+      (await correctionCredential(correctionOriginal)).data[0],
+    ),
+    "Revoked",
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "correct_credential",
+        await correctionArgs(correctionOriginal),
+        1,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (await read(`credentials?id=eq.${correctionOriginal}`, 1, "PATCH")).status,
+    403,
+  );
+});
+test("correction REST: current category permission and issuer suspension apply to creation and acceptance", async () => {
+  const args = await correctionArgs(correctionAccepted);
+  const future = new Date();
+  future.setUTCDate(future.getUTCDate() + 10);
+  let r = await issuerRpc(
+    "correct_credential",
+    { ...args, p_issue_date: future.toISOString().slice(0, 10) },
+    1,
+  );
+  assert.equal(r.status, 200, JSON.stringify(r));
+  const futureId = r.data;
+  const decide = (id) =>
+    issuerRpc(
+      "respond_credential",
+      {
+        p_credential: id,
+        p_acceptance: "accepted",
+        p_public: false,
+        p_share_evidence: false,
+      },
+      2,
+    );
+  assert.equal((await decide(futureId)).status, 400);
+  assert.equal(
+    (
+      await issuerRpc(
+        "revoke_credential",
+        {
+          p_credential: futureId,
+          p_reason:
+            "Withdraw the future-dated proposal before issuing another.",
+        },
+        1,
+      )
+    ).status,
+    204,
+  );
+  assert.equal((await decide(futureId)).status, 400);
+  r = await issuerRpc("correct_credential", args, 1);
+  assert.equal(r.status, 200, JSON.stringify(r));
+  const pendingId = r.data;
+  async function scope(types, authorize = true) {
+    const org = (
+      await read(
+        `organizations?id=eq.${(await workArgs()).p_organization}&select=*`,
+        1,
+      )
+    ).data[0];
+    const v = await issuerRpc(
+      "review_issuer_authorization",
+      {
+        p_organization: org.id,
+        p_note: "Synthetic permission change for correction trust testing.",
+        p_authorize: authorize,
+        p_name: "Privacy Fixture",
+        p_description: "Disposable local privacy test organization.",
+        p_website: "https://example.com",
+        p_types: types,
+        p_expected_authorization: org.authorization_id,
+      },
+      5,
+    );
+    assert.equal(v.status, 204, JSON.stringify(v));
+  }
+  await scope(["workshop"]);
+  assert.equal((await decide(pendingId)).status, 400);
+  assert.equal(
+    (
+      await issuerRpc(
+        "correct_credential",
+        { ...args, p_original: futureId },
+        1,
+      )
+    ).status,
+    400,
+  );
+  await scope(["company_achievement"], false);
+  assert.equal((await decide(pendingId)).status, 400);
+  await scope(["company_achievement"]);
+  assert.equal((await decide(pendingId)).status, 204);
+  // Withdrawing acceptance cannot reactivate an old credential.
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_credential",
+        {
+          p_credential: pendingId,
+          p_acceptance: "declined",
+          p_public: false,
+          p_share_evidence: false,
+        },
+        2,
+      )
+    ).status,
+    204,
+  );
+  assert.equal(
+    (await correctionCredential(correctionAccepted, 2)).data[0]
+      .credential_correction_status.superseded,
+    true,
+  );
+});

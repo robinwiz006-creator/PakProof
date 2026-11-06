@@ -170,3 +170,45 @@ test("v3 proof fixtures reject wrong signer, memo version, program, hash and fai
     "verified",
   );
 });
+
+test("supersession metadata preserves historical v3 claims; a correction uses the existing v3 commitment", async () => {
+  const historical = await credentialHash(credentialClaim(c));
+  const status = {
+    credential_id: c.id,
+    is_replacement: false,
+    replaces_id: null,
+    superseded: true,
+    pending_replacement_id: null,
+    replacement_id: null,
+    incoming_state: null,
+  };
+  assert.equal(
+    await credentialHash(
+      credentialClaim({ ...c, credential_correction_status: status }),
+    ),
+    historical,
+  );
+  const replacement = {
+    ...c,
+    id: "10000000-0000-4000-8000-000000000002",
+    description:
+      c.description + "\n\nCorrection reference sha256:" + "a".repeat(64) + ".",
+  };
+  assert.equal(credentialClaim(replacement).version, 3);
+  assert.notEqual(
+    await credentialHash(credentialClaim(replacement)),
+    historical,
+  );
+  assert.notEqual(
+    await credentialHash(
+      credentialClaim({
+        ...replacement,
+        description: replacement.description.replace(
+          "a".repeat(64),
+          "b".repeat(64),
+        ),
+      }),
+    ),
+    await credentialHash(credentialClaim(replacement)),
+  );
+});

@@ -1,3 +1,4 @@
+import { CredentialCorrectionForm } from "@/components/credential-correction";
 import Link from "next/link";
 import { z } from "zod";
 import { workCredentialTypes } from "@/lib/challenge-assessment";
@@ -12,6 +13,8 @@ import { credentialWorkspace } from "@/lib/credential-data";
 import {
   organizationTypes,
   credentialSelect,
+  credentialValidity,
+  correctionStatus,
   type Organization,
   type Credential,
 } from "@/lib/credentials";
@@ -51,31 +54,44 @@ export default async function Organizations({
     : { data: [], error: null };
   const organizations = (orgs ?? []) as unknown as Organization[];
   const orgIds = organizations.map((o) => o.id);
-  const [credentialResult, requestResult, auditResult] = await Promise.all([
-    orgIds.length
-      ? db
-          .from("credentials")
-          .select(view === "issued" ? credentialSelect : "id", {
-            count: "exact",
-            head: view !== "issued",
-          })
-          .in("organization_id", orgIds)
-          .order("created_at", { ascending: false })
-      : Promise.resolve({ data: [], error: null, count: 0 }),
-    orgIds.length
-      ? db
-          .from("qualification_requests")
-          .select("*", { count: "exact", head: view !== "requests" })
-          .in("organization_id", orgIds)
-          .order("created_at", { ascending: false })
-      : Promise.resolve({ data: [], error: null, count: 0 }),
-    view === "issued" && orgIds.length
-      ? db
-          .from("credential_issuance_audit")
-          .select("credential_id,representative_id,issued_at,authorization_id")
-          .in("organization_id", orgIds)
-      : Promise.resolve({ data: [], error: null }),
-  ]);
+  const [credentialResult, requestResult, auditResult, correctionAudit] =
+    await Promise.all([
+      orgIds.length
+        ? db
+            .from("credentials")
+            .select(view === "issued" ? credentialSelect : "id", {
+              count: "exact",
+              head: view !== "issued",
+            })
+            .in("organization_id", orgIds)
+            .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [], error: null, count: 0 }),
+      orgIds.length
+        ? db
+            .from("qualification_requests")
+            .select("*", { count: "exact", head: view !== "requests" })
+            .in("organization_id", orgIds)
+            .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [], error: null, count: 0 }),
+      view === "issued" && orgIds.length
+        ? db
+            .from("credential_issuance_audit")
+            .select(
+              "credential_id,representative_id,issued_at,authorization_id",
+            )
+            .in("organization_id", orgIds)
+        : Promise.resolve({ data: [], error: null }),
+      view === "issued" && orgIds.length
+        ? db
+            .from("credential_corrections")
+            .select(
+              "replacement_id,original_id,created_by,reason,state,created_at,responded_at",
+            )
+            .in("organization_id", orgIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+  if (correctionAudit.error)
+    throw new Error("Private correction history could not be loaded.");
   if (auditResult.error)
     throw new Error("Private issuance records could not be loaded.");
   const credentials = credentialResult.data;
@@ -545,28 +561,63 @@ export default async function Organizations({
                     </p>
                   )}
                 </details>
-                {c.credential_preferences.acceptance === "pending" && (
-                  <p className="notice">
-                    Waiting for the recipient to accept or decline. They choose
-                    whether to publish it. A blockchain record can be added
-                    after acceptance.
-                  </p>
-                )}
+                {correctionAudit.data
+                  ?.filter(
+                    (a) => a.original_id === c.id || a.replacement_id === c.id,
+                  )
+                  .map((a) => (
+                    <details className="section-spacer" key={a.replacement_id}>
+                      <summary>Private correction audit · {a.state}</summary>
+                      <p>{a.reason}</p>
+                      <p className="muted hash">
+                        Representative {a.created_by} · Recorded {a.created_at}
+                        {a.responded_at ? ` · Decision ${a.responded_at}` : ""}
+                      </p>
+                      <Link
+                        className="text-link"
+                        href={`/credentials/${a.original_id}`}
+                      >
+                        Earlier record ↗
+                      </Link>
+                      {" · "}
+                      <Link
+                        className="text-link"
+                        href={`/credentials/${a.replacement_id}`}
+                      >
+                        Replacement ↗
+                      </Link>
+                    </details>
+                  ))}
+                {c.credential_preferences.acceptance === "pending" &&
+                  !c.credential_events.length &&
+                  !correctionStatus(c)?.superseded && (
+                    <p className="notice">
+                      Waiting for the recipient to accept or decline. They
+                      choose whether to publish it. A blockchain record can be
+                      added after acceptance.
+                    </p>
+                  )}
                 {c.credential_preferences.acceptance === "accepted" &&
                   !c.credential_proofs?.length &&
-                  !c.credential_events.length &&
+                  credentialValidity(c) === "Current" &&
                   organizations.some(
                     (o) =>
                       o.id === c.organization_id &&
                       o.issuer_status === "authorized",
                   ) && <CredentialAnchor achievementId={c.id} />}
+                {organizations.some(
+                  (o) =>
+                    o.id === c.organization_id &&
+                    o.issuer_status === "authorized" &&
+                    o.allowed_credential_types?.includes(c.credential_type),
+                ) && <CredentialCorrectionForm credential={c} />}
                 {!c.credential_events.length && (
                   <details className="panel">
-                    <summary>Revoke or correct this credential</summary>
+                    <summary>Revoke this credential</summary>
                     <p className="muted">
-                      Issued facts cannot be edited. Revoke with a reason, then
-                      issue a replacement referencing this credential ID.
-                      Revocation does not erase the historical record.
+                      Revocation preserves the historical record. To correct
+                      facts, use the separate corrected replacement action. No
+                      consent is copied.
                     </p>
                     <ConfirmForm
                       action={revokeCredential}
