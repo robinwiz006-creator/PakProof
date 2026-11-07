@@ -98,6 +98,7 @@ test("demo passport never claims a company or blockchain achievement", async ({
   page,
 }) => {
   await page.goto("/talent/ayesha-khan");
+  await page.getByText("About this record", { exact: true }).click();
   await expect(
     page.getByText(/Projects and skills are added by the individual/),
   ).toBeVisible();

@@ -1,15 +1,22 @@
 "use client";
 import { useState } from "react";
 import type { Credential } from "@/lib/credentials";
+import { CredentialInboxItem } from "./credential-inbox-item";
 import { CredentialDetail } from "./credential-detail";
 import type { ProofState } from "@/lib/proof-status";
-export function CredentialDetailFixture() {
+export function CredentialDetailFixture({
+  inbox = false,
+}: {
+  inbox?: boolean;
+}) {
+  const [saved, setSaved] = useState("");
   const [acceptance, setAcceptance] = useState<
     "accepted" | "pending" | "declined"
   >("accepted");
   const [published, setPublished] = useState(true);
   const [recorded, setRecorded] = useState(false);
   const [profilePublic, setProfilePublic] = useState(true);
+  const [correction, setCorrection] = useState("none");
   const [validity, setValidity] = useState("current");
   const [state, setState] = useState<ProofState>("pending");
   const [issuer, setIssuer] = useState<"authorized" | "pending" | "suspended">(
@@ -48,6 +55,26 @@ export function CredentialDetailFixture() {
         website: "https://example.com",
       },
     },
+    credential_correction_status:
+      correction === "none"
+        ? undefined
+        : {
+            credential_id: "fixture",
+            is_replacement:
+              correction === "pending" || correction === "declined",
+            replaces_id:
+              correction === "pending" || correction === "declined"
+                ? "earlier-fixture"
+                : null,
+            superseded: correction.startsWith("superseded"),
+            pending_replacement_id: null,
+            replacement_id:
+              correction === "superseded-public" ? "replacement-fixture" : null,
+            incoming_state:
+              correction === "pending" || correction === "declined"
+                ? correction
+                : null,
+          },
     credential_events:
       validity === "revoked"
         ? [
@@ -76,6 +103,32 @@ export function CredentialDetailFixture() {
             },
           ],
   };
+  if (inbox)
+    return (
+      <div className="container page">
+        <h1>My Credentials</h1>
+        <p className="notice">
+          Offline credential inbox fixture. No credential is accepted or
+          published.
+        </p>
+        <CredentialInboxItem
+          credential={sample}
+          action={async (data) =>
+            setSaved(
+              `${data.get("acceptance")} · public: ${data.has("is_public")} · evidence: ${data.has("share_evidence")}`,
+            )
+          }
+        />
+        {saved && <p role="status">Offline decision captured: {saved}</p>}
+        <section className="qualification-section section-spacer">
+          <h2>Qualification verification</h2>
+          <p>
+            Private institution review requests remain separate from received
+            credentials.
+          </p>
+        </section>
+      </div>
+    );
   return (
     <section
       className="container page credential-page"
@@ -85,6 +138,24 @@ export function CredentialDetailFixture() {
         Offline credential presentation fixture. Status controls are for tests
         only. No real credential or finalized transaction is claimed.
       </p>
+      <label className="field">
+        Correction fixture
+        <select
+          aria-label="Correction fixture"
+          value={correction}
+          onChange={(e) => setCorrection(e.target.value)}
+        >
+          <option value="none">No correction</option>
+          <option value="pending">Replacement awaiting acceptance</option>
+          <option value="declined">Replacement declined</option>
+          <option value="superseded-private">
+            Superseded, replacement private
+          </option>
+          <option value="superseded-public">
+            Superseded, replacement public
+          </option>
+        </select>
+      </label>
       <div className="grid-2">
         <label className="field">
           Fixture recipient decision

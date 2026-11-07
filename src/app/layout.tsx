@@ -41,8 +41,8 @@ export default async function RootLayout({
               record.
             </p>
             <p className="footer-disclosure">
-              Hackathon MVP · Solana devnet proofs and test-token payments. No
-              guaranteed earnings.
+              Solana devnet proofs and test-token payments. Test tokens have no
+              monetary value; payment is not guaranteed.
             </p>
           </div>
           <div>
@@ -51,7 +51,7 @@ export default async function RootLayout({
             <Link href="/challenges">Skill Challenges</Link>
             <Link href="/paid-projects">Paid Projects</Link>
             <Link href="/#organizations">For Organizations</Link>
-            <span>Solana devnet · Hackathon MVP</span>
+            <span>Solana devnet</span>
           </div>
         </footer>
       </body>

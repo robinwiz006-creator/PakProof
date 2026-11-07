@@ -4,7 +4,11 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { supabase, isConfigured } from "./supabase/server";
-import { credentialInput, organizationTypes } from "./credentials";
+import {
+  credentialInput,
+  organizationTypes,
+  credentialTypes,
+} from "./credentials";
 function go(path: string, message: string): never {
   redirect(messageLink(path, message));
 }
@@ -67,6 +71,31 @@ export async function issueCredential(form: FormData) {
   const path = "/organizations?view=issue";
   const v = parse(credentialInput, form, path);
   const db = await context();
+  const source = String(form.get("submission_id") ?? "");
+  if (source) {
+    if (!z.uuid().safeParse(source).success)
+      go(path, "Choose valid approved work.");
+    const { error } = await db.rpc("issue_challenge_credential", {
+      p_submission: source,
+      p_organization: v.organization_id,
+      p_title: v.title,
+      p_type: v.credential_type,
+      p_description: v.description,
+      p_issue_date: v.issue_date,
+      p_expiry_date: v.expiry_date || null,
+      p_award: v.award,
+    });
+    if (error?.code === "23505")
+      go(
+        "/organizations?view=issued",
+        "This work already has a credential of that type. No duplicate was created.",
+      );
+    result(error, path);
+    go(
+      "/organizations?view=issued",
+      "Work credential issued privately. The recipient must accept and choose publication; challenge approval alone did not issue it.",
+    );
+  }
   const { data: recipient, error: lookupError } = await db
     .from("profiles")
     .select("id")
@@ -123,7 +152,12 @@ export async function respondCredential(form: FormData) {
     p_public: form.get("is_public") === "on",
     p_share_evidence: form.get("share_evidence") === "on",
   });
+  if (error?.code === "P0001") go(path, error.message);
   result(error, path);
+  revalidatePath("/my-credentials");
+  revalidatePath("/credentials", "layout");
+  revalidatePath("/talent", "layout");
+  revalidatePath("/organizations");
   go(path, "Your credential preferences were saved.");
 }
 export async function revokeCredential(form: FormData) {
@@ -144,7 +178,7 @@ export async function revokeCredential(form: FormData) {
   result(error, path);
   go(
     path,
-    "Credential revoked. Historical facts remain unchanged. To correct it, issue a replacement and include the old credential ID in the description.",
+    "Credential revoked. Historical facts remain unchanged. Use Create a corrected replacement for controlled corrections.",
   );
 }
 export async function authorizeIssuer(form: FormData) {
@@ -154,6 +188,7 @@ export async function authorizeIssuer(form: FormData) {
       organization_id: z.uuid(),
       note: z.string().trim().min(20).max(2000),
       decision: z.enum(["authorize", "suspend"]),
+      expected_authorization: z.union([z.literal(""), z.uuid()]),
       reviewed_name: z.string(),
       reviewed_description: z.string(),
       reviewed_website: z.string(),
@@ -162,7 +197,14 @@ export async function authorizeIssuer(form: FormData) {
     path,
   );
   const db = await context();
-  const { error } = await db.rpc("authorize_issuer", {
+  const types = z
+    .array(z.enum(credentialTypes))
+    .safeParse(form.getAll("credential_types"));
+  if (!types.success)
+    go(path, "Choose supported credential categories and try again.");
+  const { error } = await db.rpc("review_issuer_authorization", {
+    p_types: types.data,
+    p_expected_authorization: v.expected_authorization || null,
     p_organization: v.organization_id,
     p_note: v.note,
     p_authorize: v.decision === "authorize",
@@ -244,5 +286,57 @@ export async function disconnectWallet(form: FormData) {
   go(
     path,
     "Wallet link disconnected. Your email account, historical proofs, and transactions are unchanged. Any replacement requires a new ownership signature.",
+  );
+}
+
+export async function correctCredential(form: FormData) {
+  const path = "/organizations?view=issued";
+  const v = parse(
+    z.object({
+      original_id: z.uuid(),
+      reason: z.string().trim().min(10).max(2000),
+      title: z.string().trim().min(3).max(160),
+      description: z.string().trim().min(20).max(3850),
+      issue_date: z.iso.date(),
+      expiry_date: z.union([z.literal(""), z.iso.date()]),
+      program_name: z.string().max(200),
+      award: z.string().max(200),
+      evidence_url: z.union([
+        z.literal(""),
+        z
+          .url()
+          .refine((v) => /^https?:\/\//.test(v), "Use an HTTP or HTTPS URL."),
+      ]),
+    }),
+    form,
+    path,
+  );
+  if (v.expiry_date && v.expiry_date < v.issue_date)
+    go(path, "Expiry must be on or after the issue date.");
+  const db = await context();
+  const { error } = await db.rpc("correct_credential", {
+    p_original: v.original_id,
+    p_reason: v.reason,
+    p_title: v.title,
+    p_description: v.description,
+    p_issue_date: v.issue_date,
+    p_expiry_date: v.expiry_date || null,
+    p_program: v.program_name,
+    p_award: v.award,
+    p_evidence: v.evidence_url,
+  });
+  if (error)
+    go(
+      path,
+      error.code === "P0001"
+        ? error.message
+        : "Could not create a correction. Check permissions and open proposals. No partial correction was saved.",
+    );
+  revalidatePath("/organizations");
+  revalidatePath("/my-credentials");
+  revalidatePath("/credentials", "layout");
+  go(
+    path,
+    "Correction issued privately for recipient review. The original has not been superseded yet.",
   );
 }

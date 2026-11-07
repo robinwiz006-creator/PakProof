@@ -1,4 +1,6 @@
 export type Profile = {
+  is_discoverable?: boolean;
+  allow_contact_requests?: boolean;
   passport_previewed_at?: string | null;
   id: string;
   slug: string;
@@ -49,7 +51,13 @@ export type Submission = {
   status: string;
   challenges?: Challenge | null;
   profiles?: Profile | null;
+  challenge_assessments?: {
+    review_id: string;
+    criteria: { title: string; description: string }[];
+    outcomes: string[];
+  }[];
   submission_reviews?: {
+    id?: string;
     feedback: string;
     decision: string;
     created_at: string;
@@ -71,6 +79,7 @@ export type Achievement = {
     digest_salt: string;
   } | null;
   achievement_sharing?: {
+    share_assessment?: boolean;
     share_evidence: boolean;
     project_id: string | null;
   } | null;

@@ -83,7 +83,7 @@ export function OpportunityUXFixture() {
           )}
         </select>
       </label>
-      <section aria-label="Project brief fixture">
+      <section className="paid-detail" aria-label="Project brief fixture">
         <PaidProjectBrief
           project={project}
           action={

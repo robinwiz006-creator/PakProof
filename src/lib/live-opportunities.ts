@@ -50,7 +50,7 @@ export async function loadLiveOpportunities(
         : "id,title,skills,deadline,companies(name)",
     ),
     read<LivePaidProject>(
-      "paid_projects",
+      "public_paid_projects",
       discovery
         ? "id,title,description,skills,deadline,budget_units,companies(name)"
         : "id,title,skills,deadline,budget_units,companies(name)",

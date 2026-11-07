@@ -23,7 +23,7 @@ set local request.jwt.claim.sub='70000000-0000-4000-8000-000000000001';
 do $$begin
  begin perform public.authorize_issuer(current_setting('test.organization_id')::uuid,'Fixture stale identity review must be rejected.',true,'Different University','An isolated test university, not a real authorized institution.','https://example.com');raise exception 'Stale identity authorization allowed';exception when raise_exception then if sqlerrm='Stale identity authorization allowed' then raise;end if;end;
 end$$;
-select public.authorize_issuer(:'organization_id','Fixture: official identity and representative authority checked in isolated tests only.',true,'Fixture University','An isolated test university, not a real authorized institution.','https://example.com');
+select public.review_issuer_authorization(:'organization_id','Fixture: official identity and representative authority checked in isolated tests only.',true,'Fixture University','An isolated test university, not a real authorized institution.','https://example.com',array['degree','hackathon_achievement','company_achievement'],null);
 set local request.jwt.claim.sub='50000000-0000-4000-8000-000000000001';
 update public.profiles set is_public=true where id=auth.uid();
 set local request.jwt.claim.sub='40000000-0000-4000-8000-000000000001';

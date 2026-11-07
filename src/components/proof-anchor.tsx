@@ -1,4 +1,12 @@
 "use client";
+import {
+  captureProof,
+  broadcastSavedProof,
+  clearSavedProof,
+  recoverySnapshot,
+  walletRejected,
+  type SavedProof,
+} from "@/lib/transaction-recovery";
 import { Buffer } from "buffer";
 import { useSyncExternalStore, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -36,26 +44,36 @@ export function ProofAnchor({ achievementId }: { achievementId: string }) {
   const savedPending = useSyncExternalStore(
     (notify) => {
       window.addEventListener("proofpak-pending", notify);
-      return () => window.removeEventListener("proofpak-pending", notify);
+      window.addEventListener("storage", notify);
+      return () => {
+        window.removeEventListener("proofpak-pending", notify);
+        window.removeEventListener("storage", notify);
+      };
     },
-    () => localStorage.getItem(`proofpak:pending:${achievementId}`),
+    () => recoverySnapshot(`proofpak:pending:${achievementId}`),
     () => null,
   );
   let stored: {
     signature: string;
     wallet: string;
     claimVersion?: 1 | 2;
+    signedBase64?: string;
   } | null = null;
   try {
     stored = savedPending ? JSON.parse(savedPending) : null;
   } catch {
     stored = null;
   }
-  const [failed, setFailed] = useState(false);
+  const [failedSignature, setFailedSignature] = useState("");
+  const failed = Boolean(
+    failedSignature && failedSignature === (stored?.signature || signature),
+  );
+  const setFailed = (value: boolean) =>
+    setFailedSignature(value ? stored?.signature || signature : "");
   async function inspectStatus() {
     setBusy(true);
     try {
-      const sig = signature || stored?.signature;
+      const sig = stored?.signature || signature;
       if (!sig) throw new Error("No transaction to check.");
       const r = await fetch(
         `/api/proofs?achievement=${achievementId}&signature=${encodeURIComponent(sig)}`,
@@ -97,13 +115,17 @@ export function ProofAnchor({ achievementId }: { achievementId: string }) {
     });
     const body = await result.json();
     if (!result.ok) throw new Error(body.error);
-    setMessage("Finalized Solana proof saved.");
+    setMessage("Finalized in ProofPak. Server-verified proof saved.");
     router.refresh();
   }
   async function anchor() {
     setBusy(true);
     setMessage("");
     try {
+      if (signature || recoverySnapshot(`proofpak:pending:${achievementId}`))
+        throw new Error(
+          "Recovery required. An existing signing attempt must be resolved first.",
+        );
       const response = await fetch(`/api/proofs?achievement=${achievementId}`);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
@@ -150,30 +172,50 @@ export function ProofAnchor({ achievementId }: { achievementId: string }) {
         }),
       );
       setMessage("Review the devnet memo transaction in your wallet.");
-      const [signed] = await signing.signTransaction({
-        account,
-        chain: "solana:devnet",
-        transaction: await tx.serialize({
+      setMessage(
+        "Awaiting signature. Rejecting the wallet request sends no transaction.",
+      );
+      const saved = await captureProof(
+        localStorage,
+        `proofpak:pending:${achievementId}`,
+        {
+          wallet: account.address,
+          claimVersion: record.version,
+          hash,
+          blockhash: latest.blockhash,
+          lastValidBlockHeight: String(latest.lastValidBlockHeight),
+        },
+        await tx.serialize({
           requireAllSignatures: false,
           verifySignatures: false,
         }),
-      });
-      if (!signed) throw new Error("Wallet returned no signed transaction.");
-      const sig = await rpc.sendRawTransaction(signed.signedTransaction, {
-        skipPreflight: false,
-        maxRetries: BigInt(3),
-      });
-      setSignature(sig);
-      localStorage.setItem(
-        `proofpak:pending:${achievementId}`,
-        JSON.stringify({
-          signature: sig,
-          wallet: publicKey.toBase58(),
-          claimVersion: record.version,
-        }),
+        async () => {
+          const [signed] = await signing.signTransaction({
+            account,
+            chain: "solana:devnet",
+            transaction: await tx.serialize({
+              requireAllSignatures: false,
+              verifySignatures: false,
+            }),
+          });
+          if (!signed)
+            throw new Error(
+              "Wallet returned no signed transaction. Recovery required.",
+            );
+          return signed.signedTransaction;
+        },
       );
-      window.dispatchEvent(new Event("proofpak-pending"));
-      setMessage("Transaction sent. Waiting for devnet finalization…");
+      const sig = saved.signature;
+      setSignature(sig);
+      setMessage("Signed transaction saved. Submitting the original bytes…");
+      await broadcastSavedProof(
+        localStorage,
+        `proofpak:pending:${achievementId}`,
+        rpc,
+      );
+      setMessage(
+        "Broadcast submitted. Confirmation pending; not yet finalized in ProofPak.",
+      );
       const confirmation = await rpc.confirmTransaction(
         { ...latest, signature: sig },
         "finalized",
@@ -182,12 +224,18 @@ export function ProofAnchor({ achievementId }: { achievementId: string }) {
         throw new Error(
           "The devnet transaction failed. Inspect its Explorer details.",
         );
+      setMessage(
+        "Transaction finalized on Solana. Matching-claim verification and ProofPak saving are pending…",
+      );
       await saveProof(sig, publicKey.toBase58(), record.version);
-      localStorage.removeItem(`proofpak:pending:${achievementId}`);
+      clearSavedProof(localStorage, `proofpak:pending:${achievementId}`, sig);
       window.dispatchEvent(new Event("proofpak-pending"));
     } catch (e) {
       setMessage(
-        e instanceof Error ? e.message : "Could not create the proof.",
+        walletRejected(e) &&
+          !recoverySnapshot(`proofpak:pending:${achievementId}`)
+          ? "Signature rejected. Nothing broadcast by ProofPak. You may try again."
+          : `${e instanceof Error ? e.message : "Proof interrupted."} ${recoverySnapshot(`proofpak:pending:${achievementId}`) ? "Outcome unknown or recovery required. Keep the original attempt; do not sign another transaction." : "Nothing was broadcast by ProofPak."}`,
       );
     } finally {
       setBusy(false);
@@ -196,10 +244,21 @@ export function ProofAnchor({ achievementId }: { achievementId: string }) {
   async function retry() {
     setBusy(true);
     try {
-      const pending = localStorage.getItem(`proofpak:pending:${achievementId}`);
-      const parsed = pending ? JSON.parse(pending) : null;
-      const sig = signature || parsed?.signature;
-      const address = walletAddress || parsed?.wallet;
+      let parsed: {
+        signature?: string;
+        wallet?: string;
+        claimVersion?: 1 | 2;
+      } | null = null;
+      try {
+        const pending = localStorage.getItem(
+          `proofpak:pending:${achievementId}`,
+        );
+        parsed = pending ? JSON.parse(pending) : null;
+      } catch {
+        /* Known manual signatures can still be verified by the server. */
+      }
+      const sig = parsed?.signature || signature;
+      const address = parsed?.wallet || walletAddress;
       if (!sig || !address)
         throw new Error(
           "No saved transaction found in this browser. Use the recovery fields below.",
@@ -207,10 +266,70 @@ export function ProofAnchor({ achievementId }: { achievementId: string }) {
       setSignature(sig);
       setWalletAddress(address);
       await saveProof(sig, address, parsed?.claimVersion ?? claimVersion);
-      localStorage.removeItem(`proofpak:pending:${achievementId}`);
+      clearSavedProof(localStorage, `proofpak:pending:${achievementId}`, sig);
       window.dispatchEvent(new Event("proofpak-pending"));
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Retry failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function resumeOriginal() {
+    setBusy(true);
+    try {
+      const saved = JSON.parse(
+        localStorage.getItem(`proofpak:pending:${achievementId}`) ?? "null",
+      ) as SavedProof | null;
+      if (!saved?.signedBase64 || !saved.signature)
+        throw new Error(
+          "Original signed bytes unavailable. Check or save the original signature.",
+        );
+      const response = await fetch(`/api/proofs?achievement=${achievementId}`);
+      const current = await response.json();
+      if (
+        !response.ok ||
+        current.hash !== saved.hash ||
+        current.record.version !== saved.claimVersion ||
+        (current.allowedWallets &&
+          !current.allowedWallets.includes(saved.wallet))
+      )
+        throw new Error(
+          "Current claim or signing permission changed. Do not broadcast; recover by checking the original signature.",
+        );
+      const rpc = new Connection(
+        process.env.NEXT_PUBLIC_SOLANA_RPC_URL ??
+          "https://api.devnet.solana.com",
+        "finalized",
+      );
+      if ((await rpc.getGenesisHash()) !== DEVNET_GENESIS)
+        throw new Error("RPC is not devnet. Nothing sent.");
+      const { value } = await rpc.getSignatureStatuses([saved.signature], {
+        searchTransactionHistory: true,
+      });
+      if (
+        value[0] ||
+        (await rpc.getBlockHeight("finalized")) >
+          BigInt(saved.lastValidBlockHeight)
+      )
+        throw new Error(
+          "Transaction seen or blockhash expired. Check and save this signature; no replacement will be signed.",
+        );
+      await broadcastSavedProof(
+        localStorage,
+        `proofpak:pending:${achievementId}`,
+        rpc,
+      );
+      setSignature(saved.signature);
+      setWalletAddress(saved.wallet);
+      setMessage(
+        "Original signed transaction submitted. Check and save after finalization. No new transaction was signed.",
+      );
+    } catch (e) {
+      setMessage(
+        e instanceof Error
+          ? e.message
+          : "Outcome unknown. Preserve the original attempt.",
+      );
     } finally {
       setBusy(false);
     }
@@ -237,7 +356,7 @@ export function ProofAnchor({ achievementId }: { achievementId: string }) {
       <div className="button-row section-spacer">
         <button
           className="button"
-          disabled={busy || Boolean(signature || stored?.signature)}
+          disabled={busy || Boolean(signature || savedPending)}
           onClick={anchor}
         >
           {busy ? "Working…" : "Connect wallet & anchor"}
@@ -246,10 +365,26 @@ export function ProofAnchor({ achievementId }: { achievementId: string }) {
           Retry saving existing transaction
         </button>
       </div>
+      {stored?.signedBase64 && (
+        <button
+          className="button secondary section-spacer"
+          disabled={busy}
+          onClick={resumeOriginal}
+        >
+          Resume sending original signed transaction
+        </button>
+      )}
+      {savedPending && !stored?.signature && (
+        <p className="notice">
+          Recovery required: a signing request was interrupted or browser
+          storage is unavailable. Check the wallet and recover its original
+          signature below; do not sign a replacement.
+        </p>
+      )}
       {stored?.signature && !message && (
         <p className="notice">
-          A previously sent transaction needs attention. Retry saving it; do not
-          send again.
+          A saved signed transaction needs attention. Check or save it; do not
+          sign another transaction.
         </p>
       )}
       {(signature || stored?.signature) && (
@@ -266,15 +401,43 @@ export function ProofAnchor({ achievementId }: { achievementId: string }) {
         <button
           type="button"
           className="button secondary"
-          onClick={() => {
-            localStorage.removeItem(`proofpak:pending:${achievementId}`);
-            window.dispatchEvent(new Event("proofpak-pending"));
-            setSignature("");
-            setWalletAddress("");
-            setFailed(false);
-            setMessage(
-              "Failed attempt discarded. You can start a new transaction.",
-            );
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              const sig = stored?.signature || signature;
+              const r = await fetch(
+                `/api/proofs?achievement=${achievementId}&signature=${encodeURIComponent(sig)}`,
+              );
+              const data = await r.json();
+              if (!r.ok || data.status !== "failed")
+                throw new Error(
+                  "Failure is not finalized. Keep the original signature; do not sign again.",
+                );
+              clearSavedProof(
+                localStorage,
+                `proofpak:pending:${achievementId}`,
+                sig,
+              );
+              if (recoverySnapshot(`proofpak:pending:${achievementId}`))
+                throw new Error(
+                  "A different or unreadable saved attempt remains protected. No replacement is available.",
+                );
+              setSignature("");
+              setWalletAddress("");
+              setFailed(false);
+              setMessage(
+                "Finalized failed attempt cleared. No successful proof was discarded.",
+              );
+            } catch (e) {
+              setMessage(
+                e instanceof Error
+                  ? e.message
+                  : "Outcome unknown. Keep the attempt.",
+              );
+            } finally {
+              setBusy(false);
+            }
           }}
         >
           Discard failed attempt
@@ -285,10 +448,10 @@ export function ProofAnchor({ achievementId }: { achievementId: string }) {
           {message}
         </p>
       )}
-      {signature && (
+      {(stored?.signature || signature) && (
         <a
           className="text-link"
-          href={explorerLink(signature)}
+          href={explorerLink(stored?.signature || signature)}
           target="_blank"
           rel="noopener noreferrer"
         >

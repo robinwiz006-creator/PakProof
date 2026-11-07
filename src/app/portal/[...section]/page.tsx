@@ -1,7 +1,16 @@
+import { EmployerDirectory } from "@/components/employer-directory";
+import { DiscoverySettings } from "@/components/discovery-settings";
+import { saveDiscoveryPreferences } from "@/lib/employer-actions";
 import { portalDataNeeds } from "@/lib/portal-data-needs";
 import { ProfileSetupForm } from "@/components/profile-setup-form";
 import { setupSteps, setupStep } from "@/lib/profile-setup";
 import Link from "next/link";
+import {
+  RubricEditor,
+  AssessmentFields,
+} from "@/components/challenge-assessment";
+import type { Criterion } from "@/lib/challenge-assessment";
+import { saveChallengeRubric } from "@/lib/actions";
 
 import { ProjectEditor } from "@/components/project-editor";
 import { RemoveProject, SharePassport } from "@/components/passport-actions";
@@ -61,12 +70,23 @@ export default async function Portal({
   searchParams,
 }: {
   params: Promise<{ section: string[] }>;
-  searchParams: Promise<{ message?: string; step?: string; company?: string }>;
+  searchParams: Promise<{
+    message?: string;
+    step?: string;
+    company?: string;
+    q?: string;
+    skill?: string;
+    page?: string;
+    credentials?: string;
+    assessed?: string;
+    saved?: string;
+  }>;
 }) {
   const { section: parts } = await params;
   const role = parts[0];
   const section = parts[1] ?? "";
   if (parts.length > 2 || !titles[`${role}:${section}`]) notFound();
+  const directoryParams = await searchParams;
   const {
     message,
     step: requestedStep,
@@ -82,7 +102,6 @@ export default async function Portal({
     ownChallenges: Challenge[] = [],
     submissions: Submission[] = [],
     achievements: Achievement[] = [],
-    directory: Profile[] = [demoProfile],
     membershipIds: string[] = [],
     canManageCompany = false;
   if (live) {
@@ -122,7 +141,7 @@ export default async function Portal({
             .select(
               section === ""
                 ? "id,talent_id,status"
-                : "*,challenges(*,companies(name)),submission_reviews(*)",
+                : "*,challenges(*,companies(name)),submission_reviews(*),challenge_assessments(review_id,criteria,outcomes)",
             )
             .eq("talent_id", user.id)
             .order("created_at", { ascending: false })
@@ -171,7 +190,7 @@ export default async function Portal({
               .select(
                 section === ""
                   ? "id,talent_id,status,challenges!inner(company_id)"
-                  : "*,challenges!inner(*),profiles(*),submission_reviews(*)",
+                  : "*,challenges!inner(*),profiles(*),submission_reviews(*),challenge_assessments(review_id,criteria,outcomes)",
               )
               .in("challenges.company_id", membershipIds)
               .order("created_at", { ascending: false })
@@ -192,16 +211,32 @@ export default async function Portal({
       submissions = (su.data ?? []) as Submission[];
       achievements = ah.data ?? [];
     }
-    if (section === "directory") {
-      const { data: d, error } = await db
-        .from("profiles")
-        .select("*")
-        .eq("is_public", true)
-        .order("created_at", { ascending: false })
-        .limit(100);
-      if (error) throw new Error("Talent directory could not be loaded.");
-      directory = d ?? [];
-    }
+  }
+  let rubrics: {
+    id: string;
+    challenge_id: string;
+    version: number;
+    criteria: Criterion[];
+  }[] = [];
+  if (
+    live &&
+    role === "company" &&
+    ["reviews", "challenges"].includes(section)
+  ) {
+    const db = await supabase();
+    const relevantChallenges = [
+      ...new Set([
+        ...ownChallenges.map((c) => c.id),
+        ...submissions.map((s) => s.challenge_id),
+      ]),
+    ];
+    const { data, error } = await db
+      .from("challenge_public_rubrics")
+      .select("id,challenge_id,version,criteria")
+      .in("challenge_id", relevantChallenges)
+      .order("version", { ascending: false });
+    if (error) throw new Error("Assessment criteria could not be loaded.");
+    rubrics = data ?? [];
   }
   const canWrite = live;
   const approved = submissions.filter((s) => s.status === "approved");
@@ -211,9 +246,11 @@ export default async function Portal({
         eyebrow={role === "company" ? "ORGANIZATION DASHBOARD" : "MY DASHBOARD"}
         title={titles[`${role}:${section}`]}
         description={
-          role === "company"
-            ? "Manage your organization, create opportunities and recognize people’s work."
-            : `Welcome${live ? `, ${profile.full_name.split(" ")[0]}` : " to the demo"}. Your Skill Passport brings your work and credentials together. Start with your profile.`
+          role === "talent" && (section === "passport" || section === "preview")
+            ? "Your professional profile and the records you choose to share."
+            : role === "company"
+              ? "Manage your organization, create opportunities and recognize people’s work."
+              : `Welcome${live ? `, ${profile.full_name.split(" ")[0]}` : " to the demo"}. Your Skill Passport brings your work and credentials together. Start with your profile.`
         }
         action={
           live ? (
@@ -597,6 +634,17 @@ export default async function Portal({
                   <div className="notice section-spacer" key={i}>
                     <strong>{r.decision.replaceAll("_", " ")}</strong>
                     <p>{r.feedback}</p>
+                    {s.challenge_assessments
+                      ?.filter((a) => a.review_id === r.id)
+                      .map((a) => (
+                        <ul key={a.review_id}>
+                          {a.criteria.map((c, n) => (
+                            <li key={n}>
+                              {c.title}: {a.outcomes[n]?.replaceAll("_", " ")}
+                            </li>
+                          ))}
+                        </ul>
+                      ))}
                   </div>
                 ))}
               {s.status === "approved" && (
@@ -647,7 +695,9 @@ export default async function Portal({
                     ? "Manage visibility"
                     : "Publish Skill Passport"}
                 </ButtonLink>
-                <Link href="/portal/talent/projects">Manage projects</Link>
+                <ButtonLink secondary href="/portal/talent/projects">
+                  Manage projects
+                </ButtonLink>
                 {profile.is_public && <SharePassport slug={profile.slug} />}
               </div>
             </div>
@@ -686,6 +736,24 @@ export default async function Portal({
                     public passport
                   </label>
                   <label className="field">
+                    <span>
+                      <input
+                        type="checkbox"
+                        name="share_assessment"
+                        defaultChecked={
+                          a.achievement_sharing?.share_assessment ?? false
+                        }
+                      />{" "}
+                      Allow this achievement’s assessed-work summary in employer
+                      discovery
+                    </span>
+                    <span className="muted">
+                      Only applies to structured approved reviews, with your
+                      directory opt-in. Does not publish reviewer notes or
+                      private evidence.
+                    </span>
+                  </label>
+                  <label className="field">
                     Related portfolio project (optional)
                     <select
                       name="project_id"
@@ -716,6 +784,14 @@ export default async function Portal({
             </Empty>
           )}
         </>
+      )}
+      {live && role === "talent" && section === "settings" && (
+        <DiscoverySettings
+          isPublic={profile.is_public}
+          discoverable={profile.is_discoverable}
+          contact={profile.allow_contact_requests}
+          action={saveDiscoveryPreferences}
+        />
       )}
       {role === "talent" && section === "settings" && (
         <section className="panel">
@@ -797,6 +873,7 @@ export default async function Portal({
                   required
                   minLength={20}
                 />
+                <RubricEditor />
                 <p className="muted">
                   Use a fair, time-bounded brief. Don’t request private
                   information or unpaid production work.
@@ -828,6 +905,21 @@ export default async function Portal({
                   View brief ↗
                 </Link>
               </div>
+              {live && (
+                <details className="section-spacer">
+                  <summary>Assessment criteria</summary>
+                  <form action={saveChallengeRubric}>
+                    <input type="hidden" name="challenge_id" value={c.id} />
+                    <RubricEditor
+                      initial={
+                        rubrics.find((r) => r.challenge_id === c.id)
+                          ?.criteria ?? []
+                      }
+                    />
+                    <SubmitButton>Save new assessment version</SubmitButton>
+                  </form>
+                </details>
+              )}
               {live && c.status === "published" && (
                 <form className="section-spacer" action={closeChallenge}>
                   <input type="hidden" name="challenge_id" value={c.id} />
@@ -906,9 +998,39 @@ export default async function Portal({
                   </Link>
                 )}
               </div>
+              {!!s.challenge_assessments?.length && (
+                <details className="section-spacer">
+                  <summary>Assessment history</summary>
+                  {s.challenge_assessments.map((a) => (
+                    <div key={a.review_id}>
+                      <p className="muted">Review reference {a.review_id}</p>
+                      {a.criteria.length ? (
+                        <ul>
+                          {a.criteria.map((c, i) => (
+                            <li key={i}>
+                              {c.title}: {a.outcomes[i]?.replaceAll("_", " ")}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p>Reviewed without structured criteria.</p>
+                      )}
+                    </div>
+                  ))}
+                </details>
+              )}
               {s.status === "pending" && (
                 <form className="form section-spacer" action={reviewSubmission}>
                   <input type="hidden" name="submission_id" value={s.id} />
+                  <AssessmentFields
+                    criteria={
+                      rubrics.find((r) => r.challenge_id === s.challenge_id)
+                        ?.criteria ?? []
+                    }
+                    rubricId={
+                      rubrics.find((r) => r.challenge_id === s.challenge_id)?.id
+                    }
+                  />
                   <Field
                     label="Feedback for the candidate"
                     name="feedback"
@@ -937,6 +1059,17 @@ export default async function Portal({
                   .map((a) => (
                     <div className="section-spacer" key={a.id}>
                       <AchievementCard achievement={a} />
+                      <p className="muted">
+                        An approved challenge creates this achievement. A
+                        credential is a separate decision by an organization
+                        with category permission.
+                      </p>
+                      <Link
+                        className="button secondary"
+                        href={`/organizations?view=issue&submission=${s.id}`}
+                      >
+                        Issue credential for this work
+                      </Link>
                       {!a.blockchain_proofs?.length && (
                         <ProofAnchor achievementId={a.id} />
                       )}
@@ -953,43 +1086,19 @@ export default async function Portal({
           )}
         </>
       )}
-      {role === "company" && section === "directory" && (
-        <>
-          {directory.map((p) => (
-            <Link
-              className="panel list-row"
-              href={`/talent/${p.slug}`}
-              key={p.id}
-            >
-              <div className="profile-header" style={{ margin: 0 }}>
-                <div className="avatar">
-                  {p.full_name
-                    .split(" ")
-                    .slice(0, 2)
-                    .map((s) => s[0])
-                    .join("")}
-                </div>
-                <div>
-                  <h3>{p.full_name}</h3>
-                  <p className="muted">{p.headline}</p>
-                  <p className="muted">{p.location}</p>
-                  <Tags values={p.skills} />
-                </div>
-              </div>
-              <span className="text-link">View evidence ↗</span>
-            </Link>
-          ))}
-          {!directory.length && (
-            <Empty title="Talent is on its way">
-              Only people who publish their profile are listed here.
-            </Empty>
-          )}
-          <p className="muted section-spacer">
-            Showing up to 100 public profiles. Skills are self-reported; open
-            each passport to inspect project evidence and company achievements.
-          </p>
-        </>
-      )}
+      {role === "company" &&
+        section === "directory" &&
+        (live ? (
+          <EmployerDirectory
+            companyId={company?.id ?? null}
+            params={directoryParams}
+          />
+        ) : (
+          <Empty title="Employer directory needs a real account">
+            Connect Supabase and sign in as a company member to search opted-in
+            Passports.
+          </Empty>
+        ))}
     </div>
   );
 }

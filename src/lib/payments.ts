@@ -110,15 +110,43 @@ export function paymentStatusLabel(status: string) {
   return (
     (
       {
-        prepared: "Not sent",
-        signed: "Pending / outcome unknown",
-        registered: "Pending / outcome unknown",
-        pending: "Pending",
-        paid: "Paid",
-        failed: "Failed",
-        needs_review: "Needs review",
-        cancelled: "Cancelled",
+        prepared: "Awaiting wallet signature",
+        signed: "Signed · confirmation unknown",
+        registered: "Signed · not yet verified",
+        pending: "Confirmation pending",
+        paid: "Payment verified",
+        failed: "Transaction failed",
+        needs_review: "Outcome unknown · review required",
+        cancelled: "Unsigned preparation cancelled",
       } as Record<string, string>
     )[status] ?? "Payment due"
+  );
+}
+
+export function paymentRecoveryGuidance(
+  status: string,
+  signature: string | null,
+) {
+  if (status === "paid")
+    return "The server verified a finalized transfer. No further payment is needed.";
+  if (signature && !["failed", "cancelled"].includes(status))
+    return "Keep this transaction signature. Check the original transfer; do not prepare or send a replacement while its outcome is unknown.";
+  if (status === "failed")
+    return "The recorded transaction failed. Review its receipt and resolve the cause before explicitly preparing another payment.";
+  if (status === "cancelled")
+    return "Only the unsigned preparation was cancelled. No blockchain transfer was reversed.";
+  return "No registered signature yet. If signing was rejected, retry this preparation or cancel it. If your wallet shows a transfer, stop and contact support with the payment ID before retrying.";
+}
+
+export function milestoneWorkLabel(status: string) {
+  return (
+    (
+      {
+        not_submitted: "Awaiting work",
+        submitted: "Work submitted",
+        revisions: "Revision requested",
+        approved: "Work approved",
+      } as Record<string, string>
+    )[status] ?? "Work status unavailable"
   );
 }

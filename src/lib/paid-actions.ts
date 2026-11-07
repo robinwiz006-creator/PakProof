@@ -28,7 +28,9 @@ async function mutate(
       path,
       error.code === "23505"
         ? "This application or decision already exists."
-        : "Could not save. Check your permissions and the current project status, then try again.",
+        : name === "change_paid_lifecycle" && error.code === "P0001"
+          ? error.message
+          : "Could not save. Check your permissions and the current project status, then try again.",
     );
   revalidatePath("/paid-projects", "layout");
   revalidatePath("/talent", "layout");
@@ -36,7 +38,12 @@ async function mutate(
   go(path, message);
 }
 export async function createPaidProject(form: FormData) {
-  const path = "/paid-projects/new";
+  const editing = z.uuid().safeParse(form.get("project_id"));
+  if (form.has("project_id") && !editing.success)
+    go("/paid-projects", "Invalid project. Reload the draft before saving.");
+  const path = editing.success
+    ? `/paid-projects/${editing.data}`
+    : "/paid-projects/new";
   const v = parse(
     z.object({
       company_id: z.uuid(),
@@ -86,25 +93,46 @@ export async function createPaidProject(form: FormData) {
     go(path, e instanceof Error ? e.message : "Check milestone details.");
   }
   const { db } = await credentialWorkspace();
-  const { data, error } = await db.rpc("create_paid_project", {
-    p_company: v.company_id,
-    p_title: v.title,
-    p_description: v.description,
-    p_requirements: v.requirements,
-    p_skills: v.skills
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean),
-    p_deadline: v.deadline,
-    p_budget: budget,
-    p_milestones: milestones,
-  });
+  let expected: unknown;
+  if (editing.success) {
+    try {
+      expected = JSON.parse(String(form.get("expected")));
+    } catch {
+      go(path, "Reload the draft before editing.");
+    }
+  }
+  const { data, error } = await db.rpc(
+    editing.success ? "edit_paid_project" : "create_paid_project",
+    {
+      ...(editing.success
+        ? { p_project: editing.data, p_expected: expected }
+        : { p_company: v.company_id }),
+      p_title: v.title,
+      p_description: v.description,
+      p_requirements: v.requirements,
+      p_skills: v.skills
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+      p_deadline: v.deadline,
+      p_budget: budget,
+      p_milestones: milestones,
+    },
+  );
   if (error)
     go(
       path,
-      "Could not create the draft. Check your company membership, amounts, deadlines and migration setup.",
+      editing.success
+        ? "Could not save. Reload the draft and check dates, amounts and your membership. Published terms cannot be edited."
+        : "Could not create the draft. Check your company membership, amounts, deadlines and migration setup.",
     );
-  redirect(`/paid-projects/${data}`);
+  revalidatePath("/paid-projects", "layout");
+  go(
+    `/paid-projects/${editing.success ? editing.data : data}`,
+    editing.success
+      ? "Draft updated. Review before publishing."
+      : "Draft created. Review before publishing.",
+  );
 }
 export async function publishPaidProject(form: FormData) {
   const v = parse(z.object({ project_id: z.uuid() }), form, "/paid-projects");
@@ -248,5 +276,30 @@ export async function consentPaidWork(form: FormData) {
     { p_project: v.project_id, p_consent: form.get("consent") === "on" },
     `/paid-projects/${v.project_id}`,
     "Company disclosure consent saved. This does not issue a skill credential.",
+  );
+}
+
+export async function changePaidLifecycle(form: FormData) {
+  const v = parse(
+    z.object({
+      project_id: z.uuid(),
+      action: z.enum([
+        "withdraw",
+        "cancel",
+        "request",
+        "accept",
+        "decline",
+        "retract",
+      ]),
+      reason: z.string().trim().min(10).max(2000),
+    }),
+    form,
+    "/paid-projects",
+  );
+  await mutate(
+    "change_paid_lifecycle",
+    { p_project: v.project_id, p_action: v.action, p_reason: v.reason },
+    `/paid-projects/${v.project_id}`,
+    "Project decision saved. Existing terms and transaction records are preserved.",
   );
 }

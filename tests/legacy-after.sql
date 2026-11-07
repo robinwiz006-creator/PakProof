@@ -1,6 +1,6 @@
 do $$ declare r record; data jsonb; additions text[]; begin
  for r in select * from public.test_preservation_baseline loop
- additions=case r.name when 'profiles' then array['passport_previewed_at'] when 'projects' then array['skills'] when 'blockchain_proofs' then array['claim_version'] else array[]::text[] end;
+ additions=case r.name when 'profiles' then array['passport_previewed_at','is_discoverable','allow_contact_requests'] when 'projects' then array['skills'] when 'blockchain_proofs' then array['claim_version'] else array[]::text[] end;
  execute format('select coalesce(jsonb_agg(to_jsonb(t)-%L::text[] order by (to_jsonb(t)-%L::text[])::text),''[]''::jsonb) from public.%I t',additions,additions,r.name) into data;
  if data<>(select jsonb_agg(value-additions order by (value-additions)::text) from jsonb_array_elements(r.data)) then raise exception 'Existing data changed in %',r.name;end if;
  end loop;

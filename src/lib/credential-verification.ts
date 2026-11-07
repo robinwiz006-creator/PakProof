@@ -1,3 +1,4 @@
+import { workContext, assessmentContextMatches } from "./challenge-assessment";
 import type { Credential } from "./credentials";
 import {
   credentialClaim,
@@ -25,9 +26,13 @@ export async function credentialIntegrity(
   try {
     hash = await credentialHash(credentialClaim(c));
     evidenceMatches =
-      !c.credential_evidence ||
-      (await credentialEvidenceDigest(c.credential_evidence)) ===
-        c.evidence_digest;
+      (!c.credential_evidence ||
+        (await credentialEvidenceDigest(c.credential_evidence)) ===
+          c.evidence_digest) &&
+      (await assessmentContextMatches(
+        c.program_name,
+        workContext(c.credential_challenge_context),
+      ));
   } catch {
     return { state: "unavailable", hash: null, evidenceMatches: false };
   }

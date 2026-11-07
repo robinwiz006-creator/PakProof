@@ -6,8 +6,45 @@ import { WalletLinks } from "./wallet-links";
 import { WalletManager } from "./wallet-manager";
 import { ConfirmForm } from "./confirm-form";
 import { PaidProjectBrowser } from "./paid-project-browser";
-export function WorkspaceFixture() {
+export function WorkspaceFixture({
+  walletOnly = false,
+}: {
+  walletOnly?: boolean;
+}) {
   const [decisions, setDecisions] = useState(0);
+  if (walletOnly)
+    return (
+      <div className="container page narrow wallet-page">
+        <h1>My Wallet</h1>
+        <p className="notice">
+          Offline wallet layout fixture. No real wallet is linked.
+        </p>
+        <WalletManager
+          organizations={[
+            {
+              id: "fixture-org",
+              name: "Offline fixture organization",
+              role: "owner",
+              issuerStatus: "authorized",
+            },
+          ]}
+        />
+        <WalletLinks
+          links={[
+            {
+              id: "fixture-link",
+              wallet_address: "11111111111111111111111111111111",
+              purpose: "account",
+              organization_id: null,
+              disconnected_at: null,
+              lock_reason:
+                "Offline fixture: an unresolved payment prevents unlinking.",
+              created_at: "2026-10-13T00:00:00Z",
+            },
+          ]}
+        />
+      </div>
+    );
   return (
     <div className="container page">
       <h1>Isolated UI test fixtures</h1>

@@ -96,7 +96,7 @@ export default async function Payments() {
                       {a.created_at.slice(0, 10)}
                     </p>
                     <p className="muted">{a.status_note}</p>
-                    {a.signature && (
+                    {(a.signature || a.status === "cancelled") && (
                       <PaymentRecovery
                         attempt={a}
                         intentId={i.id}

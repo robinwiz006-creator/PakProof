@@ -1,4 +1,9 @@
+import { CredentialCorrectionForm } from "@/components/credential-correction";
 import Link from "next/link";
+import { z } from "zod";
+import { workCredentialTypes } from "@/lib/challenge-assessment";
+import { IssuerTypeFields } from "@/components/issuer-type-fields";
+import { credentialTypeLabels } from "@/lib/issuer-permissions";
 import { ConfirmForm } from "@/components/confirm-form";
 import { CredentialAnchor } from "@/components/credential-anchor";
 import { PageHeading, Empty } from "@/components/ui";
@@ -7,8 +12,9 @@ import { CredentialRecord } from "@/components/credential-record";
 import { credentialWorkspace } from "@/lib/credential-data";
 import {
   organizationTypes,
-  credentialTypes,
   credentialSelect,
+  credentialValidity,
+  correctionStatus,
   type Organization,
   type Credential,
 } from "@/lib/credentials";
@@ -22,10 +28,14 @@ export const dynamic = "force-dynamic";
 export default async function Organizations({
   searchParams,
 }: {
-  searchParams: Promise<{ message?: string; view?: string }>;
+  searchParams: Promise<{
+    message?: string;
+    view?: string;
+    submission?: string;
+  }>;
 }) {
   const { db, user } = await credentialWorkspace();
-  const { message, view: requestedView } = await searchParams;
+  const { message, view: requestedView, submission } = await searchParams;
   const view = ["overview", "issue", "issued", "requests", "register"].includes(
     requestedView ?? "",
   )
@@ -44,29 +54,92 @@ export default async function Organizations({
     : { data: [], error: null };
   const organizations = (orgs ?? []) as unknown as Organization[];
   const orgIds = organizations.map((o) => o.id);
-  const [credentialResult, requestResult] = await Promise.all([
-    orgIds.length
-      ? db
-          .from("credentials")
-          .select(view === "issued" ? credentialSelect : "id", {
-            count: "exact",
-            head: view !== "issued",
-          })
-          .in("organization_id", orgIds)
-          .order("created_at", { ascending: false })
-      : Promise.resolve({ data: [], error: null, count: 0 }),
-    orgIds.length
-      ? db
-          .from("qualification_requests")
-          .select("*", { count: "exact", head: view !== "requests" })
-          .in("organization_id", orgIds)
-          .order("created_at", { ascending: false })
-      : Promise.resolve({ data: [], error: null, count: 0 }),
-  ]);
+  const [credentialResult, requestResult, auditResult, correctionAudit] =
+    await Promise.all([
+      orgIds.length
+        ? db
+            .from("credentials")
+            .select(view === "issued" ? credentialSelect : "id", {
+              count: "exact",
+              head: view !== "issued",
+            })
+            .in("organization_id", orgIds)
+            .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [], error: null, count: 0 }),
+      orgIds.length
+        ? db
+            .from("qualification_requests")
+            .select("*", { count: "exact", head: view !== "requests" })
+            .in("organization_id", orgIds)
+            .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [], error: null, count: 0 }),
+      view === "issued" && orgIds.length
+        ? db
+            .from("credential_issuance_audit")
+            .select(
+              "credential_id,representative_id,issued_at,authorization_id",
+            )
+            .in("organization_id", orgIds)
+        : Promise.resolve({ data: [], error: null }),
+      view === "issued" && orgIds.length
+        ? db
+            .from("credential_corrections")
+            .select(
+              "replacement_id,original_id,created_by,reason,state,created_at,responded_at",
+            )
+            .in("organization_id", orgIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+  if (correctionAudit.error)
+    throw new Error("Private correction history could not be loaded.");
+  if (auditResult.error)
+    throw new Error("Private issuance records could not be loaded.");
   const credentials = credentialResult.data;
   const requests = requestResult.data;
+  let source: { id: string; company_id: string; title: string } | null = null;
+  if (submission && z.uuid().safeParse(submission).success) {
+    const { data, error } = await db
+      .from("achievements")
+      .select("submission_id,company_id,title")
+      .eq("submission_id", submission)
+      .maybeSingle();
+    if (error) throw new Error("Approved work could not be loaded.");
+    if (data)
+      source = {
+        id: data.submission_id,
+        company_id: data.company_id,
+        title: data.title,
+      };
+  }
+  let sourceAssessment: {
+    criteria: { title: string; description: string }[];
+    outcomes: string[];
+  } | null = null;
+  if (source) {
+    const { data, error } = await db
+      .from("submission_reviews")
+      .select("id,challenge_assessments(criteria,outcomes)")
+      .eq("submission_id", source.id)
+      .eq("decision", "approved")
+      .maybeSingle();
+    if (error) throw new Error("The approved assessment could not be loaded.");
+    const value = data?.challenge_assessments;
+    sourceAssessment = (Array.isArray(value) ? value[0] : value) ?? null;
+  }
   const eligible = organizations.filter(
-    (o) => o.issuer_status === "authorized",
+    (o) =>
+      o.issuer_status === "authorized" &&
+      (o.allowed_credential_types?.length ?? 0) > 0 &&
+      (!submission ||
+        Boolean(
+          source &&
+          source.company_id === o.company_id &&
+          o.allowed_credential_types?.some((t) =>
+            workCredentialTypes.includes(
+              t as (typeof workCredentialTypes)[number],
+            ),
+          ),
+        )),
   );
   return (
     <div className="container page">
@@ -80,6 +153,23 @@ export default async function Organizations({
           </Link>
         }
       />
+      {view === "overview" &&
+        organizations.map((o) => (
+          <p className="notice section-spacer" key={`permissions-${o.id}`}>
+            <strong>{o.companies.name}: </strong>Registered on ProofPak ·{" "}
+            {o.issuer_status === "authorized"
+              ? "Authorized by ProofPak"
+              : o.issuer_status === "suspended"
+                ? "Issuance suspended"
+                : "Awaiting approval"}
+            . Approved categories:{" "}
+            {(o.allowed_credential_types ?? [])
+              .map((t) => credentialTypeLabels[t] ?? t)
+              .join(", ") || "None — administrator category review required"}
+            . Approval does not establish government accreditation or guarantee
+            a credential’s truth.
+          </p>
+        ))}
       <nav className="workspace-tabs" aria-label="Organization sections">
         {[
           ["overview", "Overview"],
@@ -126,7 +216,7 @@ export default async function Organizations({
               <strong>{organizations.length}</strong>
             </div>
             <div className="stat">
-              <span>Approved organizations</span>
+              <span>Ready to issue</span>
               <strong>{eligible.length}</strong>
             </div>
             <div className="stat">
@@ -268,6 +358,11 @@ export default async function Organizations({
               name="description"
               label="Description"
               type="textarea"
+              value={
+                source
+                  ? `Recognition of approved work for ${source.title}. Issued following a separate organization decision.`
+                  : undefined
+              }
               required
               minLength={20}
               maxLength={4000}
@@ -278,15 +373,22 @@ export default async function Organizations({
         </details>
       )}
       {view === "issue" && !eligible.length && (
-        <Empty title="Organization approval is needed to issue credentials">
+        <Empty title="Credential category approval is needed">
           Create your organization first, then contact the ProofPak
           administrator with your official website and evidence that you
           represent it.{" "}
           <Link href="/organizations?view=overview">
             Check organization status
           </Link>
-          . You cannot approve your own organization.
+          . An administrator must explicitly approve the credential categories
+          you may issue. You cannot approve your own organization.
         </Empty>
+      )}
+      {view === "issue" && submission && !source && (
+        <p className="notice">
+          This approved work is unavailable. Return to challenge reviews and
+          choose work your organization owns.
+        </p>
       )}
       {view === "issue" && eligible.length > 0 && (
         <section className="panel section-spacer">
@@ -296,47 +398,96 @@ export default async function Organizations({
             Publishing and Solana anchoring are separate next steps.
           </p>
           <p className="muted">
-            Use an existing recipient’s published passport URL or slug. No email
-            search is available. Evidence stays private unless the recipient
-            chooses to share it.
+            {source
+              ? "The recipient comes from the approved submission; a public passport is not required to receive this credential."
+              : "Use an existing recipient’s published passport URL or slug. No email search is available."}{" "}
+            Evidence stays private unless the recipient chooses to share it.
           </p>
+          {source && (
+            <p className="notice">
+              Recognizing: {source.title}. Recipient and evidence come from the
+              approved submission. Review the credential before issuing it;
+              nothing is accepted or published automatically.
+            </p>
+          )}
+          {source && (
+            <details className="section-spacer">
+              <summary>Review assessment before issuing</summary>
+              {sourceAssessment?.criteria.length ? (
+                <ul>
+                  {sourceAssessment.criteria.map((c, i) => (
+                    <li key={i}>
+                      {c.title}:{" "}
+                      {sourceAssessment!.outcomes[i]?.replaceAll("_", " ")}
+                      <p className="muted">{c.description}</p>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>
+                  This review has no structured rubric. No criterion outcomes
+                  will be invented.
+                </p>
+              )}
+            </details>
+          )}
           <form action={issueCredential}>
-            <div className="field">
-              <label htmlFor="issuer">Issuing organization</label>
-              <select id="issuer" name="organization_id">
-                {eligible.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.companies.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <Field
-              name="recipient_slug"
-              label="Recipient passport slug or URL"
-              required
+            {source && (
+              <input type="hidden" name="submission_id" value={source.id} />
+            )}
+            <IssuerTypeFields
+              organizations={eligible.map((o) => ({
+                id: o.id,
+                name: o.companies.name,
+                types: (o.allowed_credential_types ?? []).filter(
+                  (t) =>
+                    !source ||
+                    workCredentialTypes.includes(
+                      t as (typeof workCredentialTypes)[number],
+                    ),
+                ),
+              }))}
             />
+            {source ? (
+              <>
+                <input
+                  type="hidden"
+                  name="recipient_slug"
+                  value="reviewed-recipient"
+                />
+                <p className="muted">
+                  Recipient: the owner of the approved submission. A private
+                  passport stays private.
+                </p>
+              </>
+            ) : (
+              <Field
+                name="recipient_slug"
+                label="Recipient passport slug or URL"
+                required
+              />
+            )}
             <Field
               name="title"
               label="Credential title"
+              value={
+                source
+                  ? `Recognition: ${source.title}`.slice(0, 160)
+                  : undefined
+              }
               required
               minLength={3}
               maxLength={160}
             />
-            <div className="field">
-              <label htmlFor="ctype">Credential type</label>
-              <select id="ctype" name="credential_type">
-                {credentialTypes.map((t) => (
-                  <option key={t} value={t}>
-                    {t.replaceAll("_", " ")}
-                  </option>
-                ))}
-              </select>
-            </div>
             <Field
               name="description"
               label="Description"
               type="textarea"
+              value={
+                source
+                  ? `Recognition of approved work for ${source.title}. Issued following a separate organization decision.`
+                  : undefined
+              }
               required
               minLength={20}
               maxLength={4000}
@@ -347,21 +498,41 @@ export default async function Organizations({
               label="Expiry date (optional)"
               type="date"
             />
-            <Field
-              name="program_name"
-              label="Course, program, or event (optional)"
-              maxLength={200}
-            />
+            {source ? (
+              <>
+                <input name="program_name" type="hidden" value="" />
+                <p className="muted">
+                  The work-assessment integrity reference will be set
+                  automatically.
+                </p>
+              </>
+            ) : (
+              <Field
+                name="program_name"
+                label="Course, program, or event (optional)"
+                maxLength={200}
+              />
+            )}
             <Field
               name="award"
               label="Award or rank (optional)"
               maxLength={200}
             />
-            <Field
-              name="evidence_url"
-              label="Supporting evidence URL (optional)"
-              type="url"
-            />
+            {source ? (
+              <>
+                <input name="evidence_url" type="hidden" value="" />
+                <p className="muted">
+                  Approved work evidence stays private unless the recipient
+                  chooses to share it.
+                </p>
+              </>
+            ) : (
+              <Field
+                name="evidence_url"
+                label="Supporting evidence URL (optional)"
+                type="url"
+              />
+            )}
             <SubmitButton>Issue for recipient acceptance</SubmitButton>
           </form>
         </section>
@@ -373,26 +544,80 @@ export default async function Organizations({
             (credentials as unknown as Credential[]).map((c) => (
               <div key={c.id}>
                 <CredentialRecord credential={c} />
-                {c.credential_preferences.acceptance === "pending" && (
-                  <p className="notice">
-                    Waiting for the recipient to accept or decline. They choose
-                    whether to publish it. A blockchain record can be added
-                    after acceptance.
-                  </p>
-                )}
+                <details className="section-spacer">
+                  <summary>Private issuing representative</summary>
+                  {auditResult.data
+                    ?.filter((a) => a.credential_id === c.id)
+                    .map((a) => (
+                      <p className="muted hash" key={a.credential_id}>
+                        Representative {a.representative_id} · Recorded{" "}
+                        {a.issued_at} · Approval reference {a.authorization_id}
+                      </p>
+                    ))}
+                  {!auditResult.data?.some((a) => a.credential_id === c.id) && (
+                    <p className="muted">
+                      Historical record: issuing representative was not
+                      captured.
+                    </p>
+                  )}
+                </details>
+                {correctionAudit.data
+                  ?.filter(
+                    (a) => a.original_id === c.id || a.replacement_id === c.id,
+                  )
+                  .map((a) => (
+                    <details className="section-spacer" key={a.replacement_id}>
+                      <summary>Private correction audit · {a.state}</summary>
+                      <p>{a.reason}</p>
+                      <p className="muted hash">
+                        Representative {a.created_by} · Recorded {a.created_at}
+                        {a.responded_at ? ` · Decision ${a.responded_at}` : ""}
+                      </p>
+                      <Link
+                        className="text-link"
+                        href={`/credentials/${a.original_id}`}
+                      >
+                        Earlier record ↗
+                      </Link>
+                      {" · "}
+                      <Link
+                        className="text-link"
+                        href={`/credentials/${a.replacement_id}`}
+                      >
+                        Replacement ↗
+                      </Link>
+                    </details>
+                  ))}
+                {c.credential_preferences.acceptance === "pending" &&
+                  !c.credential_events.length &&
+                  !correctionStatus(c)?.superseded && (
+                    <p className="notice">
+                      Waiting for the recipient to accept or decline. They
+                      choose whether to publish it. A blockchain record can be
+                      added after acceptance.
+                    </p>
+                  )}
                 {c.credential_preferences.acceptance === "accepted" &&
                   !c.credential_proofs?.length &&
-                  !c.credential_events.length &&
-                  eligible.some((o) => o.id === c.organization_id) && (
-                    <CredentialAnchor achievementId={c.id} />
-                  )}
+                  credentialValidity(c) === "Current" &&
+                  organizations.some(
+                    (o) =>
+                      o.id === c.organization_id &&
+                      o.issuer_status === "authorized",
+                  ) && <CredentialAnchor achievementId={c.id} />}
+                {organizations.some(
+                  (o) =>
+                    o.id === c.organization_id &&
+                    o.issuer_status === "authorized" &&
+                    o.allowed_credential_types?.includes(c.credential_type),
+                ) && <CredentialCorrectionForm credential={c} />}
                 {!c.credential_events.length && (
                   <details className="panel">
-                    <summary>Revoke or correct this credential</summary>
+                    <summary>Revoke this credential</summary>
                     <p className="muted">
-                      Issued facts cannot be edited. Revoke with a reason, then
-                      issue a replacement referencing this credential ID.
-                      Revocation does not erase the historical record.
+                      Revocation preserves the historical record. To correct
+                      facts, use the separate corrected replacement action. No
+                      consent is copied.
                     </p>
                     <ConfirmForm
                       action={revokeCredential}
@@ -403,7 +628,8 @@ export default async function Organizations({
                       <input type="hidden" name="credential_id" value={c.id} />
                       <Field
                         name="reason"
-                        label="Reason for revocation or correction"
+                        label="Public explanation for revocation or correction"
+                        hint="This explanation may appear on the published credential. Do not include staff details or private investigation notes."
                         type="textarea"
                         required
                         minLength={10}

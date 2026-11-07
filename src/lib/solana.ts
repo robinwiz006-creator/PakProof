@@ -1,3 +1,4 @@
+import { signatureStatus } from "./transaction-recovery";
 import "server-only";
 import { Connection } from "@solana/web3.js";
 import { DEVNET_GENESIS, matchesAnchor } from "./proof";
@@ -39,11 +40,5 @@ export async function transactionStatus(signature: string) {
     searchTransactionHistory: true,
   });
   const s = value[0];
-  return !s
-    ? "not_found"
-    : s.err
-      ? "failed"
-      : s.confirmationStatus === "finalized"
-        ? "finalized"
-        : "pending";
+  return signatureStatus(s);
 }

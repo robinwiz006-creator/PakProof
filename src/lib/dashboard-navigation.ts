@@ -14,6 +14,7 @@ export const organizationNavigation = [
   ["/portal/company/reviews", "Review challenge work"],
 ] as const;
 export const secondaryNavigation = [
+  ["/contact-requests", "Contact requests"],
   ["/wallet", "Wallet"],
   ["/payments", "Payments"],
   ["/portal/talent/settings", "Account Settings"],

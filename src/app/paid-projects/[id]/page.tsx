@@ -1,3 +1,4 @@
+import { PaidProjectEditor } from "@/components/paid-project-editor";
 import Link from "next/link";
 import {
   MilestonePayment,
@@ -17,11 +18,13 @@ import { projectData, milestoneData } from "@/lib/paid-data";
 import {
   tokenAmount,
   paymentStatusLabel,
+  milestoneWorkLabel,
   type PaymentAttempt,
   type PaidOffer,
 } from "@/lib/payments";
 import {
   publishPaidProject,
+  changePaidLifecycle,
   applyPaidProject,
   selectPaidWorker,
   respondPaidOffer,
@@ -43,18 +46,34 @@ export default async function PaidProjectPage({
   if (!z.uuid().safeParse(id).success || !isConfigured()) notFound();
   const db = await supabase();
   const user = await currentUser();
-  const { data, error } = await db
-    .from("paid_projects")
-    .select("*,companies(name)")
-    .eq("id", id)
-    .maybeSingle();
-  if (error || !data) notFound();
-  const p = projectData(data);
+  // Raw records are RLS-limited to project parties. Other visitors use only
+  // the database's fixed public projection, never a client-side privacy filter.
+  const privateResult = user
+    ? await db
+        .from("paid_projects")
+        .select("*,companies(name)")
+        .eq("id", id)
+        .maybeSingle()
+    : { data: null, error: null };
+  if (privateResult.error)
+    throw new Error("Project access could not be checked.");
+  const privateProject = privateResult.data;
+  const publicResult = privateProject
+    ? { data: privateProject, error: null }
+    : await db
+        .from("public_paid_projects")
+        .select("*,companies(name)")
+        .eq("id", id)
+        .maybeSingle();
+  if (publicResult.error)
+    throw new Error("Project details could not be loaded.");
+  if (!publicResult.data) notFound();
+  const p = projectData(publicResult.data);
   const { message } = await searchParams;
   const [milestoneResult, memberResult, appResult, offerResult] =
     await Promise.all([
       db
-        .from("paid_milestones")
+        .from(privateProject ? "paid_milestones" : "public_paid_milestones")
         .select("*")
         .eq("project_id", id)
         .order("position"),
@@ -73,11 +92,11 @@ export default async function PaidProjectPage({
             .eq("project_id", id)
             .order("created_at")
         : Promise.resolve({ data: [], error: null }),
-      user && p.current_offer_id
+      user && privateProject?.current_offer_id
         ? db
             .from("paid_project_offers")
             .select("*")
-            .eq("id", p.current_offer_id)
+            .eq("id", privateProject.current_offer_id)
             .maybeSingle()
         : Promise.resolve({ data: null, error: null }),
     ]);
@@ -89,7 +108,9 @@ export default async function PaidProjectPage({
   const member = memberResult.data,
     apps = appResult.data;
   const isCompany = Boolean(member),
-    isWorker = user?.id === p.worker_id;
+    isWorker = Boolean(
+      user && privateProject && user.id === privateProject.worker_id,
+    );
   const ownApp = (apps ?? []).find((a) => a.worker_id === user?.id);
   const offer = offerResult.data as unknown as PaidOffer | null;
   const ids = ms.map((m) => m.id),
@@ -132,11 +153,11 @@ export default async function PaidProjectPage({
           .eq("user_id", user.id)
           .is("disconnected_at", null)
       : Promise.resolve({ data: [], error: null }),
-    party && data.payout_authorization_id
+    party && privateProject?.payout_authorization_id
       ? db
           .from("paid_payout_authorizations")
           .select("wallet_address")
-          .eq("id", data.payout_authorization_id)
+          .eq("id", privateProject.payout_authorization_id)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
     party && ids.length
@@ -188,6 +209,33 @@ export default async function PaidProjectPage({
   const accountWallets = (walletResult.data ?? []).filter(
     (w) => w.purpose === "account",
   );
+  const lifecycle = party
+    ? await db
+        .from("paid_cancellation_requests")
+        .select("id,requester_id,requester_side,reason,status,created_at")
+        .eq("project_id", id)
+        .eq("status", "pending")
+        .maybeSingle()
+    : { data: null, error: null };
+  const events = party
+    ? await db
+        .from("paid_project_events")
+        .select("id,action,reason,created_at")
+        .eq("project_id", id)
+        .order("created_at", { ascending: false })
+        .limit(30)
+    : { data: [], error: null };
+  if (lifecycle.error || events.error)
+    throw new Error("Project history could not be loaded.");
+  const draftSnapshot = JSON.stringify({
+    title: p.title,
+    description: p.description,
+    requirements: p.requirements,
+    skills: p.skills,
+    deadline: p.deadline,
+    budget_units: p.budget_units,
+    milestones: milestoneResult.data,
+  });
   const applicationState = projectApplicationState({
     signedIn: Boolean(user),
     companyMember: isCompany,
@@ -213,27 +261,6 @@ export default async function PaidProjectPage({
           ) : undefined
         }
       />
-      <div className="button-row">
-        <Link className="text-link" href="/paid-projects">
-          Paid projects
-        </Link>
-        <Link
-          className="text-link"
-          href={
-            isCompany && org
-              ? `/wallet?purpose=company_payer&organization=${org.id}`
-              : "/wallet"
-          }
-        >
-          My Wallet
-        </Link>
-        <Link className="text-link" href="/payments">
-          Payment history
-        </Link>
-        <Link className="text-link" href="/portal/talent/passport">
-          My passport
-        </Link>
-      </div>
       {message && (
         <p className="notice section-spacer" role="status">
           {message}
@@ -250,13 +277,111 @@ export default async function PaidProjectPage({
           <SubmitButton>Publish project</SubmitButton>
         </form>
       )}
+      {isCompany && p.status === "draft" && (
+        <details className="panel section-spacer">
+          <summary>Correct this draft</summary>
+          <PaidProjectEditor
+            companies={[
+              {
+                id: p.company_id,
+                name: p.companies?.name ?? "Your organization",
+              },
+            ]}
+            initial={p}
+            milestones={ms}
+            expected={draftSnapshot}
+          />
+        </details>
+      )}
+      {party && (
+        <section className="panel section-spacer">
+          <h2>Project lifecycle</h2>
+          <p>
+            Status: {p.status}. Published terms are locked. Withdrawing or
+            cancelling never reverses a blockchain transfer.
+          </p>
+          {lifecycle.data && (
+            <p className="notice">
+              Cancellation requested: {lifecycle.data.reason}.{" "}
+              {p.status === "active"
+                ? "The agreement remains active until the other party confirms. Submitted work, approved unpaid work and unresolved payments must be resolved first."
+                : "This request is no longer actionable because the project is closed."}
+            </p>
+          )}
+          {((member?.role === "owner" &&
+            ["draft", "published", "offered"].includes(p.status)) ||
+            (p.status === "active" &&
+              (isWorker || member?.role === "owner"))) && (
+            <form action={changePaidLifecycle} className="form">
+              <input type="hidden" name="project_id" value={id} />
+              <label className="field">
+                Decision
+                <select name="action">
+                  {p.status !== "active" ? (
+                    <>
+                      <option value="cancel">Cancel before agreement</option>
+                      {p.status !== "draft" && (
+                        <option value="withdraw">Withdraw opportunity</option>
+                      )}
+                    </>
+                  ) : !lifecycle.data ? (
+                    <option value="request">Request mutual cancellation</option>
+                  ) : lifecycle.data.requester_id === user?.id ? (
+                    <option value="retract">Retract my request</option>
+                  ) : (
+                      lifecycle.data.requester_side === "company"
+                        ? isWorker
+                        : isCompany
+                    ) ? (
+                    <>
+                      <option value="decline">Decline cancellation</option>
+                      <option value="accept">Agree to cancel project</option>
+                    </>
+                  ) : (
+                    <option disabled>
+                      No decision available for your side
+                    </option>
+                  )}
+                </select>
+              </label>
+              <Field
+                name="reason"
+                label="Reason (shared with the other party)"
+                required
+                minLength={10}
+                maxLength={2000}
+              />
+              <label className="check-field">
+                <input type="checkbox" required /> I have reviewed this
+                decision. No refund or payment guarantee is provided.
+              </label>
+              <SubmitButton>Confirm project decision</SubmitButton>
+            </form>
+          )}
+          <details className="section-spacer">
+            <summary>Project decision history</summary>
+            {!(events.data ?? []).length && (
+              <p>No lifecycle changes recorded.</p>
+            )}
+            {(events.data ?? []).map((e) => (
+              <article key={e.id}>
+                <strong>{e.action.replaceAll("_", " ")}</strong>
+                <p>{e.reason}</p>
+                <small>{new Date(e.created_at).toLocaleString("en-GB")}</small>
+              </article>
+            ))}
+          </details>
+        </section>
+      )}
       {ownApp && (
         <p className="notice section-spacer">
           Your application:{" "}
           {ownApp.status === "rejected" ? "Not selected" : ownApp.status}.{" "}
-          {ownApp.status === "selected" && p.status === "offered"
-            ? "Review the offer below before accepting."
-            : "Track work and decisions on this page."}
+          {["withdrawn", "cancelled"].includes(p.status)
+            ? "This project is closed. Your application and offer are retained for reference; no new work can be submitted."
+            : ownApp.status === "selected" && p.status === "offered"
+              ? "Review the offer below before accepting."
+              : "Track work and decisions on this page."}
         </p>
       )}
       {isCompany && (
@@ -329,20 +454,22 @@ export default async function PaidProjectPage({
               agreed project. Work approval does not mean payment is complete.
             </p>
           </details>
-          {isWorker && offer.response === "pending" && (
-            <form action={respondPaidOffer}>
-              <input type="hidden" name="offer_id" value={offer.id} />
-              <input type="hidden" name="project_id" value={id} />
-              <label className="field">
-                Decision
-                <select name="decision">
-                  <option value="decline">Decline this offer</option>
-                  <option value="accept">Accept these exact terms</option>
-                </select>
-              </label>
-              <SubmitButton>Confirm decision</SubmitButton>
-            </form>
-          )}
+          {isWorker &&
+            p.status === "offered" &&
+            offer.response === "pending" && (
+              <form action={respondPaidOffer}>
+                <input type="hidden" name="offer_id" value={offer.id} />
+                <input type="hidden" name="project_id" value={id} />
+                <label className="field">
+                  Decision
+                  <select name="decision">
+                    <option value="decline">Decline this offer</option>
+                    <option value="accept">Accept these exact terms</option>
+                  </select>
+                </label>
+                <SubmitButton>Confirm decision</SubmitButton>
+              </form>
+            )}
         </section>
       )}
       {(isWorker || isCompany) && payout && (
@@ -476,7 +603,7 @@ export default async function PaidProjectPage({
               {(isCompany || isWorker) && (
                 <>
                   <span className="tag">
-                    Work: {m.work_status.replaceAll("_", " ")}
+                    {milestoneWorkLabel(m.work_status)}
                   </span>
                   {submission && (
                     <div className="section-spacer">

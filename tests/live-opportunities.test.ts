@@ -43,7 +43,7 @@ function fixture(errorTable?: string) {
                       skills: ["TypeScript"],
                       deadline: "2026-10-30",
                       companies: { name: "Test organization" },
-                      ...(table === "paid_projects"
+                      ...(table === "public_paid_projects"
                         ? { budget_units: "1000001" }
                         : {}),
                     },
@@ -63,6 +63,10 @@ test("homepage reads bounded published opportunity metadata, never private relat
   assert.equal(result.challenges.items.length, 1);
   assert.equal(result.projects.items[0].budget_units, "1000001");
   assert.equal(calls.length, 2);
+  assert.deepEqual(
+    calls.map((call) => call.table),
+    ["challenges", "public_paid_projects"],
+  );
   for (const call of calls) {
     assert.deepEqual(call.filters, [
       "status=published",
@@ -79,7 +83,7 @@ test("homepage reads bounded published opportunity metadata, never private relat
   assert.equal(calls[0].fields?.includes("budget"), false);
 });
 test("a failed paid-project query preserves successful challenges and is not an empty success", async () => {
-  const { db } = fixture("paid_projects");
+  const { db } = fixture("public_paid_projects");
   const result = await loadLiveOpportunities(db);
   assert.equal(result.challenges.unavailable, false);
   assert.equal(result.challenges.items.length, 1);
@@ -113,7 +117,9 @@ test("real listing presentation keeps routes, payment types, amounts and failure
     createElement(OpportunityList, { ...results, configured: true }),
   );
   assert.ok(html.includes('href="/challenges/challenges-fixture"'));
-  assert.ok(html.includes('href="/paid-projects/paid_projects-fixture"'));
+  assert.ok(
+    html.includes('href="/paid-projects/public_paid_projects-fixture"'),
+  );
   assert.ok(html.includes("Unpaid challenge"));
   assert.ok(html.includes("Paid project · devnet"));
   assert.ok(html.includes("1.000001 test USDC"));

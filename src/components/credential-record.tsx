@@ -1,4 +1,8 @@
+import { CredentialCorrectionNotice } from "./credential-correction";
+import { workContext } from "@/lib/challenge-assessment";
+import { issuanceTrustLabel } from "@/lib/issuer-permissions";
 import Link from "next/link";
+import { credentialDate } from "@/lib/credential-presentation";
 import { credentialValidity, type Credential } from "@/lib/credentials";
 export function CredentialRecord({
   credential: c,
@@ -10,18 +14,25 @@ export function CredentialRecord({
       <p className="eyebrow">
         ORGANIZATION-ISSUED · {c.credential_type.replaceAll("_", " ")}
       </p>
+      <p className="muted">{issuanceTrustLabel(c)}</p>
       <h3>
-        <Link href={`/credentials/${c.id}`}>{c.title} ↗</Link>
+        <Link href={`/credentials/${c.id}`}>{c.title}</Link>
       </h3>
       <p className="muted">
-        Issued by {c.issuer_name} · {c.issue_date}
+        Issued by {c.issuer_name} · {credentialDate(c.issue_date)}
       </p>
+      {workContext(c.credential_challenge_context) && (
+        <p className="muted">
+          Assessed work:{" "}
+          {workContext(c.credential_challenge_context)!.challenge_title}
+        </p>
+      )}
       <div className="tags">
         <span className="tag">Validity: {credentialValidity(c)}</span>
         <span className="tag">
           Organization{" "}
           {c.organizations?.issuer_status === "authorized"
-            ? "approved"
+            ? "approved on ProofPak"
             : c.organizations?.issuer_status === "pending"
               ? "awaiting approval"
               : (c.organizations?.issuer_status ?? "unverified")}
@@ -32,12 +43,13 @@ export function CredentialRecord({
             : c.credential_preferences.acceptance}
         </span>
       </div>
-      <p className="muted section-spacer">
-        {c.credential_proofs?.length
-          ? "Transaction recorded · open the credential to check integrity. "
-          : "Blockchain record not completed. "}
-        Organization approval and blockchain integrity are separate checks.
-      </p>
+      <CredentialCorrectionNotice credential={c} />
+      <Link
+        className="button secondary credential-view-action"
+        href={`/credentials/${c.id}`}
+      >
+        View Credential
+      </Link>
     </article>
   );
 }

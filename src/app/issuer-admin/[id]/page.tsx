@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { credentialTypes } from "@/lib/credentials";
+import { credentialTypeLabels } from "@/lib/issuer-permissions";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { credentialWorkspace } from "@/lib/credential-data";
@@ -25,7 +27,9 @@ export default async function IssuerReview({
     db.from("company_memberships").select("company_id").eq("user_id", user.id),
     db
       .from("issuer_authorizations")
-      .select("id,review_note,created_at,administrator_id")
+      .select(
+        "id,review_note,created_at,administrator_id,decision,previous_status,resulting_status,previous_credential_types,allowed_credential_types",
+      )
       .eq("organization_id", id)
       .order("created_at", { ascending: false })
       .limit(50),
@@ -86,6 +90,40 @@ export default async function IssuerReview({
               <input type="hidden" name="organization_id" value={o.id} />
               <input
                 type="hidden"
+                name="expected_authorization"
+                value={o.authorization_id ?? ""}
+              />
+              <fieldset className="section-spacer">
+                <legend>Approved credential categories</legend>
+                <p className="muted">
+                  Select only categories supported by your review. Degree
+                  permission requires a separate academic-authority review;
+                  organization type alone grants nothing. Degree permission is
+                  available only to university organizations after that review.
+                  Suspension clears permissions. No selection means no new
+                  issuance.
+                </p>
+                {credentialTypes.map((t) => (
+                  <label className="field" key={t}>
+                    <span>
+                      <input
+                        type="checkbox"
+                        name="credential_types"
+                        value={t}
+                        disabled={
+                          t === "degree" && o.organization_type !== "university"
+                        }
+                        defaultChecked={(
+                          o.allowed_credential_types ?? []
+                        ).includes(t)}
+                      />{" "}
+                      {credentialTypeLabels[t]}
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+              <input
+                type="hidden"
                 name="reviewed_name"
                 value={o.companies.name}
               />
@@ -135,6 +173,23 @@ export default async function IssuerReview({
           {(reviews.data ?? []).map((r) => (
             <li key={r.id}>
               <time>{r.created_at}</time>
+              <p>
+                <strong>
+                  {r.decision?.replaceAll("_", " ") ??
+                    "Historical decision — outcome not recorded"}
+                </strong>
+                {r.resulting_status
+                  ? ` · ${r.previous_status} → ${r.resulting_status}`
+                  : ""}
+              </p>
+              <p>
+                Categories:{" "}
+                {r.allowed_credential_types === null
+                  ? "Not recorded in historical review"
+                  : r.allowed_credential_types
+                      .map((t: string) => credentialTypeLabels[t] ?? t)
+                      .join(", ") || "None"}
+              </p>
               <p>{r.review_note}</p>
               <small className="hash">
                 Administrator {r.administrator_id} · Reference {r.id}

@@ -94,6 +94,27 @@ export async function GET(request: Request) {
         },
         { status: 503 },
       );
+    const { data: existing, error: existingError } = await db
+      .from("blockchain_proofs")
+      .select("achievement_id")
+      .eq("achievement_id", a.id)
+      .maybeSingle();
+    if (existingError)
+      return NextResponse.json(
+        {
+          error:
+            "Proof status is unavailable. Preserve the original transaction and try again.",
+        },
+        { status: 503 },
+      );
+    if (existing)
+      return NextResponse.json(
+        {
+          error:
+            "A proof is already recorded. Open verification or retry saving the original signature; do not send another transaction.",
+        },
+        { status: 409 },
+      );
     const record = await recordFor(db, a, 2);
     return NextResponse.json(
       { record, hash: await hashRecord(record) },
