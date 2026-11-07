@@ -2,6 +2,7 @@
 -- Same fixture records after migration: no event/claim/audit rewrites allowed.
 do $$begin
  if revocation_fixture.fingerprint()<>(select digest from revocation_fixture.before_snapshot) then raise exception 'Migration rewrote historical records';end if;
+ if exists(select 1 from public.issuer_authorizations where previous_trust_review_id is not null or trust_decision is not null or previous_trust_level is not null or resulting_trust_level is not null or resulting_trust_suspended is not null or verification_request_id is not null) then raise exception 'Historical trust review invented';end if;
  if has_table_privilege('anon','public.credential_events','SELECT') or has_any_column_privilege('anon','public.credential_events','SELECT') then raise exception 'Anonymous raw audit grant retained';end if;
 end$$;
 begin;

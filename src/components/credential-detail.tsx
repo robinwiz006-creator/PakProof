@@ -1,3 +1,4 @@
+import { OrganizationTrust } from "./organization-trust";
 import { CredentialCorrectionNotice } from "./credential-correction";
 import { CredentialWorkContextView } from "./credential-work-context";
 import { workContext } from "@/lib/challenge-assessment";
@@ -140,6 +141,7 @@ export function CredentialDetail({
           </div>
         </footer>
       </article>
+      <OrganizationTrust organization={c.organizations} />
       {workContext(c.credential_challenge_context) && (
         <CredentialWorkContextView
           context={workContext(c.credential_challenge_context)!}
@@ -275,7 +277,7 @@ export function CredentialDetail({
                 </strong>
                 <p>
                   {c.authorization_id
-                    ? "ProofPak approval recorded at issuance."
+                    ? "Credential issuance authorization recorded at issuance. Institutional verification is shown separately."
                     : "Approval at issuance is unavailable."}
                 </p>
                 <p className="muted">

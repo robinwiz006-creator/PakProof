@@ -106,7 +106,9 @@ test("revocation, expiry, organization approval and integrity remain independent
     checks.getByText("Suspended on ProofPak", { exact: true }),
   ).toBeVisible();
   await expect(
-    checks.getByText("ProofPak approval recorded at issuance."),
+    checks.getByText(
+      "Credential issuance authorization recorded at issuance. Institutional verification is shown separately.",
+    ),
   ).toBeVisible();
   await expect(
     checks.getByText("Onchain verified", { exact: true }),

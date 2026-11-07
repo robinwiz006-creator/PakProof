@@ -2423,3 +2423,310 @@ test("handoff REST: concurrent send and candidate closure serialize; accepted or
     ).data.length > 0,
   );
 });
+
+let verificationOrg,
+  verificationRequest,
+  verificationScope,
+  verificationPartnerRequest;
+async function verificationOrgRecord() {
+  return (await read(`organizations?id=eq.${verificationOrg}&select=*`, 1))
+    .data[0];
+}
+async function submitVerification(assessment = false, role = 1) {
+  return issuerRpc(
+    "submit_organization_verification",
+    {
+      p_organization: verificationOrg,
+      p_identity:
+        "PRIVATE institutional identity and representative authority evidence.",
+      p_role: "Training representative",
+      p_identity_url: "https://example.com/PRIVATE-institutional-evidence",
+      p_assessment: assessment
+        ? "PRIVATE documented rubric, assessor qualifications and appeals policy."
+        : "",
+      p_assessment_url: assessment
+        ? "https://example.com/PRIVATE-assessment-evidence"
+        : "",
+    },
+    role,
+  );
+}
+async function reviewVerification(
+  decision,
+  level,
+  request,
+  role = 5,
+  checks = { identity: true, assessment: true },
+) {
+  const o = await verificationOrgRecord();
+  return issuerRpc(
+    "review_organization_verification",
+    {
+      p_organization: verificationOrg,
+      p_request: request,
+      p_expected_review: o.trust_review_id,
+      p_decision: decision,
+      p_level: level,
+      p_reason:
+        "PRIVATE administrator institutional evidence and assessment review.",
+      p_identity_checked: checks.identity,
+      p_assessment_checked: checks.assessment,
+    },
+    role,
+  );
+}
+test("institutional trust REST: old authorized issuers remain self-registered, with no inferred identity status", async () => {
+  verificationOrg = (await workArgs()).p_organization;
+  const o = await verificationOrgRecord();
+  assert.equal(o.trust_level, "self_registered");
+  assert.equal(o.trust_suspended, false);
+  verificationScope = {
+    authorization_id: o.authorization_id,
+    issuer_status: o.issuer_status,
+    allowed_credential_types: o.allowed_credential_types,
+  };
+  const r = await submitVerification();
+  assert.equal(r.status, 200, JSON.stringify(r));
+  verificationRequest = r.data;
+  assert.equal((await submitVerification()).status, 400);
+});
+test("institutional trust REST: verification evidence is private to members and admins, not the public or unrelated accounts", async () => {
+  for (const role of [undefined, 2, 3]) {
+    const r = await read(
+      `organization_verification_requests?organization_id=eq.${verificationOrg}&select=*`,
+      role,
+    );
+    assert.ok(r.status >= 400 || r.data.length === 0);
+    const a = await read(
+      `organization_verification_outcomes?organization_id=eq.${verificationOrg}&select=*`,
+      role,
+    );
+    assert.ok(a.status >= 400 || a.data.length === 0);
+    const q = await read("administrator_verification_queue?select=*", role);
+    assert.ok(q.status >= 400 || q.data.length === 0);
+  }
+  for (const role of [1, 4, 5])
+    assert.equal(
+      (
+        await read(
+          `organization_verification_requests?id=eq.${verificationRequest}&select=*`,
+          role,
+        )
+      ).data.length,
+      1,
+    );
+  const publicOrg = (
+    await read(`organizations?id=eq.${verificationOrg}&select=*`)
+  ).data[0];
+  assert.ok(!JSON.stringify(publicOrg).includes("PRIVATE"));
+  assert.ok(!("verification_request_id" in publicOrg));
+  assert.equal(
+    (await read(`administrator_verification_queue?id=eq.${verificationOrg}`, 5))
+      .data.length,
+    1,
+  );
+});
+test("institutional trust REST: member, outsider, anonymous and direct API writes cannot approve trust", async () => {
+  for (const role of [0, 1, 2, 3, 4, 5]) {
+    const r = await fetch(`${base}/organizations?id=eq.${verificationOrg}`, {
+      method: "PATCH",
+      headers: {
+        ...(role ? { Authorization: `Bearer ${jwt(role)}` } : {}),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        trust_level: "trusted_assessment_partner",
+        trust_suspended: false,
+      }),
+    });
+    assert.ok(
+      [401, 403].includes(r.status),
+      `Valid-column direct trust PATCH role ${role}: ${r.status}`,
+    );
+  }
+  for (const role of [0, 1, 2, 3, 4])
+    assert.ok(
+      (
+        await reviewVerification(
+          "approve",
+          "verified_organization",
+          verificationRequest,
+          role,
+        )
+      ).status >= 400,
+    );
+  for (const role of [1, 3, 5])
+    for (const table of [
+      "organizations",
+      "organization_verification_requests",
+      "issuer_authorizations",
+    ])
+      for (const method of ["POST", "PATCH", "DELETE"])
+        assert.ok((await read(table, role, method)).status >= 400);
+});
+test("institutional trust REST: identity and assessment confirmations are separately enforced", async () => {
+  assert.equal(
+    (
+      await reviewVerification(
+        "approve",
+        "trusted_assessment_partner",
+        verificationRequest,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await reviewVerification(
+        "approve",
+        "verified_organization",
+        verificationRequest,
+        5,
+        { identity: false, assessment: false },
+      )
+    ).status,
+    400,
+  );
+  const attempts = await Promise.all([
+    reviewVerification("approve", "verified_organization", verificationRequest),
+    reviewVerification("approve", "verified_organization", verificationRequest),
+  ]);
+  assert.deepEqual(
+    attempts.map((r) => r.status).sort(),
+    [204, 400],
+    JSON.stringify(attempts),
+  );
+  const o = await verificationOrgRecord();
+  assert.equal(o.trust_level, "verified_organization");
+  const { organizationTrust } =
+    await import("../src/lib/organization-trust.ts");
+  assert.equal(
+    organizationTrust(
+      (await read(`organizations?id=eq.${verificationOrg}&select=*`)).data[0],
+    ).label,
+    "Verified Organization",
+  );
+  assert.equal(o.authorization_id, verificationScope.authorization_id);
+  assert.deepEqual(
+    o.allowed_credential_types,
+    verificationScope.allowed_credential_types,
+  );
+  assert.equal(
+    (await read(`administrator_verification_queue?id=eq.${verificationOrg}`, 5))
+      .data.length,
+    0,
+  );
+  assert.equal(
+    (
+      await reviewVerification(
+        "approve",
+        "verified_organization",
+        verificationRequest,
+      )
+    ).status,
+    400,
+  );
+});
+test("institutional trust REST: partner approval, downgrade and suspension retain scopes and immutable private history", async () => {
+  let r = await submitVerification(true);
+  assert.equal(r.status, 200, JSON.stringify(r));
+  verificationPartnerRequest = r.data;
+  assert.equal(
+    (
+      await reviewVerification(
+        "approve",
+        "trusted_assessment_partner",
+        verificationPartnerRequest,
+        5,
+        { identity: true, assessment: false },
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await reviewVerification(
+        "approve",
+        "trusted_assessment_partner",
+        verificationPartnerRequest,
+      )
+    ).status,
+    204,
+  );
+  let o = await verificationOrgRecord();
+  const stale = o.trust_review_id;
+  assert.equal(o.trust_level, "trusted_assessment_partner");
+  assert.equal(
+    (await reviewVerification("downgrade", "verified_organization", null))
+      .status,
+    204,
+  );
+  r = await issuerRpc(
+    "review_organization_verification",
+    {
+      p_organization: verificationOrg,
+      p_request: null,
+      p_expected_review: stale,
+      p_decision: "suspend",
+      p_level: "self_registered",
+      p_reason: "A stale review should never overwrite another decision.",
+      p_identity_checked: false,
+      p_assessment_checked: false,
+    },
+    5,
+  );
+  assert.equal(r.status, 400);
+  assert.equal(
+    (await reviewVerification("suspend", "self_registered", null)).status,
+    204,
+  );
+  o = await verificationOrgRecord();
+  assert.equal(o.trust_level, "self_registered");
+  assert.equal(o.trust_suspended, true);
+  for (const k of Object.keys(verificationScope))
+    assert.deepEqual(o[k], verificationScope[k]);
+  const audit = (
+    await read(
+      `issuer_authorizations?organization_id=eq.${verificationOrg}&trust_decision=not.is.null&select=*`,
+      5,
+    )
+  ).data;
+  assert.equal(audit.length, 4);
+  assert.ok(audit.every((a) => a.administrator_id === uid(5)));
+  const outcomes = (
+    await read(
+      `organization_verification_outcomes?organization_id=eq.${verificationOrg}`,
+      1,
+    )
+  ).data;
+  assert.equal(outcomes.length, 4);
+  assert.ok(!JSON.stringify(outcomes).includes("PRIVATE"));
+  assert.ok(
+    outcomes.every((a) => !("administrator_id" in a) && !("review_note" in a)),
+  );
+});
+test("institutional trust REST: rejection retains current trust, category permissions still control issuance and historic v3 hashes stay intact", async () => {
+  const { credentialClaim, credentialHash } =
+    await import("../src/lib/credential-proof.ts");
+  const record = (await correctionCredential(correctionAccepted, 1)).data[0];
+  const hash = await credentialHash(credentialClaim(record));
+  const r = await submitVerification();
+  assert.equal(r.status, 200);
+  assert.equal(
+    (await reviewVerification("reject", "trusted_assessment_partner", r.data))
+      .status,
+    204,
+  );
+  assert.equal((await verificationOrgRecord()).trust_level, "self_registered");
+  assert.equal((await verificationOrgRecord()).trust_suspended, true);
+  assert.equal((await submitVerification()).status, 400);
+  const args = await issueArgs("company_achievement");
+  assert.equal((await issuerRpc("issue_credential", args, 1)).status, 200);
+  assert.equal(
+    (await issuerRpc("issue_credential", { ...args, p_type: "degree" }, 1))
+      .status,
+    400,
+  );
+  const same = (await correctionCredential(correctionAccepted, 1)).data[0];
+  assert.equal(await credentialHash(credentialClaim(same)), hash);
+});

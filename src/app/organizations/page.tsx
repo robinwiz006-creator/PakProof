@@ -1,3 +1,4 @@
+import { OrganizationVerificationWorkspace } from "@/components/organization-verification-workspace";
 import { CredentialCorrectionForm } from "@/components/credential-correction";
 import Link from "next/link";
 import { z } from "zod";
@@ -158,7 +159,7 @@ export default async function Organizations({
           <p className="notice section-spacer" key={`permissions-${o.id}`}>
             <strong>{o.companies.name}: </strong>Registered on ProofPak ·{" "}
             {o.issuer_status === "authorized"
-              ? "Authorized by ProofPak"
+              ? "Authorized for credential issuance"
               : o.issuer_status === "suspended"
                 ? "Issuance suspended"
                 : "Awaiting approval"}
@@ -169,6 +170,13 @@ export default async function Organizations({
             . Approval does not establish government accreditation or guarantee
             a credential’s truth.
           </p>
+        ))}
+      {view === "overview" &&
+        organizations.map((o) => (
+          <OrganizationVerificationWorkspace
+            key={`trust-${o.id}`}
+            organization={o}
+          />
         ))}
       <nav className="workspace-tabs" aria-label="Organization sections">
         {[

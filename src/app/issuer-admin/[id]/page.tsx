@@ -1,3 +1,4 @@
+import { OrganizationVerificationWorkspace } from "@/components/organization-verification-workspace";
 import Link from "next/link";
 import { credentialTypes } from "@/lib/credentials";
 import { credentialTypeLabels } from "@/lib/issuer-permissions";
@@ -28,7 +29,7 @@ export default async function IssuerReview({
     db
       .from("issuer_authorizations")
       .select(
-        "id,review_note,created_at,administrator_id,decision,previous_status,resulting_status,previous_credential_types,allowed_credential_types",
+        "id,review_note,created_at,administrator_id,decision,previous_status,resulting_status,previous_credential_types,allowed_credential_types,trust_decision,previous_trust_level,resulting_trust_level,resulting_trust_suspended",
       )
       .eq("organization_id", id)
       .order("created_at", { ascending: false })
@@ -74,7 +75,7 @@ export default async function IssuerReview({
           </p>
         </section>
         <section className="panel">
-          <h2>Record a decision</h2>
+          <h2>Credential-category permissions</h2>
           {own ? (
             <p className="notice">
               You belong to this organization. A different administrator must
@@ -160,6 +161,11 @@ export default async function IssuerReview({
           )}
         </section>
       </div>
+      <OrganizationVerificationWorkspace
+        organization={o}
+        administrator
+        own={own}
+      />
       <section className="section-spacer">
         <h2>Private authorization history</h2>
         <p className="muted">
@@ -175,8 +181,10 @@ export default async function IssuerReview({
               <time>{r.created_at}</time>
               <p>
                 <strong>
-                  {r.decision?.replaceAll("_", " ") ??
-                    "Historical decision — outcome not recorded"}
+                  {r.trust_decision
+                    ? `Institutional trust: ${r.trust_decision} · ${r.previous_trust_level} → ${r.resulting_trust_level}${r.resulting_trust_suspended ? " (suspended)" : ""}`
+                    : (r.decision?.replaceAll("_", " ") ??
+                      "Historical decision — outcome not recorded")}
                 </strong>
                 {r.resulting_status
                   ? ` · ${r.previous_status} → ${r.resulting_status}`

@@ -1,3 +1,4 @@
+import { organizationTrust } from "@/lib/organization-trust";
 import { CredentialCorrectionNotice } from "./credential-correction";
 import { workContext } from "@/lib/challenge-assessment";
 import { issuanceTrustLabel } from "@/lib/issuer-permissions";
@@ -15,6 +16,10 @@ export function CredentialRecord({
         ORGANIZATION-ISSUED · {c.credential_type.replaceAll("_", " ")}
       </p>
       <p className="muted">{issuanceTrustLabel(c)}</p>
+      <p className="muted">
+        Current institutional trust: {organizationTrust(c.organizations).label}
+        {c.organizations?.trust_suspended ? " · verification suspended" : ""}
+      </p>
       <h3>
         <Link href={`/credentials/${c.id}`}>{c.title}</Link>
       </h3>
@@ -30,11 +35,11 @@ export function CredentialRecord({
       <div className="tags">
         <span className="tag">Validity: {credentialValidity(c)}</span>
         <span className="tag">
-          Organization{" "}
+          Credential issuance{" "}
           {c.organizations?.issuer_status === "authorized"
-            ? "approved on ProofPak"
+            ? "authorized"
             : c.organizations?.issuer_status === "pending"
-              ? "awaiting approval"
+              ? "awaiting category approval"
               : (c.organizations?.issuer_status ?? "unverified")}
         </span>
         <span className={`tag status-${c.credential_preferences.acceptance}`}>

@@ -1,0 +1,11 @@
+-- Read-only preflight/postflight. Retain output privately; no evidence is printed.
+select name,to_regclass('public.'||name) as relation from unnest(array['organizations','issuer_authorizations','organization_verification_requests','organization_verification_outcomes','administrator_verification_queue']) name;
+select to_regprocedure('public.submit_organization_verification(uuid,text,text,text,text,text)') as submit_rpc,
+ to_regprocedure('public.review_organization_verification(uuid,uuid,uuid,text,text,text,boolean,boolean)') as review_rpc;
+select table_name,column_name from information_schema.columns where table_schema='public' and ((table_name='organizations' and column_name in ('trust_level','trust_suspended','trust_review_id')) or (table_name='issuer_authorizations' and column_name in ('trust_decision','previous_trust_level','resulting_trust_level','resulting_trust_suspended','verification_request_id','previous_trust_review_id')));
+select tablename,policyname,roles,cmd,qual from pg_policies where schemaname='public' and tablename in ('organizations','issuer_authorizations','organization_verification_requests');
+select grantee,table_name,privilege_type from information_schema.role_table_grants where table_schema='public' and table_name in ('organization_verification_requests','organization_verification_outcomes','administrator_verification_queue') order by table_name,grantee,privilege_type;
+select 'organizations' as record_type,count(*) as records,md5(coalesce(jsonb_agg(to_jsonb(t)-array['trust_level','trust_suspended','trust_review_id'] order by id)::text,'')) as original_fields_fingerprint from public.organizations t
+union all select 'authorizations',count(*),md5(coalesce(jsonb_agg(to_jsonb(t)-array['trust_decision','previous_trust_level','resulting_trust_level','resulting_trust_suspended','verification_request_id','previous_trust_review_id'] order by id)::text,'')) from public.issuer_authorizations t
+union all select 'credentials',count(*),md5(coalesce(jsonb_agg(to_jsonb(t) order by id)::text,'')) from public.credentials t
+union all select 'proofs',count(*),md5(coalesce(jsonb_agg(to_jsonb(t) order by credential_id)::text,'')) from public.credential_proofs t;
