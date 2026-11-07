@@ -1,3 +1,5 @@
+import { AssessmentDetailsView } from "@/components/assessment-details-view";
+import type { AssessmentDetails } from "@/lib/assessment-details";
 import { OrganizationVerificationWorkspace } from "@/components/organization-verification-workspace";
 import { CredentialCorrectionForm } from "@/components/credential-correction";
 import Link from "next/link";
@@ -113,13 +115,14 @@ export default async function Organizations({
       };
   }
   let sourceAssessment: {
+    details?: AssessmentDetails | null;
     criteria: { title: string; description: string }[];
     outcomes: string[];
   } | null = null;
   if (source) {
     const { data, error } = await db
       .from("submission_reviews")
-      .select("id,challenge_assessments(criteria,outcomes)")
+      .select("id,challenge_assessments(criteria,outcomes,details)")
       .eq("submission_id", source.id)
       .eq("decision", "approved")
       .maybeSingle();
@@ -421,6 +424,9 @@ export default async function Organizations({
           {source && (
             <details className="section-spacer">
               <summary>Review assessment before issuing</summary>
+              {sourceAssessment?.details && (
+                <AssessmentDetailsView details={sourceAssessment.details} />
+              )}
               {sourceAssessment?.criteria.length ? (
                 <ul>
                   {sourceAssessment.criteria.map((c, i) => (

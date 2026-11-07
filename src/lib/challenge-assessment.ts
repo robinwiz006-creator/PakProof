@@ -1,3 +1,4 @@
+import type { AssessmentDetails } from "./assessment-details";
 import { z } from "zod";
 export const rubricSchema = z
   .array(
@@ -21,6 +22,8 @@ export const workCredentialTypes = [
 export type Criterion = z.infer<typeof rubricSchema>[number];
 export type AssessmentManifest = {
   schema: number;
+  details?: AssessmentDetails;
+  context_salt?: string;
   challenge_id: string;
   challenge_title: string;
   submission_id: string;

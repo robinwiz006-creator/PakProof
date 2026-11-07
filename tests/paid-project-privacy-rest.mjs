@@ -2730,3 +2730,355 @@ test("institutional trust REST: rejection retains current trust, category permis
   const same = (await correctionCredential(correctionAccepted, 1)).data[0];
   assert.equal(await credentialHash(credentialClaim(same)), hash);
 });
+
+let transparencyChallenge,
+  transparencySubmission,
+  transparencyRubric,
+  transparencyCredential,
+  transparencyDigest;
+const transparencyDetails = {
+  competencies: ["React", "Keyboard accessibility"],
+  method: "code_review",
+  summary:
+    "Implemented accessible controls and explained keyboard navigation decisions.",
+  score: 4,
+  score_max: 5,
+  assessed_on: new Date().toISOString().slice(0, 10),
+  reviewer_id: "PRIVATE forged reviewer",
+  evaluating_organization: "PRIVATE forged organization",
+  private_feedback: "PRIVATE investigation notes",
+  challenge_level: "Advanced",
+};
+function transparencyReview(details = transparencyDetails) {
+  return {
+    p_submission_id: transparencySubmission,
+    p_decision: "approved",
+    p_feedback:
+      "PRIVATE feedback and candidate contact details remain private.",
+    p_outcomes: ["met"],
+    p_expected_rubric: transparencyRubric,
+    p_details: details,
+  };
+}
+test("assessment transparency REST: metadata validation and reviewer permissions cannot be bypassed", async () => {
+  const org = await workState();
+  const company = (
+    await read(`organizations?id=eq.${org.org}&select=company_id`, 1)
+  ).data[0].company_id;
+  let r = await issuerRpc(
+    "create_challenge_with_rubric",
+    {
+      p_fields: {
+        company_id: company,
+        title: "Transparency work fixture",
+        description:
+          "Build keyboard-accessible controls for a synthetic reviewed project.",
+        skills: ["React"],
+        difficulty: "Beginner",
+        deadline: handoffDeadline,
+        deliverables: "Source code, accessible interface and an explanation.",
+      },
+      p_criteria: [
+        {
+          title: "Keyboard behavior",
+          description: "All controls can be operated with the keyboard.",
+        },
+      ],
+    },
+    1,
+  );
+  assert.equal(r.status, 200, JSON.stringify(r));
+  transparencyChallenge = r.data;
+  transparencyRubric = (
+    await read(`challenge_public_rubrics?challenge_id=eq.${r.data}&select=id`)
+  ).data[0].id;
+  r = await issuerRpc(
+    "submit_work",
+    {
+      p_challenge_id: transparencyChallenge,
+      p_project_url: "https://example.com/transparency-work",
+      p_github_url: "https://example.com/PRIVATE-second-link",
+      p_explanation:
+        "PRIVATE candidate explanation must not become a public assessment summary.",
+    },
+    2,
+  );
+  assert.equal(r.status, 200);
+  transparencySubmission = r.data;
+  for (const role of [0, 2, 3])
+    assert.ok(
+      (
+        await issuerRpc(
+          "review_assessed_submission_details",
+          transparencyReview(),
+          role,
+        )
+      ).status >= 400,
+    );
+  for (const patch of [
+    { competencies: [] },
+    { method: "fake_verified_test" },
+    { score: 6 },
+    { score: 4.5 },
+    { score_max: null },
+    { assessed_on: "2999-01-01" },
+    { summary: "short" },
+  ])
+    assert.ok(
+      (
+        await issuerRpc(
+          "review_assessed_submission_details",
+          transparencyReview({ ...transparencyDetails, ...patch }),
+          4,
+        )
+      ).status >= 400,
+    );
+  assert.equal(
+    (
+      await read(
+        `challenge_submissions?id=eq.${transparencySubmission}&select=status`,
+        2,
+      )
+    ).data[0].status,
+    "pending",
+  );
+  assert.deepEqual(
+    (
+      await read(
+        `submission_reviews?submission_id=eq.${transparencySubmission}`,
+        1,
+      )
+    ).data,
+    [],
+  );
+});
+test("assessment transparency REST: approved snapshots use the real authorized reviewer and whitelist shareable fields", async () => {
+  const r = await issuerRpc(
+    "review_assessed_submission_details",
+    transparencyReview(),
+    4,
+  );
+  assert.equal(r.status, 200, JSON.stringify(r));
+  const review = (
+    await read(
+      `submission_reviews?submission_id=eq.${transparencySubmission}`,
+      1,
+    )
+  ).data[0];
+  assert.equal(review.reviewer_id, uid(4));
+  const a = (
+    await read(
+      `challenge_assessments?submission_id=eq.${transparencySubmission}&select=*`,
+      2,
+    )
+  ).data[0];
+  assert.equal(a.details.challenge_level, "Beginner");
+  assert.equal(a.details.evaluating_organization, "Privacy Fixture");
+  assert.equal(a.details.reviewer_attributed, true);
+  assert.equal(a.details.method, "code_review");
+  assert.ok(!JSON.stringify(a.details).includes("PRIVATE"));
+  assert.ok(!("reviewer_id" in a.details));
+  for (const role of [1, 2, 4]) {
+    const response = await fetch(
+      `${base}/challenge_assessments?submission_id=eq.${transparencySubmission}`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${jwt(role)}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ details: { method: "interview" } }),
+      },
+    );
+    assert.equal(response.status, 403);
+  }
+});
+test("assessment transparency REST: issuance freezes schema-2 assessment within the existing v3 commitment", async () => {
+  const org = await workState();
+  const r = await issuerRpc(
+    "issue_challenge_credential",
+    {
+      p_submission: transparencySubmission,
+      p_organization: org.org,
+      p_title: "Accessible interface assessment",
+      p_type: "company_achievement",
+      p_description:
+        "A separately issued credential recognizing assessed accessible interface work.",
+      p_issue_date: new Date().toISOString().slice(0, 10),
+      p_expiry_date: null,
+      p_award: "",
+    },
+    1,
+  );
+  assert.equal(r.status, 200, JSON.stringify(r));
+  transparencyCredential = r.data;
+  const source = (
+    await read(`challenge_credential_sources?credential_id=eq.${r.data}`, 1)
+  ).data[0];
+  transparencyDigest = source.context_digest;
+  assert.equal(source.manifest.schema, 2);
+  assert.match(source.manifest.context_salt, /^[a-f0-9-]{36}$/);
+  const { assessmentHash, assessmentContextMatches, workContext } =
+    await import("../src/lib/challenge-assessment.ts");
+  assert.equal(await assessmentHash(source.manifest), source.context_digest);
+  const c = (await correctionCredential(r.data, 2)).data[0];
+  assert.equal(
+    await assessmentContextMatches(
+      c.program_name,
+      workContext(c.credential_challenge_context),
+    ),
+    true,
+  );
+  assert.equal(c.credential_preferences.acceptance, "pending");
+  assert.equal(c.credential_preferences.share_evidence, false);
+  assert.deepEqual((await correctionCredential(r.data)).data, []);
+  assert.deepEqual(
+    (await read(`challenge_credential_sources?credential_id=eq.${r.data}`, 3))
+      .data,
+    [],
+  );
+});
+test("assessment transparency REST: credential publication alone does not disclose methods, scores or additional evidence", async () => {
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_credential",
+        {
+          p_credential: transparencyCredential,
+          p_acceptance: "accepted",
+          p_public: true,
+          p_share_evidence: false,
+        },
+        2,
+      )
+    ).status,
+    204,
+  );
+  const { workContext } = await import("../src/lib/challenge-assessment.ts");
+  const c = (await correctionCredential(transparencyCredential)).data[0];
+  assert.equal(workContext(c.credential_challenge_context).assessment, null);
+  assert.equal(c.credential_evidence, null);
+  const filtered = await read(
+    `credential_challenge_context?credential_id=eq.${transparencyCredential}&assessment->details->>method=eq.code_review`,
+  );
+  assert.deepEqual(filtered.data, []);
+});
+test("assessment transparency REST: explicit evidence consent shows evaluator-reported details without private notes or reviewer UUIDs", async () => {
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_credential",
+        {
+          p_credential: transparencyCredential,
+          p_acceptance: "accepted",
+          p_public: true,
+          p_share_evidence: true,
+        },
+        2,
+      )
+    ).status,
+    204,
+  );
+  const { workContext, assessmentContextMatches } =
+    await import("../src/lib/challenge-assessment.ts");
+  const c = (await correctionCredential(transparencyCredential)).data[0],
+    ctx = workContext(c.credential_challenge_context);
+  assert.equal(ctx.assessment.details.score, 4);
+  assert.equal(ctx.assessment.details.score_max, 5);
+  assert.equal(ctx.assessment.details.method, "code_review");
+  assert.ok(!JSON.stringify(ctx.assessment).includes("PRIVATE"));
+  assert.ok(!JSON.stringify(c).includes("PRIVATE-second-link"));
+  assert.equal(
+    c.credential_evidence.evidence_url,
+    "https://example.com/transparency-work",
+  );
+  assert.equal(await assessmentContextMatches(c.program_name, ctx), true);
+});
+test("assessment transparency REST: later challenge edits and corrections cannot rewrite issued assessment evidence", async () => {
+  const response = await fetch(
+    `${base}/challenges?id=eq.${transparencyChallenge}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${jwt(1)}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ difficulty: "Advanced", skills: ["SQL"] }),
+    },
+  );
+  assert.equal(response.status, 204);
+  const r = await issuerRpc(
+    "correct_credential",
+    {
+      ...(await correctionArgs(transparencyCredential)),
+      p_title: "Corrected accessible interface credential",
+    },
+    1,
+  );
+  assert.equal(r.status, 200, JSON.stringify(r));
+  const old = (
+      await read(
+        `challenge_credential_sources?credential_id=eq.${transparencyCredential}`,
+        1,
+      )
+    ).data[0],
+    replacement = (
+      await read(`challenge_credential_sources?credential_id=eq.${r.data}`, 1)
+    ).data[0];
+  assert.equal(old.context_digest, transparencyDigest);
+  assert.equal(old.manifest.details.challenge_level, "Beginner");
+  assert.deepEqual(replacement.manifest, old.manifest);
+  const c = (await correctionCredential(r.data, 2)).data[0];
+  assert.equal(c.credential_preferences.acceptance, "pending");
+  assert.equal(c.credential_preferences.is_public, false);
+  assert.equal(c.credential_preferences.share_evidence, false);
+  assert.equal(
+    (
+      await issuerRpc(
+        "revoke_credential",
+        {
+          p_credential: transparencyCredential,
+          p_reason:
+            "Historical original revoked without rewriting the assessment commitment.",
+        },
+        1,
+      )
+    ).status,
+    204,
+  );
+  const { credentialValidity } = await import("../src/lib/credentials.ts");
+  assert.equal(
+    credentialValidity(
+      (await correctionCredential(transparencyCredential)).data[0],
+    ),
+    "Revoked",
+  );
+  assert.equal(
+    (
+      await read(
+        `challenge_credential_sources?credential_id=eq.${transparencyCredential}`,
+        1,
+      )
+    ).data[0].context_digest,
+    transparencyDigest,
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_credential",
+        {
+          p_credential: transparencyCredential,
+          p_acceptance: "accepted",
+          p_public: false,
+          p_share_evidence: false,
+        },
+        2,
+      )
+    ).status,
+    204,
+  );
+  assert.deepEqual(
+    (await correctionCredential(transparencyCredential)).data,
+    [],
+  );
+});

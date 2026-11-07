@@ -147,6 +147,13 @@ export function CredentialDetail({
           context={workContext(c.credential_challenge_context)!}
         />
       )}
+      {!workContext(c.credential_challenge_context) && (
+        <p className="notice section-spacer">
+          No structured assessment record is attached to this credential. This
+          does not establish whether an assessment took place. Refer to the
+          issuer’s description and any permitted supporting evidence.
+        </p>
+      )}
       <div className="credential-actions-row">
         {shared ? (
           <CredentialShare id={c.id} />
