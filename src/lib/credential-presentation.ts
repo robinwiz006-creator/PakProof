@@ -1,3 +1,4 @@
+import { workContext } from "./challenge-assessment";
 import type { Credential } from "./credentials";
 import type { ProofState } from "./proof-status";
 export type CredentialRecipient = {
@@ -75,3 +76,20 @@ export const integrityDescriptions: Record<ProofState, string> = {
   missing:
     "No matching finalized transaction could be confirmed. The stored signature alone is not verification.",
 };
+
+// Rendering defense in addition to the authoritative database consent boundary.
+export function credentialVisibleAssessment(
+  c: Credential,
+  shared: boolean,
+  canViewPrivate: boolean,
+) {
+  const context = workContext(c.credential_challenge_context);
+  if (!context) return null;
+  return {
+    ...context,
+    assessment:
+      canViewPrivate || (shared && c.credential_preferences.share_evidence)
+        ? context.assessment
+        : null,
+  };
+}

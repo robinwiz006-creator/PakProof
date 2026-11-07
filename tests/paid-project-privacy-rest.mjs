@@ -3082,3 +3082,154 @@ test("assessment transparency REST: later challenge edits and corrections cannot
     [],
   );
 });
+
+let lifecycleOriginal, lifecycleReplacement, lifecycleOriginalHash;
+test("lifecycle REST: pending and declined credentials remain invisible to anonymous and unrelated users", async () => {
+  const { credentialLifecycle } =
+    await import("../src/lib/credential-lifecycle.ts");
+  const { credentialClaim, credentialHash } =
+    await import("../src/lib/credential-proof.ts");
+  const issued = await issuerRpc(
+    "issue_credential",
+    await issueArgs("company_achievement"),
+    1,
+  );
+  assert.equal(issued.status, 200, JSON.stringify(issued));
+  lifecycleOriginal = issued.data;
+  const record = (await correctionCredential(lifecycleOriginal, 2)).data[0];
+  lifecycleOriginalHash = await credentialHash(credentialClaim(record));
+  assert.equal(credentialLifecycle(record).status, "Awaiting acceptance");
+  for (const role of [undefined, 3])
+    assert.deepEqual(
+      (await correctionCredential(lifecycleOriginal, role)).data,
+      [],
+    );
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_credential",
+        {
+          p_credential: lifecycleOriginal,
+          p_acceptance: "declined",
+          p_public: false,
+          p_share_evidence: false,
+        },
+        2,
+      )
+    ).status,
+    204,
+  );
+  assert.equal(
+    credentialLifecycle(
+      (await correctionCredential(lifecycleOriginal, 2)).data[0],
+    ).status,
+    "Declined",
+  );
+  assert.deepEqual((await correctionCredential(lifecycleOriginal)).data, []);
+});
+test("lifecycle REST: accepted private replacement supersedes original without disclosing its identity or changing historical claim", async () => {
+  const { credentialLifecycle } =
+    await import("../src/lib/credential-lifecycle.ts");
+  const { credentialClaim, credentialHash } =
+    await import("../src/lib/credential-proof.ts");
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_credential",
+        {
+          p_credential: lifecycleOriginal,
+          p_acceptance: "accepted",
+          p_public: true,
+          p_share_evidence: false,
+        },
+        2,
+      )
+    ).status,
+    204,
+  );
+  const replacement = await issuerRpc(
+    "correct_credential",
+    await correctionArgs(lifecycleOriginal),
+    1,
+  );
+  assert.equal(replacement.status, 200, JSON.stringify(replacement));
+  lifecycleReplacement = replacement.data;
+  assert.equal(
+    credentialLifecycle((await correctionCredential(lifecycleOriginal)).data[0])
+      .status,
+    "Active",
+  );
+  assert.deepEqual((await correctionCredential(lifecycleReplacement)).data, []);
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_credential",
+        {
+          p_credential: lifecycleReplacement,
+          p_acceptance: "accepted",
+          p_public: false,
+          p_share_evidence: false,
+        },
+        2,
+      )
+    ).status,
+    204,
+  );
+  const original = (await correctionCredential(lifecycleOriginal)).data[0];
+  assert.equal(credentialLifecycle(original).status, "Superseded");
+  assert.equal(
+    await credentialHash(credentialClaim(original)),
+    lifecycleOriginalHash,
+  );
+  assert.ok(!JSON.stringify(original).includes(lifecycleReplacement));
+  assert.ok(!JSON.stringify(original).includes("PRIVATE correction"));
+  assert.deepEqual((await correctionCredential(lifecycleReplacement)).data, []);
+});
+test("lifecycle REST: publishing a replacement preserves revocation and original claim integrity", async () => {
+  const { credentialLifecycle } =
+    await import("../src/lib/credential-lifecycle.ts");
+  const { credentialClaim, credentialHash } =
+    await import("../src/lib/credential-proof.ts");
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_credential",
+        {
+          p_credential: lifecycleReplacement,
+          p_acceptance: "accepted",
+          p_public: true,
+          p_share_evidence: false,
+        },
+        2,
+      )
+    ).status,
+    204,
+  );
+  assert.equal(
+    credentialLifecycle(
+      (await correctionCredential(lifecycleReplacement)).data[0],
+    ).status,
+    "Active",
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "revoke_credential",
+        {
+          p_credential: lifecycleOriginal,
+          p_reason: "Public withdrawal of historical credential",
+        },
+        1,
+      )
+    ).status,
+    204,
+  );
+  const original = (await correctionCredential(lifecycleOriginal)).data[0];
+  assert.equal(credentialLifecycle(original).status, "Revoked");
+  assert.equal(
+    await credentialHash(credentialClaim(original)),
+    lifecycleOriginalHash,
+  );
+  assert.ok(JSON.stringify(original).includes(lifecycleReplacement));
+  assert.ok(!JSON.stringify(original).includes("PRIVATE correction"));
+});

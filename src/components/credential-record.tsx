@@ -1,10 +1,11 @@
+import { credentialLifecycle } from "@/lib/credential-lifecycle";
 import { organizationTrust } from "@/lib/organization-trust";
 import { CredentialCorrectionNotice } from "./credential-correction";
 import { workContext } from "@/lib/challenge-assessment";
 import { issuanceTrustLabel } from "@/lib/issuer-permissions";
 import Link from "next/link";
 import { credentialDate } from "@/lib/credential-presentation";
-import { credentialValidity, type Credential } from "@/lib/credentials";
+import { type Credential } from "@/lib/credentials";
 export function CredentialRecord({
   credential: c,
 }: {
@@ -33,7 +34,7 @@ export function CredentialRecord({
         </p>
       )}
       <div className="tags">
-        <span className="tag">Validity: {credentialValidity(c)}</span>
+        <span className="tag">Status: {credentialLifecycle(c).status}</span>
         <span className="tag">
           Credential issuance{" "}
           {c.organizations?.issuer_status === "authorized"

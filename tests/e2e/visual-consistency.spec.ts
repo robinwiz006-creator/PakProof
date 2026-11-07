@@ -45,7 +45,7 @@ test("credential summary stays visible while explanations and metadata are colla
   const summary = page.getByRole("region", {
     name: "Credential status summary",
   });
-  await expect(summary.getByText("Current", { exact: true })).toBeVisible();
+  await expect(summary.getByText("Active", { exact: true })).toBeVisible();
   await expect(
     summary.getByText("Not recorded", { exact: true }),
   ).toBeVisible();
