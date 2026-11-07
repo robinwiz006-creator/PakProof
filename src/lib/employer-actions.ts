@@ -101,8 +101,55 @@ export async function respondContact(form: FormData) {
   revalidatePath("/contact-requests");
   redirect(
     messageLink(
-      "/contact-requests",
+      `/contact-requests/${form.get("request_id")}`,
       "Your decision was saved. No private contact details were shared.",
     ),
   );
+}
+
+export async function sendContactFollowup(form: FormData) {
+  const { db } = await credentialWorkspace();
+  const parsed = z
+    .object({
+      request_id: z.uuid(),
+      nonce: z.uuid(),
+      topic: z.enum(["next_steps", "question", "response"]),
+      body: z.string().trim().min(10).max(1000),
+    })
+    .safeParse(Object.fromEntries(form));
+  if (!parsed.success)
+    redirect(
+      messageLink(
+        "/contact-requests",
+        "Choose a topic and write 10 to 1000 characters.",
+      ),
+    );
+  const v = parsed.data,
+    path = `/contact-requests/${v.request_id}`;
+  const { error } = await db.rpc("send_contact_followup", {
+    p_request: v.request_id,
+    p_topic: v.topic,
+    p_body: v.body,
+    p_nonce: v.nonce,
+  });
+  fail(path, error);
+  revalidatePath("/contact-requests", "layout");
+  redirect(
+    messageLink(
+      path,
+      "Follow-up sent privately to the candidate and authorized organization members.",
+    ),
+  );
+}
+export async function closeContact(form: FormData) {
+  const { db } = await credentialWorkspace();
+  const id = z.uuid().parse(form.get("request_id"));
+  const path = `/contact-requests/${id}`;
+  const { error } = await db.rpc("close_contact_request", {
+    p_request: id,
+    p_withdraw: form.get("withdraw") === "yes",
+  });
+  fail(path, error);
+  revalidatePath("/contact-requests", "layout");
+  redirect(messageLink(path, "Contact ended. No more follow-ups can be sent."));
 }

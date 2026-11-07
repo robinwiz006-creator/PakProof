@@ -2080,3 +2080,346 @@ test("correction REST: current category permission and issuer suspension apply t
     true,
   );
 });
+
+let handoffCompany,
+  handoffRequest,
+  handoffProject,
+  handoffUnlinked,
+  handoffDeclined,
+  handoffWithdrawn;
+const handoffDeadline = new Date(Date.now() + 30 * 86400000)
+  .toISOString()
+  .slice(0, 10);
+async function handoffCreate(candidate, project = null) {
+  const r = await issuerRpc(
+    "create_contact_request",
+    {
+      p_company: handoffCompany,
+      p_candidate: uid(candidate),
+      p_purpose: "Discuss a practical next step with this organization.",
+      p_paid_project: project,
+    },
+    3,
+  );
+  assert.equal(r.status, 200, JSON.stringify(r));
+  return r.data;
+}
+async function handoffSend(
+  request,
+  role,
+  nonce = crypto.randomUUID(),
+  body = "Please suggest a convenient next step for this work.",
+) {
+  return issuerRpc(
+    "send_contact_followup",
+    { p_request: request, p_topic: "next_steps", p_body: body, p_nonce: nonce },
+    role,
+  );
+}
+async function handoffRespond(request, role, decision = "accepted") {
+  return issuerRpc(
+    "respond_contact_request",
+    { p_request: request, p_decision: decision },
+    role,
+  );
+}
+test("handoff REST: accepted paid opportunity permits explicit next step and no automatic application", async () => {
+  const org = await issuerRpc(
+    "create_company",
+    {
+      p_name: "Handoff fixture organization",
+      p_description: "An isolated organization for private contact testing.",
+      p_website: "https://example.com",
+      p_location: "Karachi",
+    },
+    3,
+  );
+  assert.equal(org.status, 200, JSON.stringify(org));
+  handoffCompany = org.data;
+  const project = await issuerRpc(
+    "create_paid_project",
+    {
+      p_company: handoffCompany,
+      p_title: "Handoff project fixture",
+      p_description:
+        "A synthetic paid project for private opportunity contact tests.",
+      p_requirements: "Deliver an accessible interface and documented source.",
+      p_skills: ["React"],
+      p_deadline: handoffDeadline,
+      p_budget: "1000000",
+      p_milestones: [
+        {
+          title: "Deliver source",
+          deliverables: "Source code and accessible interface documentation.",
+          deadline: handoffDeadline,
+          amount_units: "1000000",
+        },
+      ],
+    },
+    3,
+  );
+  assert.equal(project.status, 200, JSON.stringify(project));
+  handoffProject = project.data;
+  assert.equal(
+    (await issuerRpc("publish_paid_project", { p_project: handoffProject }, 3))
+      .status,
+    204,
+  );
+  handoffRequest = await handoffCreate(30, handoffProject);
+  assert.equal((await handoffSend(handoffRequest, 3)).status, 400);
+  assert.equal((await handoffRespond(handoffRequest, 30)).status, 204);
+  const op = await issuerRpc(
+    "contact_request_opportunity",
+    { p_request: handoffRequest },
+    30,
+  );
+  assert.equal(op.status, 200);
+  assert.equal(op.data.status, "Open");
+  assert.equal(op.data.href, `/paid-projects/${handoffProject}`);
+  assert.deepEqual(
+    (await read(`paid_project_applications?project_id=eq.${handoffProject}`, 3))
+      .data,
+    [],
+  );
+});
+test("handoff REST: original nonce retry is idempotent and changed content cannot reuse it", async () => {
+  const nonce = crypto.randomUUID();
+  const a = await handoffSend(handoffRequest, 3, nonce);
+  assert.equal(a.status, 200, JSON.stringify(a));
+  const replies = await Promise.all([
+    handoffSend(handoffRequest, 3, nonce),
+    handoffSend(handoffRequest, 3, nonce),
+  ]);
+  for (const r of replies) {
+    assert.equal(r.status, 200);
+    assert.equal(r.data, a.data);
+  }
+  assert.equal(
+    (
+      await handoffSend(
+        handoffRequest,
+        3,
+        nonce,
+        "Different content cannot reuse the same submission reference.",
+      )
+    ).status,
+    400,
+  );
+  assert.equal((await handoffSend(handoffRequest, 30)).status, 200);
+  const notes = await read(
+    `visible_contact_followups?request_id=eq.${handoffRequest}`,
+    30,
+  );
+  assert.equal(notes.data.length, 2);
+  for (const n of notes.data) {
+    assert.ok(!("created_by" in n));
+    assert.ok(!("client_nonce" in n));
+  }
+});
+test("handoff REST: anonymous, unrelated company, and unrelated candidate cannot read or write", async () => {
+  for (const role of [undefined, 1, 31]) {
+    const r = await read(
+      `visible_contact_followups?request_id=eq.${handoffRequest}`,
+      role,
+    );
+    assert.ok(r.status >= 400 || r.data.length === 0);
+    assert.ok((await handoffSend(handoffRequest, role)).status >= 400);
+    assert.ok(
+      (
+        await issuerRpc(
+          "contact_request_opportunity",
+          { p_request: handoffRequest },
+          role,
+        )
+      ).status >= 400,
+    );
+  }
+  assert.deepEqual(
+    (await read(`contact_followups?request_id=eq.${handoffRequest}`, 30)).data,
+    [],
+  );
+  assert.equal(
+    (await read(`visible_contact_followups?select=created_by`, 30)).status,
+    400,
+  );
+  for (const role of [3, 30, 1])
+    for (const method of ["POST", "PATCH", "DELETE"])
+      assert.ok((await read("contact_followups", role, method)).status >= 400);
+  assert.ok(
+    (await issuerRpc("close_contact_request", { p_request: handoffRequest }, 3))
+      .status >= 400,
+  );
+});
+test("handoff REST: closed opportunity is accurate and preserves private follow-up", async () => {
+  assert.equal(
+    (
+      await issuerRpc(
+        "change_paid_lifecycle",
+        {
+          p_project: handoffProject,
+          p_action: "withdraw",
+          p_reason:
+            "Withdraw this synthetic opportunity while retaining contact history.",
+        },
+        3,
+      )
+    ).status,
+    204,
+  );
+  const op = await issuerRpc(
+    "contact_request_opportunity",
+    { p_request: handoffRequest },
+    30,
+  );
+  assert.equal(op.data.status, "Unavailable");
+  assert.equal(op.data.title, null);
+  assert.equal(op.data.href, null);
+  assert.equal((await handoffSend(handoffRequest, 30)).status, 200);
+});
+test("handoff REST: accepted unlinked request has follow-up; declined and withdrawn requests cannot continue", async () => {
+  handoffUnlinked = await handoffCreate(31);
+  assert.equal((await handoffRespond(handoffUnlinked, 31)).status, 204);
+  assert.equal(
+    (
+      await issuerRpc(
+        "contact_request_opportunity",
+        { p_request: handoffUnlinked },
+        31,
+      )
+    ).data,
+    null,
+  );
+  assert.equal((await handoffSend(handoffUnlinked, 31)).status, 200);
+  handoffDeclined = await handoffCreate(32);
+  assert.equal(
+    (await handoffRespond(handoffDeclined, 32, "declined")).status,
+    204,
+  );
+  assert.equal((await handoffSend(handoffDeclined, 3)).status, 400);
+  handoffWithdrawn = await handoffCreate(33);
+  assert.equal(
+    (
+      await issuerRpc(
+        "close_contact_request",
+        { p_request: handoffWithdrawn, p_withdraw: true },
+        3,
+      )
+    ).status,
+    204,
+  );
+  assert.equal((await handoffRespond(handoffWithdrawn, 33)).status, 400);
+  assert.equal((await handoffSend(handoffWithdrawn, 3)).status, 400);
+});
+test("handoff REST: privacy withdrawal pauses access and closure permanently prevents reopening", async () => {
+  assert.equal(
+    (
+      await issuerRpc(
+        "set_discovery_preferences",
+        { p_discoverable: false, p_contact: false },
+        31,
+      )
+    ).status,
+    204,
+  );
+  assert.deepEqual(
+    (
+      await read(
+        `visible_contact_followups?request_id=eq.${handoffUnlinked}`,
+        3,
+      )
+    ).data,
+    [],
+  );
+  assert.equal((await handoffSend(handoffUnlinked, 3)).status, 400);
+  assert.equal((await handoffSend(handoffUnlinked, 31)).status, 400);
+  assert.equal(
+    (
+      await issuerRpc(
+        "close_contact_request",
+        { p_request: handoffUnlinked },
+        31,
+      )
+    ).status,
+    204,
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "set_discovery_preferences",
+        { p_discoverable: true, p_contact: true },
+        31,
+      )
+    ).status,
+    204,
+  );
+  assert.equal((await handoffRespond(handoffUnlinked, 31)).status, 400);
+  assert.equal((await handoffSend(handoffUnlinked, 3)).status, 400);
+  assert.equal(
+    (
+      await read(
+        `visible_contact_followups?request_id=eq.${handoffUnlinked}`,
+        31,
+      )
+    ).data.length,
+    1,
+  );
+});
+test("handoff REST: bounded exchange and per-actor daily limit resist direct RPC spam", async () => {
+  for (let i = 0; i < 5; i++)
+    assert.equal((await handoffSend(handoffRequest, 3)).status, 200);
+  assert.equal((await handoffSend(handoffRequest, 3)).status, 400);
+  let sent = 6,
+    blocked = 0;
+  for (const person of [20, 21, 22, 23]) {
+    const r = await handoffCreate(person);
+    assert.equal((await handoffRespond(r, person)).status, 204);
+    for (let i = 0; i < 6; i++) {
+      const v = await handoffSend(r, 3);
+      if (sent < 20) {
+        assert.equal(v.status, 200, JSON.stringify(v));
+        sent++;
+      } else {
+        assert.equal(v.status, 400);
+        blocked++;
+      }
+    }
+  }
+  assert.equal(sent, 20);
+  assert.ok(blocked > 0);
+});
+test("handoff REST: concurrent send and candidate closure serialize; accepted organization withdrawal also ends contact", async () => {
+  const request = await handoffCreate(24);
+  assert.equal((await handoffRespond(request, 24)).status, 204);
+  const [send, close] = await Promise.all([
+    handoffSend(request, 24),
+    issuerRpc("close_contact_request", { p_request: request }, 24),
+  ]);
+  assert.ok([200, 400].includes(send.status));
+  assert.equal(close.status, 204);
+  assert.equal((await handoffSend(request, 24)).status, 400);
+  assert.equal((await handoffRespond(request, 24)).status, 400);
+  const notes = (
+    await read(`visible_contact_followups?request_id=eq.${request}`, 24)
+  ).data;
+  assert.equal(notes.length, send.status === 200 ? 1 : 0);
+  assert.equal(
+    (
+      await issuerRpc(
+        "close_contact_request",
+        { p_request: handoffRequest, p_withdraw: true },
+        3,
+      )
+    ).status,
+    204,
+  );
+  assert.equal((await handoffSend(handoffRequest, 30)).status, 400);
+  assert.equal((await handoffRespond(handoffRequest, 30)).status, 400);
+  assert.ok(
+    (
+      await read(
+        `visible_contact_followups?request_id=eq.${handoffRequest}`,
+        30,
+      )
+    ).data.length > 0,
+  );
+});

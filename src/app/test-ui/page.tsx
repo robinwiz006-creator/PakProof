@@ -1,3 +1,4 @@
+import { ContactHandoffFixture } from "@/components/contact-handoff-fixture";
 import { TransactionRecoveryFixture } from "@/components/transaction-recovery-fixture";
 import { PaidProjectEditor } from "@/components/paid-project-editor";
 import {
@@ -22,6 +23,7 @@ export default async function TestUI({
   // Isolated component fixtures only. Never available with configured Supabase.
   if (process.env.PROOFPAK_E2E !== "1" || isConfigured()) notFound();
   const { fixture } = await searchParams;
+  if (fixture === "contact-handoff") return <ContactHandoffFixture />;
   if (
     fixture === "transaction-recovery" ||
     fixture === "transaction-recovery-cancelled"

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { contactStatus } from "@/lib/contact-handoff";
 import { z } from "zod";
 import { credentialWorkspace } from "@/lib/credential-data";
 import { respondContact } from "@/lib/employer-actions";
@@ -114,7 +115,7 @@ export default async function ContactRequests({
     <div className="container page">
       <PageHeading
         title="Contact requests"
-        description="An in-app way to express interest. Acceptance shares no email or private contact details."
+        description="Review requests and agree on a next step privately. No email or phone is shared automatically."
       />
       <div className="button-row">
         <Link className="text-link" href="/contact-requests">
@@ -172,7 +173,7 @@ export default async function ContactRequests({
                   : ((r.companies as unknown as { name: string })?.name ??
                     "Organization")}
               </h2>
-              <span className="tag">{r.status}</span>
+              <span className="tag">{contactStatus(r.status)}</span>
             </div>
             <p>{r.purpose}</p>
             <p className="muted">
@@ -209,34 +210,35 @@ export default async function ContactRequests({
                 The linked opportunity is no longer open or publicly available.
               </p>
             )}
-            {!outgoing && r.status !== "declined" && (
+            {!outgoing && r.status === "pending" && (
               <form className="section-spacer" action={respondContact}>
                 <input type="hidden" name="request_id" value={r.id} />
                 <label className="field">
                   Your decision
                   <select name="decision" defaultValue="" required>
                     <option value="">Choose a decision</option>
-                    {r.status === "pending" && (
-                      <option value="accepted">Accept contact request</option>
-                    )}
-                    <option value="declined">
-                      {r.status === "accepted"
-                        ? "Withdraw acceptance"
-                        : "Decline request"}
-                    </option>
+                    <option value="accepted">Accept contact request</option>
+                    <option value="declined">Decline request</option>
                   </select>
                 </label>
                 <SubmitButton>Save my decision</SubmitButton>
               </form>
             )}
-            {r.status === "accepted" && (
-              <p className="notice section-spacer">
-                Interest recorded.{" "}
-                {(r.challenge_id && openChallenges.has(r.challenge_id)) ||
-                (r.paid_project_id && openProjects.has(r.paid_project_id))
-                  ? "Use the linked opportunity to continue through its existing workflow."
-                  : "No opportunity was linked; acceptance records interest only."}{" "}
-                This does not start a chat or share contact details.
+            <div className="button-row section-spacer">
+              <Link
+                className="button secondary"
+                href={`/contact-requests/${r.id}`}
+              >
+                {r.status === "accepted"
+                  ? "Continue privately"
+                  : "View request & history"}
+              </Link>
+            </div>
+            {r.status === "pending" && (
+              <p className="muted">
+                Accepting allows a limited private follow-up with this
+                organization. You can close contact at any time. No email or
+                phone is shared.
               </p>
             )}
           </article>
