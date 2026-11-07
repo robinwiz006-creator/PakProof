@@ -1,3 +1,4 @@
+import type { AssessmentDetails } from "./assessment-details";
 export type Profile = {
   is_discoverable?: boolean;
   allow_contact_requests?: boolean;
@@ -52,6 +53,7 @@ export type Submission = {
   challenges?: Challenge | null;
   profiles?: Profile | null;
   challenge_assessments?: {
+    details?: AssessmentDetails | null;
     review_id: string;
     criteria: { title: string; description: string }[];
     outcomes: string[];

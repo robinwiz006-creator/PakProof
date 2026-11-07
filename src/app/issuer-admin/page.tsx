@@ -11,6 +11,7 @@ export default async function IssuerAdmin({
 }: {
   searchParams: Promise<{
     q?: string;
+    trust?: string;
     status?: string;
     page?: string;
     message?: string;
@@ -30,16 +31,22 @@ export default async function IssuerAdmin({
     1,
     Math.min(10000, Number.parseInt(input.page ?? "1") || 1),
   );
+  const pendingTrust = input.trust === "pending";
   let query = db
-    .from("organizations")
+    .from(pendingTrust ? "administrator_verification_queue" : "organizations")
     .select(
-      "id,company_id,organization_type,issuer_status,created_at,companies!inner(name,description,website)",
+      pendingTrust
+        ? "*"
+        : "id,company_id,organization_type,issuer_status,created_at,trust_level,trust_suspended,companies!inner(name,description,website)",
       { count: "exact" },
     )
     .order("created_at", { ascending: false });
   if (status) query = query.eq("issuer_status", status);
   if (q)
-    query = query.ilike("companies.name", `%${q.replace(/[\\%_]/g, "\\$&")}%`);
+    query = query.ilike(
+      pendingTrust ? "company_name" : "companies.name",
+      `%${q.replace(/[\\%_]/g, "\\$&")}%`,
+    );
   const [orgs, ...counts] = await Promise.all([
     query.range((page - 1) * 25, page * 25 - 1),
     ...["pending", "authorized", "suspended"].map((state) =>
@@ -48,6 +55,9 @@ export default async function IssuerAdmin({
         .select("id", { count: "exact", head: true })
         .eq("issuer_status", state),
     ),
+    db
+      .from("administrator_verification_queue")
+      .select("id", { count: "exact", head: true }),
   ]);
   if (orgs.error || counts.some((c) => c.error))
     throw new Error(
@@ -57,13 +67,13 @@ export default async function IssuerAdmin({
     created_at: string;
   })[];
   const url = (n: number) =>
-    `/issuer-admin?${new URLSearchParams({ q, status, page: String(n) })}`;
+    `/issuer-admin?${new URLSearchParams({ q, status, page: String(n), ...(pendingTrust ? { trust: "pending" } : {}) })}`;
   return (
     <div className="container page">
       <PageHeading
         eyebrow="RESTRICTED ADMINISTRATION"
         title="Issuer review desk"
-        description="Check identity and representative authority before enabling credentials. Authorization is a recorded human decision."
+        description="Review institutional trust and credential-category permissions separately. Neither guarantees every credential."
       />
       {input.message && (
         <p className="notice" role="status">
@@ -82,7 +92,16 @@ export default async function IssuerAdmin({
           </Link>
         ))}
       </div>
+      <Link
+        className="button secondary section-spacer"
+        href={pendingTrust ? "/issuer-admin" : "/issuer-admin?trust=pending"}
+      >
+        {pendingTrust
+          ? "All issuer organizations"
+          : `Institutional requests awaiting review (${counts[3]?.count ?? 0})`}
+      </Link>
       <Form className="filters" action="/issuer-admin">
+        {pendingTrust && <input type="hidden" name="trust" value="pending" />}
         <input
           name="q"
           aria-label="Search organization name"

@@ -73,6 +73,9 @@ export const credentialInput = z
     path: ["expiry_date"],
   });
 export type Organization = {
+  trust_level?: string;
+  trust_suspended?: boolean;
+  trust_review_id?: string | null;
   id: string;
   company_id: string;
   organization_type: string;

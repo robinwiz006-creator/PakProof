@@ -1,3 +1,5 @@
+import { AssessmentDetailsView } from "@/components/assessment-details-view";
+import { AssessmentDetailFields } from "@/components/assessment-detail-fields";
 import { EmployerDirectory } from "@/components/employer-directory";
 import { DiscoverySettings } from "@/components/discovery-settings";
 import { saveDiscoveryPreferences } from "@/lib/employer-actions";
@@ -141,7 +143,7 @@ export default async function Portal({
             .select(
               section === ""
                 ? "id,talent_id,status"
-                : "*,challenges(*,companies(name)),submission_reviews(*),challenge_assessments(review_id,criteria,outcomes)",
+                : "*,challenges(*,companies(name)),submission_reviews(*),challenge_assessments(review_id,criteria,outcomes,details)",
             )
             .eq("talent_id", user.id)
             .order("created_at", { ascending: false })
@@ -190,7 +192,7 @@ export default async function Portal({
               .select(
                 section === ""
                   ? "id,talent_id,status,challenges!inner(company_id)"
-                  : "*,challenges!inner(*),profiles(*),submission_reviews(*),challenge_assessments(review_id,criteria,outcomes)",
+                  : "*,challenges!inner(*),profiles(*),submission_reviews(*),challenge_assessments(review_id,criteria,outcomes,details)",
               )
               .in("challenges.company_id", membershipIds)
               .order("created_at", { ascending: false })
@@ -637,13 +639,18 @@ export default async function Portal({
                     {s.challenge_assessments
                       ?.filter((a) => a.review_id === r.id)
                       .map((a) => (
-                        <ul key={a.review_id}>
-                          {a.criteria.map((c, n) => (
-                            <li key={n}>
-                              {c.title}: {a.outcomes[n]?.replaceAll("_", " ")}
-                            </li>
-                          ))}
-                        </ul>
+                        <div key={a.review_id}>
+                          {a.details && (
+                            <AssessmentDetailsView details={a.details} />
+                          )}
+                          <ul>
+                            {a.criteria.map((c, n) => (
+                              <li key={n}>
+                                {c.title}: {a.outcomes[n]?.replaceAll("_", " ")}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
                       ))}
                   </div>
                 ))}
@@ -1004,6 +1011,9 @@ export default async function Portal({
                   {s.challenge_assessments.map((a) => (
                     <div key={a.review_id}>
                       <p className="muted">Review reference {a.review_id}</p>
+                      {a.details && (
+                        <AssessmentDetailsView details={a.details} />
+                      )}
                       {a.criteria.length ? (
                         <ul>
                           {a.criteria.map((c, i) => (
@@ -1031,6 +1041,7 @@ export default async function Portal({
                       rubrics.find((r) => r.challenge_id === s.challenge_id)?.id
                     }
                   />
+                  <AssessmentDetailFields />
                   <Field
                     label="Feedback for the candidate"
                     name="feedback"

@@ -1,4 +1,5 @@
 "use server";
+import { assessmentDetailsFromForm } from "./assessment-details";
 import { rubricSchema } from "./challenge-assessment";
 import { messageLink } from "./navigation-message";
 import { redirect } from "next/navigation";
@@ -229,7 +230,17 @@ export async function reviewSubmission(form: FormData) {
   const { db } = await context();
   const path = "/portal/company/reviews";
   const values = validate(reviewSchema, raw(form), path);
-  const { error } = await db.rpc("review_assessed_submission", {
+  let details;
+  try {
+    details = assessmentDetailsFromForm(form);
+  } catch {
+    go(
+      path,
+      "Check assessment competencies, method, summary, date and score. Leave optional explanation disabled if not recorded.",
+    );
+  }
+  const { error } = await db.rpc("review_assessed_submission_details", {
+    p_details: details,
     p_outcomes: form.getAll("outcomes"),
     p_expected_rubric: form.get("rubric_id") || null,
     p_submission_id: values.submission_id,

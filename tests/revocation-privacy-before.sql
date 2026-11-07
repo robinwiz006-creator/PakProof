@@ -26,7 +26,7 @@ create function revocation_fixture.fingerprint() returns text language sql as $$
  (select jsonb_agg(to_jsonb(t) order by id) from public.credentials t),
  (select jsonb_agg(to_jsonb(t) order by id) from public.credential_events t),
  (select jsonb_agg(to_jsonb(t) order by credential_id) from public.credential_proofs t),
- (select jsonb_agg(to_jsonb(t) order by id) from public.issuer_authorizations t),
+ (select jsonb_agg(to_jsonb(t)-array['previous_trust_review_id','trust_decision','previous_trust_level','resulting_trust_level','resulting_trust_suspended','verification_request_id'] order by id) from public.issuer_authorizations t),
  (select jsonb_agg(to_jsonb(t) order by credential_id) from public.credential_issuance_audit t))::text)
 $$;
 create table revocation_fixture.before_snapshot as select revocation_fixture.fingerprint() as digest;

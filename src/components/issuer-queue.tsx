@@ -1,3 +1,4 @@
+import { organizationTrust } from "@/lib/organization-trust";
 import Link from "next/link";
 import type { Organization } from "@/lib/credentials";
 export function IssuerQueue({
@@ -26,6 +27,10 @@ export function IssuerQueue({
             <tr key={o.id}>
               <td>
                 <strong>{o.companies.name}</strong>
+                <p className="muted">
+                  {organizationTrust(o).label}
+                  {o.trust_suspended ? " · suspended" : ""}
+                </p>
               </td>
               <td>{o.organization_type}</td>
               <td>

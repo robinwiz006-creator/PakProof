@@ -212,3 +212,40 @@ test("supersession metadata preserves historical v3 claims; a correction uses th
     await credentialHash(credentialClaim(replacement)),
   );
 });
+
+test("current institutional trust metadata does not rewrite historical v3 claims", async () => {
+  const hash = await credentialHash(credentialClaim(c));
+  const current = {
+    ...c,
+    organizations: {
+      id: c.organization_id,
+      company_id: "21000000-0000-4000-8000-000000000001",
+      organization_type: "training",
+      issuer_status: "authorized" as const,
+      authorization_id: c.authorization_id,
+      companies: {
+        name: c.issuer_name,
+        description:
+          "Institutional metadata is separate from the original claim.",
+        website: "https://example.com",
+      },
+      trust_level: "trusted_assessment_partner",
+      trust_suspended: false,
+      trust_review_id: "31000000-0000-4000-8000-000000000001",
+    },
+  };
+  assert.equal(await credentialHash(credentialClaim(current)), hash);
+  assert.equal(
+    await credentialHash(
+      credentialClaim({
+        ...current,
+        organizations: {
+          ...current.organizations,
+          trust_level: "self_registered",
+          trust_suspended: true,
+        },
+      }),
+    ),
+    hash,
+  );
+});

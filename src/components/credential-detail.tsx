@@ -1,3 +1,10 @@
+import {
+  credentialLifecycle,
+  verificationCheckedAt,
+} from "@/lib/credential-lifecycle";
+import { organizationTrust } from "@/lib/organization-trust";
+import { CredentialRecheck } from "./credential-recheck";
+import { OrganizationTrust } from "./organization-trust";
 import { CredentialCorrectionNotice } from "./credential-correction";
 import { CredentialWorkContextView } from "./credential-work-context";
 import { workContext } from "@/lib/challenge-assessment";
@@ -12,6 +19,7 @@ import { credentialValidity } from "@/lib/credentials";
 import type { CredentialIntegrity } from "@/lib/credential-verification";
 import {
   canShareCredential,
+  credentialVisibleAssessment,
   credentialDate,
   credentialEvidenceUrl,
   safeCredentialWebsite,
@@ -30,6 +38,8 @@ export function CredentialDetail({
   canViewPrivate = false,
   manageHref,
   manageLabel,
+  checkedAt,
+  allowRecheck = false,
 }: {
   credential: Credential;
   recipient: CredentialRecipient | null;
@@ -37,12 +47,32 @@ export function CredentialDetail({
   canViewPrivate?: boolean;
   manageHref?: string;
   manageLabel?: string;
+  checkedAt?: string;
+  allowRecheck?: boolean;
 }) {
   const shared = canShareCredential(c, recipient);
   const proof = c.credential_proofs?.[0];
   const evidence = credentialEvidenceUrl(c, shared, canViewPrivate);
   const website = safeCredentialWebsite(c.organizations?.companies?.website);
   const validity = credentialValidity(c);
+  const lifecycle = credentialLifecycle(c),
+    asOf = verificationCheckedAt(checkedAt);
+  const assessmentContext = credentialVisibleAssessment(
+    c,
+    shared,
+    canViewPrivate,
+  );
+  if (!shared && !canViewPrivate)
+    return (
+      <div className="credential-detail">
+        <h1>Credential not public</h1>
+        <p className="notice">
+          Private record · this credential is not available for public
+          verification. Its URL does not grant access.
+        </p>
+        <Link href="/">Return to ProofPak</Link>
+      </div>
+    );
   return (
     <div className="credential-detail">
       <div className="credential-page-top">
@@ -74,6 +104,77 @@ export function CredentialDetail({
                   : "This credential’s issue date has not arrived."}
           </p>
         </aside>
+      )}
+      <section
+        className="credential-summary"
+        aria-label="Credential status summary"
+      >
+        <div>
+          <span>Current credential status</span>
+          <strong
+            className={`credential-status status-${lifecycle.status.toLowerCase().replaceAll(" ", "-")}`}
+          >
+            {lifecycle.status}
+          </strong>
+          <p className="muted">{lifecycle.description}</p>
+        </div>
+        <div>
+          <span>Recipient & visibility</span>
+          <strong>
+            {acceptanceLabels[c.credential_preferences.acceptance]}
+          </strong>
+          <p className="muted">
+            {shared
+              ? "Publicly shared by the recipient"
+              : "Private · not available to public visitors"}
+          </p>
+        </div>
+        <div>
+          <span>Current issuer trust</span>
+          <strong>
+            {c.organizations
+              ? organizationTrust(c.organizations).label
+              : "Current issuer information unavailable"}
+          </strong>
+          <p className="muted">
+            Current institutional verification is separate from category
+            permission at issuance.
+          </p>
+        </div>
+        <div>
+          <span>Historical Solana integrity</span>
+          <strong className={`credential-status integrity-${integrity.state}`}>
+            {integrityLabel(integrity.state, Boolean(proof))}
+          </strong>
+          <p className="muted">
+            {integrityDescriptions[integrity.state]} A matching historical
+            record does not prove current validity or issuer identity.
+          </p>
+          {proof && (
+            <a
+              className="text-link"
+              href={explorerLink(proof.signature)}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Inspect stored transaction reference ↗
+            </a>
+          )}
+        </div>
+      </section>
+      {asOf && (
+        <p className="muted">
+          This view checked at {asOf}. Current validity and issuer trust come
+          from ProofPak; Solana checks the historical commitment. This is not an
+          onchain revocation registry.
+        </p>
+      )}
+      {allowRecheck && <CredentialRecheck />}
+      {c.organizations?.issuer_status === "suspended" && (
+        <p className="notice">
+          The issuer’s current credential-issuing permission is suspended. This
+          does not automatically revoke previously issued credentials.
+        </p>
       )}
       <article
         className="credential-certificate"
@@ -140,10 +241,16 @@ export function CredentialDetail({
           </div>
         </footer>
       </article>
-      {workContext(c.credential_challenge_context) && (
-        <CredentialWorkContextView
-          context={workContext(c.credential_challenge_context)!}
-        />
+      <OrganizationTrust organization={c.organizations} />
+      {assessmentContext && (
+        <CredentialWorkContextView context={assessmentContext} />
+      )}
+      {!workContext(c.credential_challenge_context) && (
+        <p className="notice section-spacer">
+          No structured assessment record is attached to this credential. This
+          does not establish whether an assessment took place. Refer to the
+          issuer’s description and any permitted supporting evidence.
+        </p>
       )}
       <div className="credential-actions-row">
         {shared ? (
@@ -167,38 +274,6 @@ export function CredentialDetail({
         )}
       </div>
       <CredentialCorrectionNotice credential={c} />
-      <section
-        className="credential-summary"
-        aria-label="Credential status summary"
-      >
-        <div>
-          <span>Validity</span>
-          <strong
-            className={`credential-status status-${validity.toLowerCase().replaceAll(" ", "-")}`}
-          >
-            {validity}
-          </strong>
-        </div>
-        <div>
-          <span>Recipient</span>
-          <strong>
-            {acceptanceLabels[c.credential_preferences.acceptance]}
-          </strong>
-        </div>
-        <div>
-          <span>Organization</span>
-          <strong>
-            {issuerLabels[c.organizations?.issuer_status ?? ""] ??
-              "Approval unavailable"}
-          </strong>
-        </div>
-        <div>
-          <span>Blockchain integrity</span>
-          <strong className={`credential-status integrity-${integrity.state}`}>
-            {integrityLabel(integrity.state, Boolean(proof))}
-          </strong>
-        </div>
-      </section>
       {(["failed", "mismatch", "missing"] as string[]).includes(
         integrity.state,
       ) && (
@@ -232,22 +307,25 @@ export function CredentialDetail({
               <dt>Credential validity</dt>
               <dd>
                 <strong
-                  className={`credential-status status-${validity.toLowerCase().replaceAll(" ", "-")}`}
+                  className={`credential-status status-${lifecycle.status.toLowerCase().replaceAll(" ", "-")}`}
                 >
-                  {validity}
+                  {lifecycle.status}
                 </strong>
                 <p className="muted">
-                  {validity === "Revoked"
-                    ? "The issuing organization withdrew this credential. A historical blockchain record does not undo revocation."
-                    : validity === "Superseded"
-                      ? "An accepted correction replaces this historical record."
-                      : validity === "Expired"
-                        ? "The expiry date has passed."
-                        : validity === "Not yet valid"
-                          ? "The issue date is in the future."
-                          : c.expiry_date
-                            ? `Valid through ${credentialDate(c.expiry_date)}, unless revoked.`
-                            : "No expiry date specified; no revocation recorded."}
+                  {lifecycle.status === "Awaiting acceptance" ||
+                  lifecycle.status === "Declined"
+                    ? lifecycle.description
+                    : validity === "Revoked"
+                      ? "The issuing organization withdrew this credential. A historical blockchain record does not undo revocation."
+                      : validity === "Superseded"
+                        ? "An accepted correction replaces this historical record."
+                        : validity === "Expired"
+                          ? "The expiry date has passed."
+                          : validity === "Not yet valid"
+                            ? "The issue date is in the future."
+                            : c.expiry_date
+                              ? `Valid through ${credentialDate(c.expiry_date)}, unless revoked.`
+                              : "No expiry date specified; no revocation recorded."}
                 </p>
               </dd>
             </div>
@@ -273,9 +351,23 @@ export function CredentialDetail({
                   {issuerLabels[c.organizations?.issuer_status ?? ""] ??
                     "Current approval unavailable"}
                 </strong>
+                <p className="muted">
+                  The status above is the issuer’s current credential-issuing
+                  permission, not its historical permission or institutional
+                  verification level.
+                </p>
+                {c.organizations?.allowed_credential_types &&
+                  !c.organizations.allowed_credential_types.includes(
+                    c.credential_type,
+                  ) && (
+                    <p className="muted">
+                      This category is not currently permitted for new issuance.
+                      That alone does not revoke this historical credential.
+                    </p>
+                  )}
                 <p>
                   {c.authorization_id
-                    ? "ProofPak approval recorded at issuance."
+                    ? "Credential issuance authorization recorded at issuance. Institutional verification is shown separately."
                     : "Approval at issuance is unavailable."}
                 </p>
                 <p className="muted">

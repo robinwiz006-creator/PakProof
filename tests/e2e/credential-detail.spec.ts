@@ -106,7 +106,9 @@ test("revocation, expiry, organization approval and integrity remain independent
     checks.getByText("Suspended on ProofPak", { exact: true }),
   ).toBeVisible();
   await expect(
-    checks.getByText("ProofPak approval recorded at issuance."),
+    checks.getByText(
+      "Credential issuance authorization recorded at issuance. Institutional verification is shown separately.",
+    ),
   ).toBeVisible();
   await expect(
     checks.getByText("Onchain verified", { exact: true }),
@@ -133,7 +135,9 @@ test("copy uses this site's actual public credential route; clipboard failure ha
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto(fixture);
   await page.getByRole("button", { name: "Copy Credential Link" }).click();
-  await expect(page.getByRole("status")).toHaveText("Credential link copied.");
+  await expect(
+    page.getByRole("status").filter({ hasText: "Credential link copied." }),
+  ).toHaveText("Credential link copied.");
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
     "http://127.0.0.1:3100/credentials/70000000-0000-4000-8000-000000000001",
   );

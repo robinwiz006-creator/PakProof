@@ -2423,3 +2423,813 @@ test("handoff REST: concurrent send and candidate closure serialize; accepted or
     ).data.length > 0,
   );
 });
+
+let verificationOrg,
+  verificationRequest,
+  verificationScope,
+  verificationPartnerRequest;
+async function verificationOrgRecord() {
+  return (await read(`organizations?id=eq.${verificationOrg}&select=*`, 1))
+    .data[0];
+}
+async function submitVerification(assessment = false, role = 1) {
+  return issuerRpc(
+    "submit_organization_verification",
+    {
+      p_organization: verificationOrg,
+      p_identity:
+        "PRIVATE institutional identity and representative authority evidence.",
+      p_role: "Training representative",
+      p_identity_url: "https://example.com/PRIVATE-institutional-evidence",
+      p_assessment: assessment
+        ? "PRIVATE documented rubric, assessor qualifications and appeals policy."
+        : "",
+      p_assessment_url: assessment
+        ? "https://example.com/PRIVATE-assessment-evidence"
+        : "",
+    },
+    role,
+  );
+}
+async function reviewVerification(
+  decision,
+  level,
+  request,
+  role = 5,
+  checks = { identity: true, assessment: true },
+) {
+  const o = await verificationOrgRecord();
+  return issuerRpc(
+    "review_organization_verification",
+    {
+      p_organization: verificationOrg,
+      p_request: request,
+      p_expected_review: o.trust_review_id,
+      p_decision: decision,
+      p_level: level,
+      p_reason:
+        "PRIVATE administrator institutional evidence and assessment review.",
+      p_identity_checked: checks.identity,
+      p_assessment_checked: checks.assessment,
+    },
+    role,
+  );
+}
+test("institutional trust REST: old authorized issuers remain self-registered, with no inferred identity status", async () => {
+  verificationOrg = (await workArgs()).p_organization;
+  const o = await verificationOrgRecord();
+  assert.equal(o.trust_level, "self_registered");
+  assert.equal(o.trust_suspended, false);
+  verificationScope = {
+    authorization_id: o.authorization_id,
+    issuer_status: o.issuer_status,
+    allowed_credential_types: o.allowed_credential_types,
+  };
+  const r = await submitVerification();
+  assert.equal(r.status, 200, JSON.stringify(r));
+  verificationRequest = r.data;
+  assert.equal((await submitVerification()).status, 400);
+});
+test("institutional trust REST: verification evidence is private to members and admins, not the public or unrelated accounts", async () => {
+  for (const role of [undefined, 2, 3]) {
+    const r = await read(
+      `organization_verification_requests?organization_id=eq.${verificationOrg}&select=*`,
+      role,
+    );
+    assert.ok(r.status >= 400 || r.data.length === 0);
+    const a = await read(
+      `organization_verification_outcomes?organization_id=eq.${verificationOrg}&select=*`,
+      role,
+    );
+    assert.ok(a.status >= 400 || a.data.length === 0);
+    const q = await read("administrator_verification_queue?select=*", role);
+    assert.ok(q.status >= 400 || q.data.length === 0);
+  }
+  for (const role of [1, 4, 5])
+    assert.equal(
+      (
+        await read(
+          `organization_verification_requests?id=eq.${verificationRequest}&select=*`,
+          role,
+        )
+      ).data.length,
+      1,
+    );
+  const publicOrg = (
+    await read(`organizations?id=eq.${verificationOrg}&select=*`)
+  ).data[0];
+  assert.ok(!JSON.stringify(publicOrg).includes("PRIVATE"));
+  assert.ok(!("verification_request_id" in publicOrg));
+  assert.equal(
+    (await read(`administrator_verification_queue?id=eq.${verificationOrg}`, 5))
+      .data.length,
+    1,
+  );
+});
+test("institutional trust REST: member, outsider, anonymous and direct API writes cannot approve trust", async () => {
+  for (const role of [0, 1, 2, 3, 4, 5]) {
+    const r = await fetch(`${base}/organizations?id=eq.${verificationOrg}`, {
+      method: "PATCH",
+      headers: {
+        ...(role ? { Authorization: `Bearer ${jwt(role)}` } : {}),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        trust_level: "trusted_assessment_partner",
+        trust_suspended: false,
+      }),
+    });
+    assert.ok(
+      [401, 403].includes(r.status),
+      `Valid-column direct trust PATCH role ${role}: ${r.status}`,
+    );
+  }
+  for (const role of [0, 1, 2, 3, 4])
+    assert.ok(
+      (
+        await reviewVerification(
+          "approve",
+          "verified_organization",
+          verificationRequest,
+          role,
+        )
+      ).status >= 400,
+    );
+  for (const role of [1, 3, 5])
+    for (const table of [
+      "organizations",
+      "organization_verification_requests",
+      "issuer_authorizations",
+    ])
+      for (const method of ["POST", "PATCH", "DELETE"])
+        assert.ok((await read(table, role, method)).status >= 400);
+});
+test("institutional trust REST: identity and assessment confirmations are separately enforced", async () => {
+  assert.equal(
+    (
+      await reviewVerification(
+        "approve",
+        "trusted_assessment_partner",
+        verificationRequest,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await reviewVerification(
+        "approve",
+        "verified_organization",
+        verificationRequest,
+        5,
+        { identity: false, assessment: false },
+      )
+    ).status,
+    400,
+  );
+  const attempts = await Promise.all([
+    reviewVerification("approve", "verified_organization", verificationRequest),
+    reviewVerification("approve", "verified_organization", verificationRequest),
+  ]);
+  assert.deepEqual(
+    attempts.map((r) => r.status).sort(),
+    [204, 400],
+    JSON.stringify(attempts),
+  );
+  const o = await verificationOrgRecord();
+  assert.equal(o.trust_level, "verified_organization");
+  const { organizationTrust } =
+    await import("../src/lib/organization-trust.ts");
+  assert.equal(
+    organizationTrust(
+      (await read(`organizations?id=eq.${verificationOrg}&select=*`)).data[0],
+    ).label,
+    "Verified Organization",
+  );
+  assert.equal(o.authorization_id, verificationScope.authorization_id);
+  assert.deepEqual(
+    o.allowed_credential_types,
+    verificationScope.allowed_credential_types,
+  );
+  assert.equal(
+    (await read(`administrator_verification_queue?id=eq.${verificationOrg}`, 5))
+      .data.length,
+    0,
+  );
+  assert.equal(
+    (
+      await reviewVerification(
+        "approve",
+        "verified_organization",
+        verificationRequest,
+      )
+    ).status,
+    400,
+  );
+});
+test("institutional trust REST: partner approval, downgrade and suspension retain scopes and immutable private history", async () => {
+  let r = await submitVerification(true);
+  assert.equal(r.status, 200, JSON.stringify(r));
+  verificationPartnerRequest = r.data;
+  assert.equal(
+    (
+      await reviewVerification(
+        "approve",
+        "trusted_assessment_partner",
+        verificationPartnerRequest,
+        5,
+        { identity: true, assessment: false },
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await reviewVerification(
+        "approve",
+        "trusted_assessment_partner",
+        verificationPartnerRequest,
+      )
+    ).status,
+    204,
+  );
+  let o = await verificationOrgRecord();
+  const stale = o.trust_review_id;
+  assert.equal(o.trust_level, "trusted_assessment_partner");
+  assert.equal(
+    (await reviewVerification("downgrade", "verified_organization", null))
+      .status,
+    204,
+  );
+  r = await issuerRpc(
+    "review_organization_verification",
+    {
+      p_organization: verificationOrg,
+      p_request: null,
+      p_expected_review: stale,
+      p_decision: "suspend",
+      p_level: "self_registered",
+      p_reason: "A stale review should never overwrite another decision.",
+      p_identity_checked: false,
+      p_assessment_checked: false,
+    },
+    5,
+  );
+  assert.equal(r.status, 400);
+  assert.equal(
+    (await reviewVerification("suspend", "self_registered", null)).status,
+    204,
+  );
+  o = await verificationOrgRecord();
+  assert.equal(o.trust_level, "self_registered");
+  assert.equal(o.trust_suspended, true);
+  for (const k of Object.keys(verificationScope))
+    assert.deepEqual(o[k], verificationScope[k]);
+  const audit = (
+    await read(
+      `issuer_authorizations?organization_id=eq.${verificationOrg}&trust_decision=not.is.null&select=*`,
+      5,
+    )
+  ).data;
+  assert.equal(audit.length, 4);
+  assert.ok(audit.every((a) => a.administrator_id === uid(5)));
+  const outcomes = (
+    await read(
+      `organization_verification_outcomes?organization_id=eq.${verificationOrg}`,
+      1,
+    )
+  ).data;
+  assert.equal(outcomes.length, 4);
+  assert.ok(!JSON.stringify(outcomes).includes("PRIVATE"));
+  assert.ok(
+    outcomes.every((a) => !("administrator_id" in a) && !("review_note" in a)),
+  );
+});
+test("institutional trust REST: rejection retains current trust, category permissions still control issuance and historic v3 hashes stay intact", async () => {
+  const { credentialClaim, credentialHash } =
+    await import("../src/lib/credential-proof.ts");
+  const record = (await correctionCredential(correctionAccepted, 1)).data[0];
+  const hash = await credentialHash(credentialClaim(record));
+  const r = await submitVerification();
+  assert.equal(r.status, 200);
+  assert.equal(
+    (await reviewVerification("reject", "trusted_assessment_partner", r.data))
+      .status,
+    204,
+  );
+  assert.equal((await verificationOrgRecord()).trust_level, "self_registered");
+  assert.equal((await verificationOrgRecord()).trust_suspended, true);
+  assert.equal((await submitVerification()).status, 400);
+  const args = await issueArgs("company_achievement");
+  assert.equal((await issuerRpc("issue_credential", args, 1)).status, 200);
+  assert.equal(
+    (await issuerRpc("issue_credential", { ...args, p_type: "degree" }, 1))
+      .status,
+    400,
+  );
+  const same = (await correctionCredential(correctionAccepted, 1)).data[0];
+  assert.equal(await credentialHash(credentialClaim(same)), hash);
+});
+
+let transparencyChallenge,
+  transparencySubmission,
+  transparencyRubric,
+  transparencyCredential,
+  transparencyDigest;
+const transparencyDetails = {
+  competencies: ["React", "Keyboard accessibility"],
+  method: "code_review",
+  summary:
+    "Implemented accessible controls and explained keyboard navigation decisions.",
+  score: 4,
+  score_max: 5,
+  assessed_on: new Date().toISOString().slice(0, 10),
+  reviewer_id: "PRIVATE forged reviewer",
+  evaluating_organization: "PRIVATE forged organization",
+  private_feedback: "PRIVATE investigation notes",
+  challenge_level: "Advanced",
+};
+function transparencyReview(details = transparencyDetails) {
+  return {
+    p_submission_id: transparencySubmission,
+    p_decision: "approved",
+    p_feedback:
+      "PRIVATE feedback and candidate contact details remain private.",
+    p_outcomes: ["met"],
+    p_expected_rubric: transparencyRubric,
+    p_details: details,
+  };
+}
+test("assessment transparency REST: metadata validation and reviewer permissions cannot be bypassed", async () => {
+  const org = await workState();
+  const company = (
+    await read(`organizations?id=eq.${org.org}&select=company_id`, 1)
+  ).data[0].company_id;
+  let r = await issuerRpc(
+    "create_challenge_with_rubric",
+    {
+      p_fields: {
+        company_id: company,
+        title: "Transparency work fixture",
+        description:
+          "Build keyboard-accessible controls for a synthetic reviewed project.",
+        skills: ["React"],
+        difficulty: "Beginner",
+        deadline: handoffDeadline,
+        deliverables: "Source code, accessible interface and an explanation.",
+      },
+      p_criteria: [
+        {
+          title: "Keyboard behavior",
+          description: "All controls can be operated with the keyboard.",
+        },
+      ],
+    },
+    1,
+  );
+  assert.equal(r.status, 200, JSON.stringify(r));
+  transparencyChallenge = r.data;
+  transparencyRubric = (
+    await read(`challenge_public_rubrics?challenge_id=eq.${r.data}&select=id`)
+  ).data[0].id;
+  r = await issuerRpc(
+    "submit_work",
+    {
+      p_challenge_id: transparencyChallenge,
+      p_project_url: "https://example.com/transparency-work",
+      p_github_url: "https://example.com/PRIVATE-second-link",
+      p_explanation:
+        "PRIVATE candidate explanation must not become a public assessment summary.",
+    },
+    2,
+  );
+  assert.equal(r.status, 200);
+  transparencySubmission = r.data;
+  for (const role of [0, 2, 3])
+    assert.ok(
+      (
+        await issuerRpc(
+          "review_assessed_submission_details",
+          transparencyReview(),
+          role,
+        )
+      ).status >= 400,
+    );
+  for (const patch of [
+    { competencies: [] },
+    { method: "fake_verified_test" },
+    { score: 6 },
+    { score: 4.5 },
+    { score_max: null },
+    { assessed_on: "2999-01-01" },
+    { summary: "short" },
+  ])
+    assert.ok(
+      (
+        await issuerRpc(
+          "review_assessed_submission_details",
+          transparencyReview({ ...transparencyDetails, ...patch }),
+          4,
+        )
+      ).status >= 400,
+    );
+  assert.equal(
+    (
+      await read(
+        `challenge_submissions?id=eq.${transparencySubmission}&select=status`,
+        2,
+      )
+    ).data[0].status,
+    "pending",
+  );
+  assert.deepEqual(
+    (
+      await read(
+        `submission_reviews?submission_id=eq.${transparencySubmission}`,
+        1,
+      )
+    ).data,
+    [],
+  );
+});
+test("assessment transparency REST: approved snapshots use the real authorized reviewer and whitelist shareable fields", async () => {
+  const r = await issuerRpc(
+    "review_assessed_submission_details",
+    transparencyReview(),
+    4,
+  );
+  assert.equal(r.status, 200, JSON.stringify(r));
+  const review = (
+    await read(
+      `submission_reviews?submission_id=eq.${transparencySubmission}`,
+      1,
+    )
+  ).data[0];
+  assert.equal(review.reviewer_id, uid(4));
+  const a = (
+    await read(
+      `challenge_assessments?submission_id=eq.${transparencySubmission}&select=*`,
+      2,
+    )
+  ).data[0];
+  assert.equal(a.details.challenge_level, "Beginner");
+  assert.equal(a.details.evaluating_organization, "Privacy Fixture");
+  assert.equal(a.details.reviewer_attributed, true);
+  assert.equal(a.details.method, "code_review");
+  assert.ok(!JSON.stringify(a.details).includes("PRIVATE"));
+  assert.ok(!("reviewer_id" in a.details));
+  for (const role of [1, 2, 4]) {
+    const response = await fetch(
+      `${base}/challenge_assessments?submission_id=eq.${transparencySubmission}`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${jwt(role)}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ details: { method: "interview" } }),
+      },
+    );
+    assert.equal(response.status, 403);
+  }
+});
+test("assessment transparency REST: issuance freezes schema-2 assessment within the existing v3 commitment", async () => {
+  const org = await workState();
+  const r = await issuerRpc(
+    "issue_challenge_credential",
+    {
+      p_submission: transparencySubmission,
+      p_organization: org.org,
+      p_title: "Accessible interface assessment",
+      p_type: "company_achievement",
+      p_description:
+        "A separately issued credential recognizing assessed accessible interface work.",
+      p_issue_date: new Date().toISOString().slice(0, 10),
+      p_expiry_date: null,
+      p_award: "",
+    },
+    1,
+  );
+  assert.equal(r.status, 200, JSON.stringify(r));
+  transparencyCredential = r.data;
+  const source = (
+    await read(`challenge_credential_sources?credential_id=eq.${r.data}`, 1)
+  ).data[0];
+  transparencyDigest = source.context_digest;
+  assert.equal(source.manifest.schema, 2);
+  assert.match(source.manifest.context_salt, /^[a-f0-9-]{36}$/);
+  const { assessmentHash, assessmentContextMatches, workContext } =
+    await import("../src/lib/challenge-assessment.ts");
+  assert.equal(await assessmentHash(source.manifest), source.context_digest);
+  const c = (await correctionCredential(r.data, 2)).data[0];
+  assert.equal(
+    await assessmentContextMatches(
+      c.program_name,
+      workContext(c.credential_challenge_context),
+    ),
+    true,
+  );
+  assert.equal(c.credential_preferences.acceptance, "pending");
+  assert.equal(c.credential_preferences.share_evidence, false);
+  assert.deepEqual((await correctionCredential(r.data)).data, []);
+  assert.deepEqual(
+    (await read(`challenge_credential_sources?credential_id=eq.${r.data}`, 3))
+      .data,
+    [],
+  );
+});
+test("assessment transparency REST: credential publication alone does not disclose methods, scores or additional evidence", async () => {
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_credential",
+        {
+          p_credential: transparencyCredential,
+          p_acceptance: "accepted",
+          p_public: true,
+          p_share_evidence: false,
+        },
+        2,
+      )
+    ).status,
+    204,
+  );
+  const { workContext } = await import("../src/lib/challenge-assessment.ts");
+  const c = (await correctionCredential(transparencyCredential)).data[0];
+  assert.equal(workContext(c.credential_challenge_context).assessment, null);
+  assert.equal(c.credential_evidence, null);
+  const filtered = await read(
+    `credential_challenge_context?credential_id=eq.${transparencyCredential}&assessment->details->>method=eq.code_review`,
+  );
+  assert.deepEqual(filtered.data, []);
+});
+test("assessment transparency REST: explicit evidence consent shows evaluator-reported details without private notes or reviewer UUIDs", async () => {
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_credential",
+        {
+          p_credential: transparencyCredential,
+          p_acceptance: "accepted",
+          p_public: true,
+          p_share_evidence: true,
+        },
+        2,
+      )
+    ).status,
+    204,
+  );
+  const { workContext, assessmentContextMatches } =
+    await import("../src/lib/challenge-assessment.ts");
+  const c = (await correctionCredential(transparencyCredential)).data[0],
+    ctx = workContext(c.credential_challenge_context);
+  assert.equal(ctx.assessment.details.score, 4);
+  assert.equal(ctx.assessment.details.score_max, 5);
+  assert.equal(ctx.assessment.details.method, "code_review");
+  assert.ok(!JSON.stringify(ctx.assessment).includes("PRIVATE"));
+  assert.ok(!JSON.stringify(c).includes("PRIVATE-second-link"));
+  assert.equal(
+    c.credential_evidence.evidence_url,
+    "https://example.com/transparency-work",
+  );
+  assert.equal(await assessmentContextMatches(c.program_name, ctx), true);
+});
+test("assessment transparency REST: later challenge edits and corrections cannot rewrite issued assessment evidence", async () => {
+  const response = await fetch(
+    `${base}/challenges?id=eq.${transparencyChallenge}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${jwt(1)}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ difficulty: "Advanced", skills: ["SQL"] }),
+    },
+  );
+  assert.equal(response.status, 204);
+  const r = await issuerRpc(
+    "correct_credential",
+    {
+      ...(await correctionArgs(transparencyCredential)),
+      p_title: "Corrected accessible interface credential",
+    },
+    1,
+  );
+  assert.equal(r.status, 200, JSON.stringify(r));
+  const old = (
+      await read(
+        `challenge_credential_sources?credential_id=eq.${transparencyCredential}`,
+        1,
+      )
+    ).data[0],
+    replacement = (
+      await read(`challenge_credential_sources?credential_id=eq.${r.data}`, 1)
+    ).data[0];
+  assert.equal(old.context_digest, transparencyDigest);
+  assert.equal(old.manifest.details.challenge_level, "Beginner");
+  assert.deepEqual(replacement.manifest, old.manifest);
+  const c = (await correctionCredential(r.data, 2)).data[0];
+  assert.equal(c.credential_preferences.acceptance, "pending");
+  assert.equal(c.credential_preferences.is_public, false);
+  assert.equal(c.credential_preferences.share_evidence, false);
+  assert.equal(
+    (
+      await issuerRpc(
+        "revoke_credential",
+        {
+          p_credential: transparencyCredential,
+          p_reason:
+            "Historical original revoked without rewriting the assessment commitment.",
+        },
+        1,
+      )
+    ).status,
+    204,
+  );
+  const { credentialValidity } = await import("../src/lib/credentials.ts");
+  assert.equal(
+    credentialValidity(
+      (await correctionCredential(transparencyCredential)).data[0],
+    ),
+    "Revoked",
+  );
+  assert.equal(
+    (
+      await read(
+        `challenge_credential_sources?credential_id=eq.${transparencyCredential}`,
+        1,
+      )
+    ).data[0].context_digest,
+    transparencyDigest,
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_credential",
+        {
+          p_credential: transparencyCredential,
+          p_acceptance: "accepted",
+          p_public: false,
+          p_share_evidence: false,
+        },
+        2,
+      )
+    ).status,
+    204,
+  );
+  assert.deepEqual(
+    (await correctionCredential(transparencyCredential)).data,
+    [],
+  );
+});
+
+let lifecycleOriginal, lifecycleReplacement, lifecycleOriginalHash;
+test("lifecycle REST: pending and declined credentials remain invisible to anonymous and unrelated users", async () => {
+  const { credentialLifecycle } =
+    await import("../src/lib/credential-lifecycle.ts");
+  const { credentialClaim, credentialHash } =
+    await import("../src/lib/credential-proof.ts");
+  const issued = await issuerRpc(
+    "issue_credential",
+    await issueArgs("company_achievement"),
+    1,
+  );
+  assert.equal(issued.status, 200, JSON.stringify(issued));
+  lifecycleOriginal = issued.data;
+  const record = (await correctionCredential(lifecycleOriginal, 2)).data[0];
+  lifecycleOriginalHash = await credentialHash(credentialClaim(record));
+  assert.equal(credentialLifecycle(record).status, "Awaiting acceptance");
+  for (const role of [undefined, 3])
+    assert.deepEqual(
+      (await correctionCredential(lifecycleOriginal, role)).data,
+      [],
+    );
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_credential",
+        {
+          p_credential: lifecycleOriginal,
+          p_acceptance: "declined",
+          p_public: false,
+          p_share_evidence: false,
+        },
+        2,
+      )
+    ).status,
+    204,
+  );
+  assert.equal(
+    credentialLifecycle(
+      (await correctionCredential(lifecycleOriginal, 2)).data[0],
+    ).status,
+    "Declined",
+  );
+  assert.deepEqual((await correctionCredential(lifecycleOriginal)).data, []);
+});
+test("lifecycle REST: accepted private replacement supersedes original without disclosing its identity or changing historical claim", async () => {
+  const { credentialLifecycle } =
+    await import("../src/lib/credential-lifecycle.ts");
+  const { credentialClaim, credentialHash } =
+    await import("../src/lib/credential-proof.ts");
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_credential",
+        {
+          p_credential: lifecycleOriginal,
+          p_acceptance: "accepted",
+          p_public: true,
+          p_share_evidence: false,
+        },
+        2,
+      )
+    ).status,
+    204,
+  );
+  const replacement = await issuerRpc(
+    "correct_credential",
+    await correctionArgs(lifecycleOriginal),
+    1,
+  );
+  assert.equal(replacement.status, 200, JSON.stringify(replacement));
+  lifecycleReplacement = replacement.data;
+  assert.equal(
+    credentialLifecycle((await correctionCredential(lifecycleOriginal)).data[0])
+      .status,
+    "Active",
+  );
+  assert.deepEqual((await correctionCredential(lifecycleReplacement)).data, []);
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_credential",
+        {
+          p_credential: lifecycleReplacement,
+          p_acceptance: "accepted",
+          p_public: false,
+          p_share_evidence: false,
+        },
+        2,
+      )
+    ).status,
+    204,
+  );
+  const original = (await correctionCredential(lifecycleOriginal)).data[0];
+  assert.equal(credentialLifecycle(original).status, "Superseded");
+  assert.equal(
+    await credentialHash(credentialClaim(original)),
+    lifecycleOriginalHash,
+  );
+  assert.ok(!JSON.stringify(original).includes(lifecycleReplacement));
+  assert.ok(!JSON.stringify(original).includes("PRIVATE correction"));
+  assert.deepEqual((await correctionCredential(lifecycleReplacement)).data, []);
+});
+test("lifecycle REST: publishing a replacement preserves revocation and original claim integrity", async () => {
+  const { credentialLifecycle } =
+    await import("../src/lib/credential-lifecycle.ts");
+  const { credentialClaim, credentialHash } =
+    await import("../src/lib/credential-proof.ts");
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_credential",
+        {
+          p_credential: lifecycleReplacement,
+          p_acceptance: "accepted",
+          p_public: true,
+          p_share_evidence: false,
+        },
+        2,
+      )
+    ).status,
+    204,
+  );
+  assert.equal(
+    credentialLifecycle(
+      (await correctionCredential(lifecycleReplacement)).data[0],
+    ).status,
+    "Active",
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "revoke_credential",
+        {
+          p_credential: lifecycleOriginal,
+          p_reason: "Public withdrawal of historical credential",
+        },
+        1,
+      )
+    ).status,
+    204,
+  );
+  const original = (await correctionCredential(lifecycleOriginal)).data[0];
+  assert.equal(credentialLifecycle(original).status, "Revoked");
+  assert.equal(
+    await credentialHash(credentialClaim(original)),
+    lifecycleOriginalHash,
+  );
+  assert.ok(JSON.stringify(original).includes(lifecycleReplacement));
+  assert.ok(!JSON.stringify(original).includes("PRIVATE correction"));
+});

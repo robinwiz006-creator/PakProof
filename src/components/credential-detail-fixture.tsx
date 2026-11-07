@@ -9,6 +9,9 @@ export function CredentialDetailFixture({
 }: {
   inbox?: boolean;
 }) {
+  const [ownerAccess, setOwnerAccess] = useState(false);
+  const [trustLevel, setTrustLevel] = useState("self_registered");
+  const [trustSuspended, setTrustSuspended] = useState(false);
   const [saved, setSaved] = useState("");
   const [acceptance, setAcceptance] = useState<
     "accepted" | "pending" | "declined"
@@ -32,7 +35,7 @@ export function CredentialDetailFixture({
     credential_type: "course",
     description:
       "Completed a practical interface project and presented the design decisions and working implementation. This is an offline presentation fixture, not a real award.",
-    issue_date: "2025-01-15",
+    issue_date: validity === "future" ? "2999-01-01" : "2025-01-15",
     expiry_date: validity === "expired" ? "2025-06-01" : null,
     program_name: "Illustrative frontend programme",
     award: "",
@@ -48,6 +51,8 @@ export function CredentialDetailFixture({
       company_id: "fixture",
       organization_type: "training",
       issuer_status: issuer,
+      trust_level: trustLevel,
+      trust_suspended: trustSuspended,
       authorization_id: "fixture",
       companies: {
         name: "Illustrative Learning Organization",
@@ -177,6 +182,7 @@ export function CredentialDetailFixture({
             onChange={(e) => setValidity(e.target.value)}
           >
             <option value="current">Current</option>
+            <option value="future">Not yet valid</option>
             <option value="expired">Expired</option>
             <option value="revoked">Revoked</option>
           </select>
@@ -239,8 +245,39 @@ export function CredentialDetailFixture({
         />{" "}
         Fixture transaction recorded
       </label>
+      <label>
+        <input
+          type="checkbox"
+          checked={ownerAccess}
+          onChange={(e) => setOwnerAccess(e.target.checked)}
+        />{" "}
+        Fixture owner access
+      </label>
+      <label className="field">
+        Fixture institutional trust
+        <select
+          value={trustLevel}
+          onChange={(e) => setTrustLevel(e.target.value)}
+        >
+          <option value="self_registered">Self-registered</option>
+          <option value="verified_organization">Verified Organization</option>
+          <option value="trusted_assessment_partner">
+            Trusted Assessment Partner
+          </option>
+        </select>
+      </label>
+      <label>
+        <input
+          type="checkbox"
+          checked={trustSuspended}
+          onChange={(e) => setTrustSuspended(e.target.checked)}
+        />{" "}
+        Fixture institutional suspension
+      </label>
       <CredentialDetail
         credential={sample}
+        canViewPrivate={ownerAccess}
+        allowRecheck
         recipient={{
           full_name: "Illustrative Recipient",
           slug: "illustrative-recipient",

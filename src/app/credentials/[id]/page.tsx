@@ -19,7 +19,11 @@ export default async function CredentialPage({
     .select(credentialSelect)
     .eq("id", id)
     .maybeSingle();
-  if (error || !data) notFound();
+  if (error)
+    throw new Error(
+      "Credential verification is temporarily unavailable. Please try again later.",
+    );
+  if (!data) notFound();
   const c = data as unknown as Credential;
   const [recipientResult, integrity, user] = await Promise.all([
     db
@@ -50,6 +54,8 @@ export default async function CredentialPage({
     <div className="container page credential-page">
       <CredentialDetail
         credential={c}
+        checkedAt={new Date().toISOString()}
+        allowRecheck
         recipient={recipient}
         integrity={integrity}
         canViewPrivate={isRecipient || isIssuerMember}
