@@ -1,6 +1,13 @@
 import type { Profile, Project } from "./types";
-export function safeReturnPath(value: string): string | null {
-  return /^\/challenges\/[a-f0-9-]{36}(?:#submit)?$/.test(value) ? value : null;
+/** No URL parsing/decoding here: reject alternate spellings, queries and auth loops. */
+export function safeReturnPath(value: unknown): string | null {
+  if (typeof value !== "string" || /[\s\\]/.test(value)) return null;
+  const uuid = "[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}";
+  return new RegExp(
+    `^/(?:challenges/${uuid}(?:#submit)?|paid-projects/${uuid})$`,
+  ).test(value)
+    ? value
+    : null;
 }
 export function passportSteps(profile: Profile, projects: Project[]) {
   return [

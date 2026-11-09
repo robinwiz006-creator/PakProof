@@ -113,7 +113,10 @@ test("visitors, company members, previous applicants and closed projects cannot 
   await page.getByLabel("Fixture applicant context").selectOption("visitor");
   await expect(
     page.getByRole("link", { name: "Sign in to apply" }),
-  ).toHaveAttribute("href", "/sign-in");
+  ).toHaveAttribute(
+    "href",
+    "/sign-in?next=%2Fpaid-projects%2F90000000-0000-4000-8000-000000000001",
+  );
 });
 for (const width of [320, 390, 1280]) {
   test(`opportunities, project brief and application dialog fit ${width}px`, async ({

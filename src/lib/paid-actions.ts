@@ -21,7 +21,7 @@ async function mutate(
   path: string,
   message: string,
 ) {
-  const { db } = await credentialWorkspace();
+  const { db } = await credentialWorkspace(path);
   const { error } = await db.rpc(name, args);
   if (error)
     go(

@@ -1,3 +1,4 @@
+import { authHref } from "@/lib/auth-navigation";
 import type { Criterion } from "@/lib/challenge-assessment";
 import { notFound } from "next/navigation";
 import { challenge } from "@/lib/data";
@@ -82,6 +83,11 @@ export default async function ChallengeDetail({
                   <ButtonLink href="/sign-up">Create your account</ButtonLink>
                 </div>
               </>
+            ) : closed ? (
+              <p className="muted">
+                Submissions are closed for this challenge. You can still review
+                the brief.
+              </p>
             ) : !user ? (
               <>
                 <p className="muted">
@@ -89,15 +95,11 @@ export default async function ChallengeDetail({
                   account.
                 </p>
                 <ButtonLink
-                  href={`/sign-in?next=${encodeURIComponent(`/challenges/${c.id}#submit`)}`}
+                  href={authHref("/sign-in", `/challenges/${c.id}#submit`)}
                 >
                   Sign in to submit
                 </ButtonLink>
               </>
-            ) : closed ? (
-              <p className="muted">
-                Submissions are closed for this challenge.
-              </p>
             ) : (
               <form className="form" action={submitWork}>
                 <input type="hidden" name="challenge_id" value={c.id} />

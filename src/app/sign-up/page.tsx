@@ -1,13 +1,24 @@
 import Link from "next/link";
 import { signUp } from "@/lib/actions";
-import { isConfigured } from "@/lib/supabase/server";
+import {
+  authHref,
+  opportunityAuthMessage,
+  signedInDestination,
+} from "@/lib/auth-navigation";
+import { safeReturnPath } from "@/lib/passport";
+import { redirect } from "next/navigation";
+import { currentUser, isConfigured } from "@/lib/supabase/server";
 import { Field, SubmitButton } from "@/components/forms";
 export default async function SignUp({
   searchParams,
 }: {
-  searchParams: Promise<{ message?: string; role?: string }>;
+  searchParams: Promise<{ message?: string; role?: string; next?: string }>;
 }) {
-  const { message, role } = await searchParams;
+  const { message, role, next: requestedNext } = await searchParams;
+  const next = safeReturnPath(requestedNext);
+  const user = isConfigured() ? await currentUser() : null;
+  if (user) redirect(signedInDestination(user, next));
+  const contextMessage = opportunityAuthMessage(next);
   return (
     <div className="auth">
       <p className="eyebrow">START WITH WHAT YOU CAN DO</p>
@@ -16,6 +27,9 @@ export default async function SignUp({
         Create your Skill Passport in a few short steps. Skills and projects can
         be added later. You do not need a wallet.
       </p>
+      {contextMessage && (
+        <p className="notice section-spacer">{contextMessage}</p>
+      )}
       {!isConfigured() && (
         <div className="notice section-spacer">
           Account creation requires Supabase. Demo browsing is available; it
@@ -32,6 +46,7 @@ export default async function SignUp({
         where you want to start; you can switch later.
       </p>
       <form className="form" action={signUp}>
+        <input type="hidden" name="next" value={next ?? ""} />
         <label className="field">
           I’m here to
           <select
@@ -61,7 +76,8 @@ export default async function SignUp({
         <SubmitButton>Create account</SubmitButton>
       </form>
       <p className="auth-bottom">
-        Already have an account? <Link href="/sign-in">Sign in</Link>
+        Already have an account?{" "}
+        <Link href={authHref("/sign-in", next)}>Sign in</Link>
       </p>
     </div>
   );
