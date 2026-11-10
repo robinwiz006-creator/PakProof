@@ -1,3 +1,4 @@
+import { authHref } from "@/lib/auth-navigation";
 import { PaidProjectEditor } from "@/components/paid-project-editor";
 import Link from "next/link";
 import {
@@ -251,7 +252,10 @@ export default async function PaidProjectPage({
           applicationState === "apply" ? (
             <PaidProjectApplication projectId={id} action={applyPaidProject} />
           ) : applicationState === "sign-in" ? (
-            <Link className="button" href="/sign-in">
+            <Link
+              className="button"
+              href={authHref("/sign-in", `/paid-projects/${id}`)}
+            >
               Sign in to apply
             </Link>
           ) : applicationState === "applied" ? (

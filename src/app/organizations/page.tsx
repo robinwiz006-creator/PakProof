@@ -1,3 +1,6 @@
+import { Suspense } from "react";
+import { OrganizationOnboarding } from "@/components/organization-onboarding";
+import { PassportSectionState } from "@/components/passport-section-state";
 import { AssessmentDetailsView } from "@/components/assessment-details-view";
 import type { AssessmentDetails } from "@/lib/assessment-details";
 import { OrganizationVerificationWorkspace } from "@/components/organization-verification-workspace";
@@ -6,7 +9,6 @@ import Link from "next/link";
 import { z } from "zod";
 import { workCredentialTypes } from "@/lib/challenge-assessment";
 import { IssuerTypeFields } from "@/components/issuer-type-fields";
-import { credentialTypeLabels } from "@/lib/issuer-permissions";
 import { ConfirmForm } from "@/components/confirm-form";
 import { CredentialAnchor } from "@/components/credential-anchor";
 import { PageHeading, Empty } from "@/components/ui";
@@ -157,30 +159,6 @@ export default async function Organizations({
           </Link>
         }
       />
-      {view === "overview" &&
-        organizations.map((o) => (
-          <p className="notice section-spacer" key={`permissions-${o.id}`}>
-            <strong>{o.companies.name}: </strong>Registered on ProofPak ·{" "}
-            {o.issuer_status === "authorized"
-              ? "Authorized for credential issuance"
-              : o.issuer_status === "suspended"
-                ? "Issuance suspended"
-                : "Awaiting approval"}
-            . Approved categories:{" "}
-            {(o.allowed_credential_types ?? [])
-              .map((t) => credentialTypeLabels[t] ?? t)
-              .join(", ") || "None — administrator category review required"}
-            . Approval does not establish government accreditation or guarantee
-            a credential’s truth.
-          </p>
-        ))}
-      {view === "overview" &&
-        organizations.map((o) => (
-          <OrganizationVerificationWorkspace
-            key={`trust-${o.id}`}
-            organization={o}
-          />
-        ))}
       <nav className="workspace-tabs" aria-label="Organization sections">
         {[
           ["overview", "Overview"],
@@ -216,19 +194,22 @@ export default async function Organizations({
       {view === "overview" && (
         <>
           <p className="workflow-callout">
-            Register your organization → Request organization approval → Issue
-            credentials when approved → Recipients accept and choose visibility.
-            Challenges and paid work remain available through their own
-            workspaces.
+            Start by registering or connecting an organization you own.
+            Employers can post opportunities; universities, bootcamps and other
+            issuers need separate approval for credential categories.
           </p>
           <div className="stats">
             <div className="stat">
               <span>Organizations</span>
-              <strong>{organizations.length}</strong>
+              <strong>
+                {error || memberError ? "Unavailable" : organizations.length}
+              </strong>
             </div>
             <div className="stat">
               <span>Ready to issue</span>
-              <strong>{eligible.length}</strong>
+              <strong>
+                {error || memberError ? "Unavailable" : eligible.length}
+              </strong>
             </div>
             <div className="stat">
               <span>Issued credentials</span>
@@ -252,49 +233,38 @@ export default async function Organizations({
             {organizations.length ? (
               organizations.map((o) => (
                 <article className="panel section-spacer" key={o.id}>
-                  <h3>{o.companies.name}</h3>
-                  <p>{o.companies.description}</p>
-                  <span className="tag">
-                    {o.organization_type.replaceAll("_", " ")} · Organization{" "}
-                    {o.issuer_status === "authorized"
-                      ? "approved"
-                      : o.issuer_status === "pending"
-                        ? "awaiting approval"
-                        : o.issuer_status}
-                  </span>
-                  <div className="button-row section-spacer">
-                    {(members ?? []).some(
+                  <OrganizationOnboarding
+                    organization={o}
+                    canEdit={(members ?? []).some(
                       (m) =>
                         m.company_id === o.company_id && m.role === "owner",
-                    ) && (
-                      <Link
-                        href={`/portal/company/profile?company=${o.company_id}`}
-                      >
-                        Edit organization profile
-                      </Link>
                     )}
-                    {o.issuer_status === "authorized" && (
-                      <Link href="/organizations?view=issue">
-                        Issue a credential
-                      </Link>
-                    )}
-                    {o.issuer_status === "authorized" && (
-                      <Link
-                        href={`/wallet?purpose=credential_issuer&organization=${o.id}`}
-                      >
-                        Credential signing wallet
-                      </Link>
-                    )}
-                  </div>
-                  {o.issuer_status !== "authorized" && (
-                    <p className="muted">
-                      Contact the ProofPak administrator with your official
-                      website and evidence that you represent this organization.
-                      Registration does not establish trust.
-                    </p>
-                  )}
+                  />
+                  <details
+                    id={`verification-${o.id}`}
+                    className="section-spacer"
+                  >
+                    <summary>
+                      Organization verification and request history
+                    </summary>
+                    <Suspense
+                      fallback={
+                        <PassportSectionState
+                          title="Organization verification"
+                          state="loading"
+                        />
+                      }
+                    >
+                      <OrganizationVerificationWorkspace organization={o} />
+                    </Suspense>
+                  </details>
                 </article>
               ))
+            ) : error || memberError ? (
+              <p className="notice">
+                Organization access is unavailable. Please retry before creating
+                another organization.
+              </p>
             ) : (
               <Empty title="No organization yet">
                 <Link href="/organizations?view=register">
@@ -326,7 +296,7 @@ export default async function Organizations({
           <form action={registerOrganization}>
             <div className="field">
               <label htmlFor="company_id">
-                Use an existing company you own (optional)
+                Use an existing organization profile you own (optional)
               </label>
               <select id="company_id" name="company_id">
                 <option value="">Create new organization</option>

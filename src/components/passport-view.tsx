@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { PassportSectionState } from "./passport-section-state";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { PassportPaidWork } from "./passport-paid-work";
@@ -93,20 +95,15 @@ export async function PassportView({
   projects,
   achievements,
   preview = false,
+  sectionErrors = {},
 }: {
   profile: Profile;
   projects: Project[];
   achievements: Achievement[];
   preview?: boolean;
+  sectionErrors?: { projects?: boolean; achievements?: boolean };
 }) {
-  const credentialSection = await PassportCredentials({
-    recipientId: p.id,
-    preview,
-  });
-  const paidWorkSection = await PassportPaidWork({
-    recipientId: p.id,
-    preview,
-  });
+  const retryHref = preview ? "/portal/talent/preview" : `/talent/${p.slug}`;
   return (
     <>
       <p className="eyebrow">
@@ -163,7 +160,13 @@ export async function PassportView({
           </details>
         </aside>
         <div>
-          {projects.length > 0 && (
+          {sectionErrors.projects ? (
+            <PassportSectionState
+              title="Projects"
+              state="unavailable"
+              href={retryHref}
+            />
+          ) : projects.length > 0 ? (
             <section>
               <h2>Projects</h2>
               {projects.map((pr) => (
@@ -182,10 +185,38 @@ export async function PassportView({
                 </article>
               ))}
             </section>
+          ) : (
+            <PassportSectionState title="Projects" state="empty" />
           )}
-          {paidWorkSection}
-          {credentialSection}
-          {achievements.length > 0 && (
+          <Suspense
+            fallback={
+              <PassportSectionState title="Completed work" state="loading" />
+            }
+          >
+            <PassportPaidWork
+              recipientId={p.id}
+              preview={preview}
+              retryHref={retryHref}
+            />
+          </Suspense>
+          <Suspense
+            fallback={
+              <PassportSectionState title="Credentials" state="loading" />
+            }
+          >
+            <PassportCredentials
+              recipientId={p.id}
+              preview={preview}
+              retryHref={retryHref}
+            />
+          </Suspense>
+          {sectionErrors.achievements ? (
+            <PassportSectionState
+              title="Achievements"
+              state="unavailable"
+              href={retryHref}
+            />
+          ) : achievements.length > 0 ? (
             <section id="achievements" className="section-spacer">
               <h2>Achievements</h2>
               {achievements.map((a) => (
@@ -203,16 +234,9 @@ export async function PassportView({
                 </div>
               ))}
             </section>
+          ) : (
+            <PassportSectionState title="Achievements" state="empty" />
           )}
-          {!projects.length &&
-            !achievements.length &&
-            !credentialSection &&
-            !paidWorkSection && (
-              <p className="notice">
-                This passport is starting out. Projects and achievements will
-                appear as they are added.
-              </p>
-            )}
         </div>
       </div>
     </>

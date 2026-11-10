@@ -1,3 +1,6 @@
+import { Suspense } from "react";
+import { AttentionLoading } from "@/components/dashboard-attention";
+import { AdministratorAttentionData } from "@/components/dashboard-attention-data";
 import Link from "next/link";
 import { IssuerQueue } from "@/components/issuer-queue";
 import Form from "next/form";
@@ -17,7 +20,7 @@ export default async function IssuerAdmin({
     message?: string;
   }>;
 }) {
-  const { db } = await credentialWorkspace();
+  const { db, user } = await credentialWorkspace();
   const { data: admin, error } = await db.rpc("is_platform_administrator");
   if (error || !admin) notFound();
   const input = await searchParams;
@@ -59,10 +62,7 @@ export default async function IssuerAdmin({
       .from("administrator_verification_queue")
       .select("id", { count: "exact", head: true }),
   ]);
-  if (orgs.error || counts.some((c) => c.error))
-    throw new Error(
-      "Issuer review records could not be loaded. Please try again.",
-    );
+
   const organizations = (orgs.data ?? []) as unknown as (Organization & {
     created_at: string;
   })[];
@@ -75,6 +75,15 @@ export default async function IssuerAdmin({
         title="Issuer review desk"
         description="Review institutional trust and credential-category permissions separately. Neither guarantees every credential."
       />
+      <Suspense fallback={<AttentionLoading />}>
+        <AdministratorAttentionData userId={user.id} />
+      </Suspense>
+      {(orgs.error || counts.some((c) => c.error)) && (
+        <p className="notice" role="status">
+          Some issuer records could not be loaded. Counts marked unavailable are
+          not zero. Please try again.
+        </p>
+      )}
       {input.message && (
         <p className="notice" role="status">
           {input.message}
@@ -88,7 +97,11 @@ export default async function IssuerAdmin({
             href={`/issuer-admin?status=${name.toLowerCase()}`}
           >
             <span>{name}</span>
-            <strong>{counts[i].count ?? 0}</strong>
+            <strong>
+              {counts[i].error || counts[i].count === null
+                ? "Unavailable"
+                : (counts[i].count ?? 0)}
+            </strong>
           </Link>
         ))}
       </div>
@@ -98,7 +111,7 @@ export default async function IssuerAdmin({
       >
         {pendingTrust
           ? "All issuer organizations"
-          : `Institutional requests awaiting review (${counts[3]?.count ?? 0})`}
+          : `Institutional requests awaiting review (${counts[3]?.error || counts[3]?.count === null ? "unavailable" : (counts[3]?.count ?? 0)})`}
       </Link>
       <Form className="filters" action="/issuer-admin">
         {pendingTrust && <input type="hidden" name="trust" value="pending" />}
@@ -123,7 +136,11 @@ export default async function IssuerAdmin({
           Clear
         </Link>
       </Form>
-      {organizations.length ? (
+      {orgs.error ? (
+        <p className="notice">
+          The organization list is unavailable. Try loading this page again.
+        </p>
+      ) : organizations.length ? (
         <IssuerQueue organizations={organizations} />
       ) : (
         <Empty title="No organizations match">

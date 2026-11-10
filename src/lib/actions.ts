@@ -5,7 +5,12 @@ import { messageLink } from "./navigation-message";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { safeReturnPath } from "./passport";
+import {
+  passwordSignIn,
+  passwordSignUp,
+  resendSignupConfirmation,
+} from "./auth-flow";
+import { authHref } from "./auth-navigation";
 import { supabase, isConfigured } from "./supabase/server";
 import {
   profileSchema,
@@ -22,7 +27,7 @@ function go(path: string, message: string): never {
 function raw(form: FormData) {
   return Object.fromEntries(form.entries());
 }
-async function context() {
+async function context(returnTo?: string) {
   if (!isConfigured())
     go(
       "/sign-in",
@@ -32,7 +37,7 @@ async function context() {
   const {
     data: { user },
   } = await db.auth.getUser();
-  if (!user) redirect("/sign-in");
+  if (!user) redirect(authHref("/sign-in", returnTo));
   return { db, user };
 }
 function validate<T>(schema: z.ZodType<T>, data: unknown, path: string): T {
@@ -55,63 +60,26 @@ function databaseError(
     );
 }
 export async function signUp(form: FormData) {
-  if (!isConfigured())
-    go("/sign-up", "Connect Supabase before creating an account.");
-  const values = validate(
-    z.object({
-      email: z.string().email(),
-      password: z.string().min(10),
-      full_name: z.string().trim().min(2).max(100),
-      role: z.enum(["talent", "company"]),
+  redirect(
+    await passwordSignUp(form, {
+      configured: isConfigured(),
+      siteUrl: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+      profileReady: async () => {
+        const db = await supabase();
+        const { error } = await db.from("profiles").select("id").limit(0);
+        return !error;
+      },
+      signUp: async (values) => (await supabase()).auth.signUp(values),
     }),
-    raw(form),
-    "/sign-up",
   );
-  const db = await supabase();
-  // Refuse signup before profiles exist, rather than creating an unusable account.
-  const { error: schemaError } = await db
-    .from("profiles")
-    .select("id")
-    .limit(0);
-  if (schemaError)
-    go(
-      "/sign-up",
-      "Account setup is not ready yet. Please contact the platform administrator.",
-    );
-  const { data, error } = await db.auth.signUp({
-    email: values.email,
-    password: values.password,
-    options: {
-      data: { full_name: values.full_name, preferred_role: values.role },
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/auth/callback`,
-    },
-  });
-  if (error)
-    go(
-      "/sign-up",
-      "Account could not be created. Check your email, password, and authentication settings.",
-    );
-  if (data.session) redirect(`/portal/${values.role}`);
-  go("/sign-in", "Check your email to confirm your account, then sign in.");
 }
 export async function signIn(form: FormData) {
-  if (!isConfigured()) go("/sign-in", "Connect Supabase before signing in.");
-  const values = validate(
-    z.object({ email: z.string().email(), password: z.string().min(1) }),
-    raw(form),
-    "/sign-in",
-  );
-  const db = await supabase();
-  const { data, error } = await db.auth.signInWithPassword(values);
-  if (error)
-    go(
-      "/sign-in",
-      "Sign in failed. Check your email and password, and confirm your email if required.",
-    );
-  const next = safeReturnPath(String(form.get("next") ?? ""));
   redirect(
-    next ??
-      `/portal/${data.user?.user_metadata.preferred_role === "company" ? "company" : "talent"}`,
+    await passwordSignIn(form, {
+      configured: isConfigured(),
+      signIn: async (values) =>
+        (await supabase()).auth.signInWithPassword(values),
+    }),
   );
 }
 export async function signOut() {
@@ -213,7 +181,9 @@ export async function closeChallenge(form: FormData) {
   revalidatePath("/", "layout");
 }
 export async function submitWork(form: FormData) {
-  const { db } = await context();
+  const { db } = await context(
+    `/challenges/${String(form.get("challenge_id") ?? "")}#submit`,
+  );
   const path = "/portal/talent/submissions";
   const values = validate(submissionSchema, raw(form), path);
   const { error } = await db.rpc("submit_work", {
@@ -376,29 +346,12 @@ export async function sendReset(form: FormData) {
   );
 }
 export async function resendConfirmation(form: FormData) {
-  if (!isConfigured())
-    go("/resend-confirmation", "Email confirmation requires Supabase.");
-  const email = validate(
-    z.string().email(),
-    form.get("email"),
-    "/resend-confirmation",
-  );
-  const db = await supabase();
-  const { error } = await db.auth.resend({
-    type: "signup",
-    email,
-    options: {
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`,
-    },
-  });
-  if (error)
-    go(
-      "/resend-confirmation",
-      "Could not send a confirmation email right now. Wait and try again.",
-    );
-  go(
-    "/resend-confirmation",
-    "If confirmation is needed, a new link will be sent. Check your inbox and spam folder.",
+  redirect(
+    await resendSignupConfirmation(form, {
+      configured: isConfigured(),
+      siteUrl: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+      resend: async (values) => (await supabase()).auth.resend(values),
+    }),
   );
 }
 export async function resetPassword(form: FormData) {

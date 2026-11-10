@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { authHref } from "@/lib/auth-navigation";
 import { useState } from "react";
 import { OpportunityBrowser } from "./opportunity-browser";
 import {
@@ -97,7 +98,10 @@ export function OpportunityUXFixture() {
                 }}
               />
             ) : applicationState === "sign-in" ? (
-              <Link className="button" href="/sign-in">
+              <Link
+                className="button"
+                href={authHref("/sign-in", `/paid-projects/${project.id}`)}
+              >
                 Sign in to apply
               </Link>
             ) : (

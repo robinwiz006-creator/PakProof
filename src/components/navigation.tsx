@@ -1,8 +1,9 @@
 "use client";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { authHref, navigationAuthContext } from "@/lib/auth-navigation";
 import { Menu, X, Fingerprint, ArrowUpRight } from "lucide-react";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 export function Navigation({ signedIn = false }: { signedIn?: boolean }) {
   const [open, setOpen] = useState(false);
   const path = usePathname();
@@ -41,22 +42,77 @@ export function Navigation({ signedIn = false }: { signedIn?: boolean }) {
           >
             For Organizations
           </Link>
-          <Link
-            href={signedIn ? "/portal/talent/passport" : "/sign-in"}
-            onClick={() => setOpen(false)}
-          >
-            {signedIn ? "My Profile" : "Log In"}
-          </Link>
-          <Link
-            className="button small"
-            href={signedIn ? "/portal/talent" : "/sign-up"}
-            onClick={() => setOpen(false)}
-          >
-            {signedIn ? "My dashboard" : "Get Started"}{" "}
-            <ArrowUpRight size={14} aria-hidden="true" />
-          </Link>
+          {signedIn ? (
+            <>
+              <Link
+                href="/portal/talent/passport"
+                onClick={() => setOpen(false)}
+              >
+                My Profile
+              </Link>
+              <Link
+                className="button small"
+                href="/portal/talent"
+                onClick={() => setOpen(false)}
+              >
+                My dashboard <ArrowUpRight size={14} aria-hidden="true" />
+              </Link>
+            </>
+          ) : (
+            <Suspense
+              fallback={
+                <AuthLinks
+                  next={navigationAuthContext(path, null)}
+                  onNavigate={() => setOpen(false)}
+                />
+              }
+            >
+              <ContextualAuthLinks
+                path={path}
+                onNavigate={() => setOpen(false)}
+              />
+            </Suspense>
+          )}
         </nav>
       </div>
     </header>
+  );
+}
+
+function ContextualAuthLinks({
+  path,
+  onNavigate,
+}: {
+  path: string | null;
+  onNavigate: () => void;
+}) {
+  const params = useSearchParams();
+  return (
+    <AuthLinks
+      next={navigationAuthContext(path, params?.get("next"))}
+      onNavigate={onNavigate}
+    />
+  );
+}
+function AuthLinks({
+  next,
+  onNavigate,
+}: {
+  next: string | null;
+  onNavigate: () => void;
+}) {
+  return (
+    <>
+      <Link href={authHref("/sign-in", next)} onClick={onNavigate}>
+        Log In
+      </Link>
+      <Link
+        className="button small"
+        href={authHref("/sign-up", next)}
+        onClick={onNavigate}
+      >
+        Get Started <ArrowUpRight size={14} aria-hidden="true" />
+      </Link>
+    </>
   );
 }

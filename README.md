@@ -1,28 +1,108 @@
 # ProofPak
 
-A digital skill passport for emerging talent, with a company workspace for practical challenges and evidence-based reviews. Built with Next.js App Router, TypeScript, Tailwind CSS, Supabase, and Solana devnet.
+**One place to show your skills, prove your work, find opportunities, and get paid.**
 
-For the passport-first release, follow [Phase 1 implementation and manual upgrade](docs/PHASE-1-PASSPORT.md) before merging or deploying. Existing databases need the additive migration only; do not rerun the initial migration.
+ProofPak brings a professional Skill Passport, evidence-based assessments, organization-issued credentials, employer discovery and optional paid work together. It is not a freelance-only marketplace. A person can build and share a useful Passport without entering a challenge or connecting a wallet.
 
-For a safe checklist to activate the existing implementation, see [Get the MVP operational](docs/GO-LIVE.md). Run `npm run doctor` for read-only service checks.
+## Release status
 
-## Credentials and optional wallets on this branch
+The implementation includes Tasks 14–16, merged in PR #9 at `00fa9830e3444f35e8ed6a323fc2933a2d0e9970`. This describes source code, **not a verified production deployment**. Hosted account journeys, current production migration state and physical-wallet transactions require acceptance testing. Current payments use **Solana devnet test USDC with no monetary value**.
 
-See [credentials/wallet delivery and manual setup](docs/CREDENTIALS-WALLETS-DELIVERY.md). This branch adds authorized organizations, direct credentials, recipient consent, private degree verification requests, v3 devnet proofs, and signed wallet ownership. The three new migrations are **unapplied** by this task. Stages 6–8 are now connected: see [paid-project/payment delivery and manual setup](docs/PAYMENTS-MVP.md). Paid projects use devnet test tokens only; new migrations remain unapplied by this task. No new feature is claimed tested in production.
+Start with the [Task 17 readiness report](docs/TASK-17-RELEASE-READINESS.md) and [hosted testing guide](docs/PROOFPAK_HOSTED_TESTING_GUIDE.md). Earlier task reports are historical snapshots; their test totals and statements about unapplied migrations do not establish today's hosted state.
 
-## What you can use now
+## The four pillars
 
-- Responsive landing page, How It Works, searchable challenge browser and details.
-- Talent dashboard, editable/private-by-default profile, project evidence links, submissions and feedback, skill passport, unique public profile URL.
-- ProofPak company workspace company profile, challenge publishing/closing, submission review, improvement requests, approval, candidate directory, and dashboard counts.
-- Atomic database approval creates an immutable achievement. A separate Wallet Standard flow supports Phantom and Solflare to sign a real Solana devnet memo transaction. The server verifies the finalized transaction before storing a proof. The verification page recomputes the record hash and checks the live chain.
-- Labeled demo content when Supabase is not configured. Demo content is read-only and contains **no company-approved achievements or fake blockchain transactions**.
+| Pillar                    | What is implemented                                                                                                                                                        |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Build your Skill Passport | Profile, skills, editable projects, evidence links, achievements, accepted credentials and consented completed paid work in one public URL.                                |
+| Prove your work           | Practical challenges, versioned assessment criteria, review and feedback, separate credential issuance, institutional issuer review and historical integrity checks.       |
+| Find opportunities        | Published challenges and paid projects, search/filtering, applications, organization-side candidate discovery, private shortlists and consent-based contact.               |
+| Get paid                  | One-worker project agreements, milestones, revision/approval, direct devnet test-USDC transfers, independent settlement verification and interrupted-transaction recovery. |
 
-This implementation is ready for connecting live services, but a hosted Supabase login + wallet + devnet end-to-end run has **not** been completed in the cloud workspace. See [validation results](docs/VALIDATION.md) and [demo walkthrough](docs/DEMO.md).
+## Candidates
 
-## Run the site without accounts
+- Register with email/password, confirm email where configured, and use password recovery or resend confirmation.
+- Follow optional profile setup: About me → Skills → Work/projects → Preview/publish. Edit projects without duplicating them, remove with confirmation, and manage profile visibility.
+- Share `/talent/<slug>`. Projects and skills added by the person are distinct from reviewed achievements and organization-issued credentials.
+- Browse opportunities, submit challenge work, apply for paid projects, accept offers and submit milestone evidence.
+- Accept or decline credentials; choose credential publication and supporting-evidence/assessment sharing separately. Profile publication alone does not publish every credential or private assessment.
+- Opt in separately to employer discoverability and contact requests. Accept/decline requests and close further contact. Personal email/phone is not automatically shared.
+- Choose whether eligible completed paid work appears on the Passport. Payment completion does not automatically issue a skill credential.
 
-You need Node.js 24 LTS and npm. This workspace was tested on Node 24.19.
+## Organizations and issuers
+
+Organizations reuse company memberships; supported types include universities, training institutes, communities, hackathon organizers, companies and other professional organizations.
+
+Members can manage permitted opportunities, review evidence, search opted-in public Passports, keep private shortlists and send bounded contact requests. Financial and identity-management actions retain their stricter role checks. Membership is not the same as credential-issuer authorization.
+
+Credential issuance requires explicit administrator-approved **credential categories**. Approval for a training certificate does not permit an academic degree. New credentials record their authenticated issuing representative privately; public verification does not disclose staff account UUIDs.
+
+Institutional trust is a separate administrator-reviewed process:
+
+| Level                      | Meaning                                                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Self-registered            | Organization account exists; institutional identity has not been independently reviewed through this process. |
+| Verified Organization      | ProofPak administrators reviewed institutional identity and representative authority.                         |
+| Trusted Assessment Partner | Institutional identity and assessment standards were reviewed.                                                |
+
+Registration, wallet ownership, payments and organization type do not grant trust. Private evidence submissions, decisions, reasons and audit history are protected. Administrators cannot approve organizations they belong to. Suspension/downgrade changes current trust labels without silently revoking historical credentials. Institutional approval is **not government accreditation or a guarantee of every claimed result**. Stopping new issuance requires the separate category-authorization controls.
+
+## Assessments and credentials
+
+Challenges can have optional versioned criteria. Authorized reviewers record outcomes and private feedback; optional structured details include competencies, assessment method, evaluator-reported result/score and date. The challenge's recorded difficulty describes task context, not a global ranking of the person.
+
+Approval creates an achievement. **Issuing a credential is a separate authorized decision.** Approved work can prefill that workflow, linking the submission and immutable assessment snapshot. Direct credentials without a challenge are also supported, but are not automatically given assessment metadata they never recorded.
+
+Accepted public credentials at `/credentials/<id>` show the issuer, current trust, permitted assessment summary/evidence, issue date and separate lifecycle/integrity checks. Anyone can inspect a publicly shared credential without signing in or connecting a wallet.
+
+- Pending/declined records remain private; acceptance and publication are separate.
+- Explicit expiry dates are supported; no dates or scores are invented for legacy records.
+- Corrections create a new credential linked to the original, with fresh recipient consent. An accepted replacement supersedes its original; private replacement details remain hidden.
+- Revocation preserves historical records. A revoked record is not made valid by a matching blockchain transaction.
+- Current status can be rechecked. Private correction reasons, internal evidence and staff audit metadata are not public verification data.
+
+Immutable assessment history cannot be silently edited through a certificate correction. Incorrect assessed work needs the appropriate existing review/revocation process, not a manual historical-row update.
+
+## Employer discovery and contact
+
+Organization members search server-paginated, explicitly discoverable public Passports by public name/headline, skills and projects, with public credential/assessed-achievement filters. Hidden evidence must not influence public filters or counts.
+
+Shortlists and internal notes are organization-private. Making a Passport private or disabling discovery/contact removes organization access under the existing gates. Accepted contact requests allow a small, private follow-up exchange, with closure and limits—not full chat, automatic recruitment, or an applicant-tracking system. Linked opportunities are rechecked for ownership and availability; contact acceptance creates no application or agreement automatically.
+
+## Paid work and wallets
+
+Companies publish projects, define exact milestone budgets/deliverables, select one worker and send terms for acceptance. Accepted terms cannot be edited unilaterally. Work submission, approval and verified payment are distinct states. Draft corrections, withdrawal, guarded cancellation, private history and uncertain-payment recovery are implemented.
+
+Payments are **direct transfers after approval, not escrow**. Funds are not locked or guaranteed. Current configuration:
+
+- Network: Solana devnet only, enforced by genesis checks.
+- Test-USDC mint: `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`.
+- Token program: `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`; six decimals.
+- Amounts use integer token units. Server verification checks finalized successful transfer, mint/program, amount, authority, recipient ownership and receipt uniqueness before marking paid.
+
+Phantom and Solflare extension/in-app-browser methods are supported in code. Wallet linking requires an authenticated, nonce-based ownership signature verified on the server. Personal, company payer and credential issuer permissions remain distinct. Unsupported desktop-to-phone QR pairing and a generic wallet marketplace are not offered. Wallets are optional for normal Passport use.
+
+Signed attempts and original signatures are retained for recovery. Unknown outcomes must be checked/reconciled rather than automatically repaid. Never use a manual “mark paid” override. Public work-history consent is separate from private payment amounts; blockchain transfers remain publicly discoverable even when the app hides financial details.
+
+## How Solana is used
+
+ProofPak uses real wallet-signed Memo integrity commitments for achievements (historical v1/v2) and general credentials (v3), plus SPL-token milestone transfers. No custom smart contract, token, NFT or escrow program is deployed.
+
+Only the commitment hash is in the credential/achievement memo; private documents and personal details are not written into that memo. The application retains records, consent, issuer review, assessment context, current lifecycle and transaction references in Supabase. Transaction/account metadata on Solana is still public.
+
+A positive integrity result requires a matching claim and a successful finalized transaction checked by the server. A stored signature is insufficient. A historical proof does **not** establish current credential validity, institutional identity, accreditation or skill competence. Current trust, consent, correction and revocation rely on ProofPak's database. Devnet may reset and RPCs may fail; unavailable checks must remain unavailable, not verified.
+
+See [recovery](docs/SOLANA-RECOVERY-RELEASE.md), [assessment transparency](docs/ASSESSMENT-TRANSPARENCY-DELIVERY.md) and [lifecycle verification](docs/CREDENTIAL-LIFECYCLE-VERIFICATION.md).
+
+## Architecture
+
+Next.js 16 App Router, React 19, TypeScript and Tailwind CSS; Supabase Auth/PostgreSQL/RLS; Solana wallet providers and RPC verification. Server actions and route handlers retain backend authorization; database policies/functions enforce private data boundaries. Privileged service keys stay server-only.
+
+Key locations: `src/app` routes, `src/components` UI, `src/lib` domain/server logic, `supabase/migrations` ordered schema changes, `tests` unit/browser/SQL/REST fixtures. `vercel.json` schedules payment reconciliation; cron authorization and hosted execution must be checked separately.
+
+## Local setup
+
+Requires Node **>=24.19.0 <25**, npm, and Docker for database/REST suites.
 
 ```bash
 npm ci
@@ -30,97 +110,55 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open the local development server shown by Next.js. Leave the Supabase fields empty to browse the demo. Forms clearly explain that real saving requires Supabase; no account or submission is silently simulated.
+PowerShell: use `Copy-Item .env.example .env.local`. Open the URL printed by Next.js. With Supabase unset, labeled demonstration routes are read-only; they do not prove account, credential or payment workflows work. No fake live opportunities or blockchain success should replace missing services.
 
-## Connect real accounts and data
+For saving real local-development accounts, use an explicitly designated development database. On a **fresh empty** Supabase database, review and apply all 19 migration files in filename order. On an existing database, inspect history and objects and apply **only verified outstanding migrations**. Never rerun the initial migration, run fixture/bootstrap SQL in hosted Supabase, or assume a CLI push is safe. See the readiness report for order and cutover risks.
 
-1. Create a project at [Supabase](https://supabase.com). Save its database password securely; the application does not need that password.
-2. In the Supabase SQL Editor, run the complete contents of `supabase/migrations/202610110001_initial.sql` **once on a fresh project**. This creates the tables, signup trigger, row-level policies, and protected review functions. Do this before registering users.
-3. From Supabase Project Settings → API, copy your project URL and publishable key into `.env.local` (or deployment/environment settings):
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (a legacy anon key also works)
-4. To save verified blockchain proofs, add `SUPABASE_SERVICE_ROLE_KEY` from the project’s legacy API keys. This is a **server-only secret**. Never prefix it with `NEXT_PUBLIC_`, commit it, or paste it into chat. Normal profile/challenge/review operations do not use this key.
-5. In Supabase Authentication → URL Configuration, set the site URL and allow your site’s `/auth/callback` URL. For local development, use `http://localhost:3000/auth/callback`. For Vercel, use your deployed HTTPS URL. Set `NEXT_PUBLIC_SITE_URL` to the matching origin.
-6. Keep email/password authentication enabled. With email confirmation enabled, users must confirm the email before signing in. Configure an SMTP provider for reliable delivery outside a small hackathon demo. We do not bypass confirmation in application code.
-7. Restart Next.js after updating environment settings.
+### Configuration
 
-If users existed before the migration, their profiles must be provisioned by an administrator; the signup trigger applies to new accounts. Start the demo with new accounts created after the migration.
+Use `.env.example`; never commit `.env.local` or share credentials.
 
-### Network requirements
+| Variable                               | Purpose                                                                                      |
+| -------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`             | Intended environment's project URL.                                                          |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Same project's public API key; RLS remains essential.                                        |
+| `SUPABASE_SERVICE_ROLE_KEY`            | Server-only wallet/proof/payment operations; never expose via `NEXT_PUBLIC_`.                |
+| `NEXT_PUBLIC_SITE_URL`                 | Exact application origin, matching Auth callbacks.                                           |
+| `SOLANA_RPC_URL`                       | Server devnet RPC; private provider credentials stay here.                                   |
+| `NEXT_PUBLIC_SOLANA_RPC_URL`           | Browser-safe devnet RPC; no private credential.                                              |
+| `CRON_SECRET`                          | Server-only authorization for scheduled reconciliation.                                      |
+| `NEXT_PUBLIC_REOWN_PROJECT_ID`         | Optional legacy signing-session recovery; not needed for supported extension/in-app linking. |
 
-The cloud environment must allow `registry.npmjs.org`, your Supabase project hostname (`<project-ref>.supabase.co`), `api.devnet.solana.com`, and `explorer.solana.com`. A custom RPC provider needs its own domain added. Browser wallets also need their normal connectivity. The saved draft includes Supabase and Solana domain additions; saving the draft does not itself apply the policy.
+Supabase Email Auth must be enabled. Configure Site URL, `/auth/callback` and recovery callback URLs for the actual host. Reliable public email delivery needs appropriate SMTP configuration; code does not bypass confirmation. Never set `PROOFPAK_E2E` in a hosted deployment.
 
-## Solana: real proofs, explicit limits
-
-No platform signing key is used. Install Phantom or Solflare, enable devnet, and obtain devnet SOL through the wallet or [Solana faucet](https://faucet.solana.com). Devnet SOL has no monetary value. Wallet Standard signs serialized bytes, so the app does not rely on legacy wallet compatibility with SDK transaction classes.
-
-- `SOLANA_RPC_URL`: server-only devnet RPC, default `https://api.devnet.solana.com`.
-- `NEXT_PUBLIC_SOLANA_RPC_URL`: browser devnet RPC, same default. Do not put a private provider credential into a browser variable.
-- Both routes check the devnet genesis hash. Mainnet endpoints are refused.
-- Approval issues an achievement, **not** an onchain proof. The company reviewer then selects a wallet and anchors it. A failed or missing transaction remains pending.
-- The memo contains only `proofpak:v1:<sha256>`. Canonical JSON contains version, achievement ID, challenge ID, company ID, and issuance timestamp. It excludes names, emails, talent IDs, URLs, and private evidence. Timestamp normalization uses UTC millisecond precision and fixed key order.
-- The server requires company membership, a successful finalized transaction, the exact memo program/hash, and the recorded signing wallet. Only the server writes `blockchain_proofs`; clients cannot insert proofs or achievements.
-- If a transaction was sent but storage failed, use **Retry saving existing transaction**. The browser saves the pending signature and wallet locally, and the recovery fields accept them after a reload. Do not send a second transaction just to retry storage.
-- A commitment proves that this opaque achievement record was anchored at a point in time. It does not independently prove the assessment is truthful or certify the company’s identity. Project content is not hashed by this version. Companies are self-registered, and the reviewer’s database membership authorizes proof registration; the signer wallet is not a separately certified legal company identity.
-- Devnet can reset. The live verification page reports a missing transaction or RPC outage rather than claiming a match based only on the database.
-
-We reviewed the [Solana Attestation Service](https://github.com/solana-foundation/solana-attestation-service). Its credential registration, authorized signer management, schema provisioning, and attestation lifecycle are valuable for a later version. The MVP uses the requested simpler hash anchor to keep the challenge/review/wallet demo tractable. See [architecture](docs/ARCHITECTURE.md).
-
-## Validation
+## Automated validation
 
 ```bash
-npm run typecheck
+npm test
+npm run test:db
+npm run test:privacy
+npm run test:e2e -- --workers=1
 npm run lint
-npm run test
+npm run typecheck
+npm run format:check
 npm run build
-npm run test:db       # Requires Docker; isolated PostgreSQL, no hosted credentials
-npx playwright install chromium
-npm run test:e2e      # Isolated demo build and production server on port 3100
 ```
 
-If Chromium is already installed, use:
+Install Playwright Chromium if needed with `npx playwright install chromium`. An existing system Chromium can be selected with `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/chromium` (shell syntax varies on Windows).
 
-```bash
-PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/chromium npm run test:e2e
-```
+Database/REST commands create disposable local Docker PostgreSQL/PostgREST with synthetic users and remove them on exit. They must never be pointed at hosted data. Browser tests build `.next-e2e` with blank hosted credentials and explicit offline fixtures; real wallet approval/email/hosted RLS are not established by those tests. Use [the hosted guide](docs/PROOFPAK_HOSTED_TESTING_GUIDE.md) to record actual acceptance evidence.
 
-The browser suite builds and launches with blank Supabase variables in its own ignored `.next-e2e` directory, independent of a developer’s live accounts. Public variables are captured at build time, so blanking only the startup environment is insufficient. It validates demo interactions and responsive layouts, not a hosted authentication or wallet transaction. The SQL suite creates test auth roles in an ephemeral local PostgreSQL container, applies the actual migration, and checks the approval flow and denied operations. It does not emulate Supabase email delivery or its API gateway.
+`npm run doctor` is read-only but uses the currently configured project and checks only part of the schema; it does not prove the full migration ledger or current production policies. Confirm the target first and do not publish its credentials or user data.
 
-## Deploy to Vercel
+## Deployment cautions and limitations
 
-1. Push the working branch, create a pull request, and merge it into `main` after review (commands below).
-2. Import `robinwiz006-creator/PakProof` into Vercel. It detects Next.js; the root is the repository root. Use Node 24 and the standard `npm run build` command.
-3. Add the environment variables above in Vercel. Store `SUPABASE_SERVICE_ROLE_KEY` as a secret. Use your HTTPS deployment origin for `NEXT_PUBLIC_SITE_URL`.
-4. Apply the Supabase migration, configure auth redirect URLs, deploy, and run the walkthrough in `docs/DEMO.md` with two separate accounts.
-5. Confirm that the achievement has a finalized devnet signature and the verification page reports a live match before presenting the full onchain demo.
+- A GitHub merge or successful local build is not proof Vercel promoted the commit to Production. Confirm the production domain's actual deployment SHA, environment and logs.
+- Use the existing Vercel project, Next.js defaults, `npm ci`, `npm run build`, Node 24.x meeting the minimum, and the approved production branch. No build hook applies database migrations.
+- Coordinate privacy-view migrations with matching application queries. Reverting to old public grants is not a rollback. Tasks 14/15 require `202611070002_organization_verification.sql` then `202611070003_assessment_transparency.sql` after existing prerequisites. Task 16 has no migration.
+- Verify a usable recovery point before schema changes. The Free Supabase plan must not be assumed to have automatic backups. Preserve Auth, public data, schema, grants/functions, migration history and any used storage objects through supported backup procedures; test restoration separately.
+- Real hosted two-account journeys, SMTP, physical wallets, RPC recovery, cron execution and finalized devnet settlement still need evidence. No mainnet/real-money launch is claimed. There is no separate bounty/reward-distribution workflow.
+- Known dependency advisories remain in transitive wallet/Solana dependencies; see the fresh readiness report and [dependency review](docs/DEPENDENCY-SECURITY-REVIEW.md). Passing tests do not remove those risks or replace independent security review.
+- Evidence uses external links, not a secure sensitive-document upload system. No automatic university-database verification exists. General direct credentials do not acquire structured assessments automatically.
+- Work history currently combines projects and consented completed paid work; it is not a full structured CV employment-history system. There is no escrow, guaranteed payment, automated refund/dispute resolution, team payment splitting, full chat or automatic skill verification. Employer handoff is intentionally bounded. Issuer review quality requires operational standards and accountable human review.
 
-There is no onchain program to deploy and no private signing key to store on Vercel.
-
-## Merge the working branch
-
-The implementation is committed to `work`. To publish it from a machine with the branch:
-
-```bash
-git push -u origin work
-```
-
-On GitHub, open a pull request from **work → main**, review the changes, and select **Merge pull request**. If you prefer the command line after review:
-
-```bash
-git checkout main
-git pull --ff-only origin main
-git merge --no-ff work
-git push origin main
-```
-
-This task does not push or merge automatically. If the cloud UI creates a pull request for you, use that flow to get the committed changes onto GitHub.
-
-## MVP boundaries
-
-Project and supporting-document evidence uses external URLs; direct Supabase Storage uploads are deferred. There is no messaging, recruitment pipeline, recommendations, multi-company selector, membership invitation UI, project edit screen, or password-reset screen. Company profile editing is owner-only, while reviewers can publish and review challenges. The portal uses the first company for its profile/create screen and all existing memberships for review visibility; use one company per account for the demo. No live seed creates fabricated achievements: use the walkthrough to produce authentic test records and label the test company/profile as demonstration data.
-
-Company identity vetting, wallet identity binding, production abuse/rate-limit controls, account recovery, and a durable production-chain policy should precede a public launch. This is a hackathon MVP, not a completed production trust system.
-
-## Phase 1 passport foundation
-
-The passport-first branch requires the additive `202610120001_passport_foundation.sql` migration before deployment. Do not rerun the initial migration or merge before reviewing the manual upgrade procedure. See [Phase 1 implementation and release guide](docs/PHASE-1-PASSPORT.md) for user journeys, v1/v2 compatibility, security tests, and exact Supabase/Vercel actions.
+Before any controlled pilot, resolve deployment/schema uncertainty, review residual security risks and complete the hosted testing record. Do not use real student identity documents, private institutional records or mainnet funds for acceptance testing.

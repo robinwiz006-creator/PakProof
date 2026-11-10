@@ -1,25 +1,17 @@
 import { NextResponse } from "next/server";
 import { supabase, isConfigured } from "@/lib/supabase/server";
+import { emailConfirmationDestination } from "@/lib/auth-flow";
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const code = url.searchParams.get("code");
-  if (code && isConfigured()) {
-    const db = await supabase();
-    const { data, error } = await db.auth.exchangeCodeForSession(code);
-    if (!error)
-      return NextResponse.redirect(
-        new URL(
-          url.searchParams.get("purpose") === "recovery"
-            ? "/reset-password"
-            : `/portal/${data.user?.user_metadata.preferred_role === "company" ? "company" : "talent"}`,
-          url.origin,
-        ),
-      );
-  }
-  return NextResponse.redirect(
-    new URL(
-      "/sign-in?message=Email+confirmation+failed.+Use+Resend+confirmation+or+request+a+new+password+reset+link.",
-      url.origin,
-    ),
-  );
+  const destination = await emailConfirmationDestination(url.searchParams, {
+    configured: isConfigured(),
+    exchange: async (code) =>
+      (await supabase()).auth.exchangeCodeForSession(code),
+  });
+  // A relative Location retains the browser origin behind proxies/local bind hosts.
+  // destination is built only from fixed routes and the strict opportunity allowlist.
+  return new NextResponse(null, {
+    status: 307,
+    headers: { Location: destination, "Cache-Control": "no-store" },
+  });
 }

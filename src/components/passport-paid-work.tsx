@@ -1,24 +1,39 @@
+import { loadSection } from "@/lib/section-result";
+import { PassportSectionState } from "./passport-section-state";
 import { isConfigured, supabase } from "@/lib/supabase/server";
 import { Tags } from "./ui";
 export async function PassportPaidWork({
   recipientId,
   preview = false,
+  retryHref,
 }: {
   recipientId: string;
   preview?: boolean;
+  retryHref?: string;
 }) {
   if (!isConfigured()) return null;
   const db = await supabase();
-  const { data, error } = await db
-    .from("paid_work_history")
-    .select("*,paid_work_evidence(evidence)")
-    .eq("worker_id", recipientId)
-    .order("completed_at", { ascending: false });
-  if (error) return null;
-  const records = (data ?? []).filter(
+  const result = await loadSection(() =>
+    db
+      .from("paid_work_history")
+      .select("*,paid_work_evidence(evidence)")
+      .eq("worker_id", recipientId)
+      .order("completed_at", { ascending: false })
+      .abortSignal(AbortSignal.timeout(8000)),
+  );
+  if (result.state === "unavailable")
+    return (
+      <PassportSectionState
+        title="Completed work"
+        state="unavailable"
+        href={retryHref}
+      />
+    );
+  const records = result.items.filter(
     (h) => preview || (h.is_public && h.company_consent),
   );
-  if (!records.length) return null;
+  if (!records.length)
+    return <PassportSectionState title="Completed work" state="empty" />;
   return (
     <section id="work-history" className="section-spacer">
       <h2>Completed work</h2>

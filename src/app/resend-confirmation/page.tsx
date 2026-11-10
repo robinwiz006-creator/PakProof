@@ -2,9 +2,8 @@ import { RecoveryForm } from "@/components/recovery-form";
 export default async function Confirm({
   searchParams,
 }: {
-  searchParams: Promise<{ message?: string }>;
+  searchParams: Promise<{ message?: string; next?: string }>;
 }) {
-  return (
-    <RecoveryForm kind="confirmation" message={(await searchParams).message} />
-  );
+  const { message, next } = await searchParams;
+  return <RecoveryForm kind="confirmation" message={message} next={next} />;
 }

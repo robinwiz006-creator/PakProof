@@ -1,3 +1,4 @@
+import { PassportSectionState } from "./passport-section-state";
 import { supabase } from "@/lib/supabase/server";
 import type { Organization } from "@/lib/credentials";
 import {
@@ -20,7 +21,7 @@ export async function OrganizationVerificationWorkspace({
   own?: boolean;
 }) {
   const db = await supabase();
-  const [requests, outcomes] = await Promise.all([
+  const results = await Promise.all([
     db
       .from("organization_verification_requests")
       .select(
@@ -28,7 +29,8 @@ export async function OrganizationVerificationWorkspace({
       )
       .eq("organization_id", o.id)
       .order("created_at", { ascending: false })
-      .limit(20),
+      .limit(20)
+      .abortSignal(AbortSignal.timeout(8000)),
     db
       .from("organization_verification_outcomes")
       .select(
@@ -37,12 +39,18 @@ export async function OrganizationVerificationWorkspace({
       .eq("organization_id", o.id)
       .not("verification_request_id", "is", null)
       .order("created_at", { ascending: false })
-      .limit(20),
-  ]);
-  if (requests.error || outcomes.error)
-    throw new Error(
-      "Private organization verification records could not be loaded.",
+      .limit(20)
+      .abortSignal(AbortSignal.timeout(8000)),
+  ]).catch(() => null);
+  if (!results || results.some((r) => r.error))
+    return (
+      <PassportSectionState
+        title="Organization verification"
+        state="unavailable"
+        href={administrator ? `/issuer-admin/${o.id}` : "/organizations"}
+      />
     );
+  const [requests, outcomes] = results;
   const rows = (requests.data ?? []) as VerificationRequest[],
     decisions = (outcomes.data ?? []) as VerificationOutcome[];
   const pending = rows.find(

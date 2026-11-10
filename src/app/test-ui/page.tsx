@@ -1,3 +1,5 @@
+import { Task21Fixture } from "@/components/task21-fixture";
+import { DashboardAttentionFixture } from "@/components/dashboard-attention-fixture";
 import { OrganizationVerificationFixture } from "@/components/organization-verification-fixture";
 import { ContactHandoffFixture } from "@/components/contact-handoff-fixture";
 import { TransactionRecoveryFixture } from "@/components/transaction-recovery-fixture";
@@ -24,6 +26,8 @@ export default async function TestUI({
   // Isolated component fixtures only. Never available with configured Supabase.
   if (process.env.PROOFPAK_E2E !== "1" || isConfigured()) notFound();
   const { fixture } = await searchParams;
+  if (fixture === "task21") return <Task21Fixture />;
+  if (fixture === "dashboard-attention") return <DashboardAttentionFixture />;
   if (fixture === "organization-verification")
     return <OrganizationVerificationFixture />;
   if (fixture === "contact-handoff") return <ContactHandoffFixture />;
