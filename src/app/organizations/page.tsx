@@ -159,6 +159,10 @@ export default async function Organizations({
           </Link>
         }
       />
+      <Link className="button secondary" href="/credential-invitations">
+        Credential invitations
+      </Link>
+
       <nav className="workspace-tabs" aria-label="Organization sections">
         {[
           ["overview", "Overview"],

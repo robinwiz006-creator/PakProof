@@ -433,3 +433,15 @@ test("independent jobs start concurrently, order by priority, and reject invalid
   );
   assert.deepEqual(result.unavailable, ["fixture"]);
 });
+
+test("invitation attention uses a recipient-only database projection", async () => {
+  const { db, calls } = fixture({ counts: { credential_invitation_inbox: 2 } });
+  const result = await loadDashboardAttention(db, talent);
+  const item = result.items.find((i) => i.key === "credential-invitations");
+  assert.equal(item?.href, "/credential-invitations");
+  assert.equal(item?.count, 2);
+  const query = calls.find((q) => q.table === "credential_invitation_inbox");
+  assert.equal(query?.params.get("status"), "eq.pending");
+  assert.ok(query?.params.get("expires_at")?.startsWith("gt."));
+  assert.ok(!calls.some((q) => q.table === "credential_invitations"));
+});

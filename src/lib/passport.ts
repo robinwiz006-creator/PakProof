@@ -4,7 +4,7 @@ export function safeReturnPath(value: unknown): string | null {
   if (typeof value !== "string" || /[\s\\]/.test(value)) return null;
   const uuid = "[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}";
   return new RegExp(
-    `^/(?:challenges/${uuid}(?:#submit)?|paid-projects/${uuid})$`,
+    `^/(?:challenges/${uuid}(?:#submit)?|paid-projects/${uuid}|credential-invitations(?:/(?:${uuid}|[a-f0-9]{64}))?)$`,
   ).test(value)
     ? value
     : null;

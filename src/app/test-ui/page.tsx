@@ -1,3 +1,4 @@
+import { InvitationForm } from "@/components/invitation-form";
 import { HistoryForm } from "@/components/history-form";
 import { Task21Fixture } from "@/components/task21-fixture";
 import { DashboardAttentionFixture } from "@/components/dashboard-attention-fixture";
@@ -27,6 +28,25 @@ export default async function TestUI({
   // Isolated component fixtures only. Never available with configured Supabase.
   if (process.env.PROOFPAK_E2E !== "1" || isConfigured()) notFound();
   const { fixture } = await searchParams;
+  if (fixture === "invitation")
+    return (
+      <main className="container page narrow">
+        <h1>Invitation form fixture</h1>
+        <p>
+          Synthetic organization. No email or credential is created by this
+          browser test.
+        </p>
+        <InvitationForm
+          organizations={[
+            {
+              id: "23000000-0000-4000-8000-000000000001",
+              name: "Synthetic training organization",
+              types: ["course"],
+            },
+          ]}
+        />
+      </main>
+    );
   if (fixture === "history")
     return (
       <main className="container page narrow">
