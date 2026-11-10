@@ -1,3 +1,4 @@
+import { PassportHistory } from "./passport-history";
 import { Suspense } from "react";
 import { PassportSectionState } from "./passport-section-state";
 import Link from "next/link";
@@ -160,6 +161,20 @@ export async function PassportView({
           </details>
         </aside>
         <div>
+          <Suspense
+            fallback={
+              <PassportSectionState
+                title="Education & experience"
+                state="loading"
+              />
+            }
+          >
+            <PassportHistory
+              ownerId={p.id}
+              preview={preview}
+              retryHref={retryHref}
+            />
+          </Suspense>
           {sectionErrors.projects ? (
             <PassportSectionState
               title="Projects"
