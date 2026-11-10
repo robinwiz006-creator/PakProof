@@ -3391,3 +3391,158 @@ test("legacy ACL REST: intended public Passport and safe paid opportunity reads 
   assert.ok(forbidden.status >= 400);
   assert.notEqual(forbidden.data.code, "PGRST205");
 });
+
+test("talent evidence REST: authenticated membership and private-history filters are enforced", async () => {
+  await employerSearch();
+  const denied = await issuerRpc(
+    "search_passports_evidence",
+    {
+      p_company: employerCompany,
+      p_skill: "React",
+      p_education: "Hidden School",
+    },
+    3,
+  );
+  assert.equal(denied.status, 400);
+  const result = await issuerRpc(
+    "search_passports_evidence",
+    {
+      p_company: employerCompany,
+      p_education: "Hidden School",
+      p_sort: "relevance",
+    },
+    1,
+  );
+  assert.equal(result.status, 200, JSON.stringify(result.data));
+  assert.equal(result.data.total, 0);
+  const forbidden = await read(
+    "rpc/search_passports_evidence?p_company=" + employerCompany,
+  );
+  assert.ok([401, 403].includes(forbidden.status));
+  const oracle = await read(
+    "rpc/discovery_current_credential?p_id=" + uid(10),
+    1,
+  );
+  assert.ok([401, 403].includes(oracle.status));
+});
+test("talent evidence REST: direct shortlist/invitation writes and impersonation remain denied", async () => {
+  const directResponse = await fetch(`${base}/employer_shortlists`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${jwt(3)}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      company_id: employerCompany,
+      candidate_id: uid(10),
+      saved_by: uid(3),
+      note: "Unauthorized valid-shaped request",
+    }),
+  });
+  const direct = { status: directResponse.status };
+  assert.ok([401, 403].includes(direct.status));
+  const invite = await issuerRpc(
+    "invite_candidate_to_opportunity",
+    {
+      p_company: employerCompany,
+      p_candidate: uid(10),
+      p_purpose: "An unrelated organization cannot invite this candidate.",
+      p_challenge: "25000000-0000-4000-8000-000000000001",
+      p_paid_project: null,
+    },
+    3,
+  );
+  assert.equal(invite.status, 400);
+});
+
+test("opportunity invitation REST: same inbox, explicit acceptance, duplicate prevention and opt-out", async () => {
+  const company = await issuerRpc(
+    "create_company",
+    {
+      p_name: "Opportunity invitation REST fixture",
+      p_description:
+        "Synthetic organization for actual REST invitation testing.",
+      p_website: "https://example.test",
+      p_location: "",
+    },
+    33,
+  );
+  assert.equal(company.status, 200, JSON.stringify(company.data));
+  const challenge = await issuerRpc(
+    "create_challenge_with_rubric",
+    {
+      p_fields: {
+        company_id: company.data,
+        title: "REST invitation challenge",
+        description:
+          "A published challenge for real isolated REST consent testing.",
+        skills: ["React"],
+        difficulty: "Beginner",
+        deadline: new Date(Date.now() + 2 * 86400000)
+          .toISOString()
+          .slice(0, 10),
+        deliverables: "Provide accessible source code and test evidence.",
+      },
+      p_criteria: [],
+    },
+    33,
+  );
+  assert.equal(challenge.status, 200, JSON.stringify(challenge.data));
+  const args = {
+    p_company: company.data,
+    p_candidate: uid(32),
+    p_purpose: "Please review our published accessible interface challenge.",
+    p_challenge: challenge.data,
+    p_paid_project: null,
+  };
+  const invite = await issuerRpc("invite_candidate_to_opportunity", args, 33);
+  assert.equal(invite.status, 200, JSON.stringify(invite.data));
+  const duplicate = await issuerRpc(
+    "invite_candidate_to_opportunity",
+    args,
+    33,
+  );
+  assert.equal(duplicate.status, 400);
+  const incoming = await read(
+    `visible_contact_requests?id=eq.${invite.data}&select=*`,
+    32,
+  );
+  assert.equal(incoming.status, 200);
+  assert.equal(incoming.data[0].status, "pending");
+  assert.ok(incoming.data[0].expires_at);
+  assert.ok(!("created_by" in incoming.data[0]));
+  assert.equal(
+    (
+      await issuerRpc(
+        "respond_contact_request",
+        { p_request: invite.data, p_decision: "accepted" },
+        32,
+      )
+    ).status,
+    204,
+  );
+  assert.deepEqual(
+    (
+      await read(
+        `challenge_submissions?challenge_id=eq.${challenge.data}&select=id`,
+        32,
+      )
+    ).data,
+    [],
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "set_discovery_preferences",
+        { p_discoverable: false, p_contact: false },
+        32,
+      )
+    ).status,
+    204,
+  );
+  assert.deepEqual(
+    (await read(`visible_contact_requests?id=eq.${invite.data}&select=*`, 33))
+      .data,
+    [],
+  );
+});

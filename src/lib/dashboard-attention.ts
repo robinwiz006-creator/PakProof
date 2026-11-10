@@ -196,7 +196,7 @@ export async function loadDashboardAttention(
       {
         key: "contact",
         source: "Contact requests",
-        title: "Review contact requests",
+        title: "Review invitations & contact requests",
         explanation:
           "Choose whether to continue with an organization. No contact details are shared automatically.",
         status: "Your decision needed",
@@ -235,6 +235,26 @@ export async function loadDashboardAttention(
   const company = c.companyId;
   const jobs: Job[] = [
     invitationJob,
+    {
+      key: "accepted-invitations",
+      source: "Accepted invitations",
+      title: "Continue accepted invitations",
+      explanation:
+        "Candidates accepted contact. Review the opportunity and agree on next steps; acceptance did not create an application.",
+      status: "Contact open",
+      href: `/contact-requests?view=outgoing&company=${company}&status=accepted`,
+      action: "Review accepted contact",
+      priority: 40,
+      read: () =>
+        count(
+          db
+            .from("visible_contact_requests")
+            .select("id", options)
+            .eq("company_id", company)
+            .eq("status", "accepted")
+            .abortSignal(timeout()),
+        ),
+    },
     {
       key: "challenge-reviews",
       source: "Challenge reviews",

@@ -134,7 +134,7 @@ docker exec "$rehearsal_db" createdb -U postgres workflow_checks
 apply workflow_checks tests/database-bootstrap.sql
 apply workflow_checks tests/supabase-legacy-defaults.sql
 for sql in supabase/migrations/*.sql; do apply workflow_checks "$sql"; done
-for sql in tests/passport-history-database.sql tests/credential-invitations-database.sql tests/legacy-permissions-database.sql tests/assessment-transparency-database.sql tests/organization-verification-database.sql tests/contact-handoff-database.sql tests/credential-corrections-database.sql tests/paid-lifecycle-database.sql tests/paid-projects-database.sql tests/payment-database.sql tests/database.sql tests/credentials-database.sql tests/wallet-database.sql tests/issuer-trust-database.sql tests/challenge-assessments-database.sql tests/employer-discovery-database.sql; do
+for sql in tests/talent-matching-database.sql tests/passport-history-database.sql tests/credential-invitations-database.sql tests/legacy-permissions-database.sql tests/assessment-transparency-database.sql tests/organization-verification-database.sql tests/contact-handoff-database.sql tests/credential-corrections-database.sql tests/paid-lifecycle-database.sql tests/paid-projects-database.sql tests/payment-database.sql tests/database.sql tests/credentials-database.sql tests/wallet-database.sql tests/issuer-trust-database.sql tests/challenge-assessments-database.sql tests/employer-discovery-database.sql; do
  apply workflow_checks "$sql"
  echo "WORKFLOW SUITE PASSED: $(basename "$sql")"
 done

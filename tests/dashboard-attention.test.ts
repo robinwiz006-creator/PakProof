@@ -453,3 +453,14 @@ test("company users without an organization still see only their own invitation 
     ["credential_invitation_inbox"],
   );
 });
+
+test("accepted opportunity contact is scoped to the selected company", async () => {
+  const { db, calls } = fixture({ counts: { visible_contact_requests: 2 } });
+  const result = await loadDashboardAttention(db, context);
+  const action = result.items.find((i) => i.key === "accepted-invitations");
+  assert.ok(action?.href.includes(`company=${company}`));
+  assert.ok(action?.href.includes("status=accepted"));
+  const query = calls.find((q) => q.table === "visible_contact_requests");
+  assert.equal(query?.params.get("company_id"), "eq." + company);
+  assert.equal(query?.params.get("status"), "eq.accepted");
+});

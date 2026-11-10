@@ -1,4 +1,6 @@
 "use client";
+import { TalentSearchForm } from "./talent-search-form";
+import { evidenceDirectoryInput } from "@/lib/employer-discovery";
 import { useState } from "react";
 import { CandidateCard } from "./candidate-card";
 import { DiscoverySettings } from "./discovery-settings";
@@ -13,6 +15,21 @@ export function EmployerDiscoveryFixture() {
     headline: "Accessible interface developer",
     skills: ["React", "Accessibility"],
     allow_contact_requests: true,
+    matched_skills: 2,
+    matching_projects: 1,
+    assessed_matches: 1,
+    current_credentials: 0,
+    history: [
+      {
+        kind: "education",
+        organization: "Illustrative institute",
+        title: "Illustrative computing qualification",
+        field: "Computing",
+        start_date: "2020-01-01",
+        end_date: "2024-01-01",
+        ongoing: false,
+      },
+    ],
     saved: true,
     internal_note: "Illustrative private team note",
     projects: [
@@ -53,6 +70,15 @@ export function EmployerDiscoveryFixture() {
         Illustrate a private Passport
       </label>
       <DiscoverySettings isPublic={publicProfile} action={captured} />
+      <details>
+        <summary>Illustrative search controls</summary>
+        <TalentSearchForm
+          companyId="81000000-0000-4000-8000-000000000003"
+          filters={evidenceDirectoryInput.parse({})}
+          params={{}}
+          opportunities={[]}
+        />
+      </details>
       <CandidateCard
         candidate={c}
         companyId="81000000-0000-4000-8000-000000000003"

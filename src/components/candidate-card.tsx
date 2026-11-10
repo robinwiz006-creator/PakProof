@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { Tags } from "./ui";
 import { Field, SubmitButton } from "./forms";
+import { matchingExplanation } from "@/lib/employer-discovery";
+import { organizationTrust } from "@/lib/organization-trust";
+import { ReviewContactForm } from "./review-contact-form";
 import type { CandidateCardData } from "@/lib/employer-discovery";
 export function CandidateCard({
   candidate: c,
@@ -34,6 +37,24 @@ export function CandidateCard({
         </div>
         {c.saved && <span className="tag">Saved privately</span>}
       </header>
+      {matchingExplanation(c) && (
+        <p className="notice">{matchingExplanation(c)}</p>
+      )}
+      {(c.history ?? []).length > 0 && (
+        <section className="section-spacer">
+          <h3>Public education & experience</h3>
+          <p className="record-label">SELF-REPORTED</p>
+          {c.history?.map((h, i) => (
+            <p key={i}>
+              <strong>{h.title}</strong> · {h.organization}
+              {h.field ? ` · ${h.field}` : ""}
+              <br />
+              {h.kind === "education" ? "Education" : "Employment"} ·{" "}
+              {h.start_date} — {h.ongoing ? "Present" : h.end_date}
+            </p>
+          ))}
+        </section>
+      )}
       <p className="record-label section-spacer">
         Skills added by the individual
       </p>
@@ -58,6 +79,17 @@ export function CandidateCard({
                 {r.title}
               </Link>{" "}
               · {r.issuer_name} · {r.validity}
+              {r.trust_level !== undefined && (
+                <>
+                  <br />
+                  <span className="muted">
+                    Current issuer: {organizationTrust(r).label}
+                    {r.trust_suspended ? " (trust review suspended)" : ""} ·
+                    Issuance permission: {r.issuer_status}. Institutional review
+                    does not guarantee this achievement.
+                  </span>
+                </>
+              )}
             </p>
           ))}
         </section>
@@ -67,10 +99,19 @@ export function CandidateCard({
           <h3>Company-approved achievements</h3>
           {c.achievements.map((a) => (
             <p key={a.id}>
-              {a.title} ·{" "}
+              <Link href={`/verify/${a.id}`}>{a.title}</Link> ·{" "}
               {a.assessed
                 ? "Assessed-work summary shared by the owner"
                 : "Company approval; not an independently issued qualification"}
+              {a.assessed && a.assessment_summary && (
+                <>
+                  <br />
+                  <span className="muted">
+                    {a.assessment_summary.criteria_count} criteria · Outcomes:{" "}
+                    {a.assessment_summary.outcomes.join(", ")}
+                  </span>
+                </>
+              )}
             </p>
           ))}
         </section>
@@ -94,6 +135,26 @@ export function CandidateCard({
             value={c.internal_note ?? ""}
             hint="Keep it short. Do not paste private evidence or contact information."
           />
+          <label className="field">
+            Organize shortlist by opportunity
+            <select
+              name="shortlist_opportunity"
+              defaultValue={c.saved_opportunity ?? ""}
+            >
+              <option value="">No opportunity group</option>
+              {c.saved_opportunity &&
+                !opportunities.some((o) => o.value === c.saved_opportunity) && (
+                  <option value={c.saved_opportunity}>
+                    Previously linked opportunity (not currently open)
+                  </option>
+                )}
+              {opportunities.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.title}
+                </option>
+              ))}
+            </select>
+          </label>
           <SubmitButton>
             {c.saved ? "Update note" : "Save candidate"}
           </SubmitButton>
@@ -107,8 +168,8 @@ export function CandidateCard({
       </details>
       {c.allow_contact_requests ? (
         <details className="section-spacer">
-          <summary>Request contact</summary>
-          <form action={contact}>
+          <summary>Invite to opportunity or request contact</summary>
+          <ReviewContactForm action={contact}>
             {ids}
             <Field
               name="purpose"
@@ -130,11 +191,12 @@ export function CandidateCard({
               </select>
             </label>
             <p className="muted">
-              One request per company and person. Limits apply. This is an
-              in-app invitation, not email or a job offer.
+              One invitation per organization, person and opportunity. New
+              opportunity invitations expire in up to 14 days. Contact consent
+              and limits apply. This is not email, an application, a contract or
+              a job offer.
             </p>
-            <SubmitButton>Send contact request</SubmitButton>
-          </form>
+          </ReviewContactForm>
         </details>
       ) : (
         <p className="muted section-spacer">

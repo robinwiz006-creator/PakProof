@@ -21,6 +21,7 @@ export function contactStatus(status: string) {
   return (
     (
       {
+        expired: "Invitation expired",
         pending: "Awaiting candidate decision",
         accepted: "Contact accepted",
         declined: "Declined",
