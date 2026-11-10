@@ -1,5 +1,8 @@
+-- Compare every original field, while asserting the newly added optional field
+-- stays NULL for historical rows; no legacy expiry may be invented.
 do $$begin
- if (select md5(jsonb_agg(to_jsonb(r) order by id)::text) from public.contact_requests r)<>(select fingerprint from test_handoff_snapshot) then raise exception 'Historical contact request changed';end if;
+ if exists(select 1 from public.contact_requests where expires_at is not null) then raise exception 'Historical expiration invented';end if;
+ if (select md5(jsonb_agg(to_jsonb(r)-'expires_at' order by id)::text) from public.contact_requests r)<>(select fingerprint from test_handoff_snapshot) then raise exception 'Historical contact request changed';end if;
  if (select count(distinct status) from public.contact_requests)<>3 or exists(select 1 from public.contact_followups) then raise exception 'Legacy state lost or invented notes';end if;
 end$$;
 set role authenticated;

@@ -14,3 +14,4 @@ insert into public.projects(talent_id,title,description,demo_url) values
 insert into public.projects(talent_id,title,description,demo_url) values
 ('a0000000-0000-4000-8000-000000000010','Recent unrelated project one','A newer public portfolio item for search-summary ordering.','https://example.com/new-one'),
 ('a0000000-0000-4000-8000-000000000010','Recent unrelated project two','Another newer public item; matching evidence should still surface.','https://example.com/new-two');
+insert into public.passport_history(owner_id,kind,organization,title,start_date,ongoing,is_public) values('a0000000-0000-4000-8000-000000000010','education','Hidden School','Private education fixture','2020-01-01',true,false);

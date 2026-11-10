@@ -36,7 +36,15 @@ export async function saveCandidate(form: FormData) {
   const company = z.uuid().parse(form.get("company_id"));
   const candidate = z.uuid().parse(form.get("candidate_id"));
   const path = `/portal/company/directory?company=${company}&saved=1`;
-  const { error } = await db.rpc("save_candidate", {
+  let ref;
+  try {
+    ref = opportunityReference(String(form.get("shortlist_opportunity") ?? ""));
+  } catch {
+    redirect(messageLink(path, "Choose a valid opportunity."));
+  }
+  const { error } = await db.rpc("save_candidate_for_opportunity", {
+    p_challenge: ref.challenge,
+    p_project: ref.project,
     p_company: company,
     p_candidate: candidate,
     p_note: z
@@ -75,19 +83,26 @@ export async function requestContact(form: FormData) {
   } catch {
     redirect(messageLink(path, "Choose an existing published opportunity."));
   }
-  const { error } = await db.rpc("create_contact_request", {
-    p_company: company,
-    p_candidate: z.uuid().parse(form.get("candidate_id")),
-    p_purpose: z.string().trim().min(20).max(1000).parse(form.get("purpose")),
-    p_challenge: ref.challenge,
-    p_paid_project: ref.project,
-  });
+  const { error } = await db.rpc(
+    ref.challenge || ref.project
+      ? "invite_candidate_to_opportunity"
+      : "create_contact_request",
+    {
+      p_company: company,
+      p_candidate: z.uuid().parse(form.get("candidate_id")),
+      p_purpose: z.string().trim().min(20).max(1000).parse(form.get("purpose")),
+      p_challenge: ref.challenge,
+      p_paid_project: ref.project,
+    },
+  );
   fail(path, error);
   revalidatePath("/contact-requests");
   redirect(
     messageLink(
       path,
-      "Contact request saved. No email or contact details were shared.",
+      ref.challenge || ref.project
+        ? "Opportunity invitation sent in-app. Acceptance does not apply or award work. No email was sent."
+        : "Contact request saved. No email or contact details were shared.",
     ),
   );
 }

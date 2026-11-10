@@ -39,14 +39,24 @@ test("candidate evidence labels and private forms retain organization context on
   await expect(
     page.getByRole("status").filter({ hasText: "Offline form only:" }),
   ).toContainText('"company_id":"81000000-0000-4000-8000-000000000003"');
-  await page.getByText("Request contact", { exact: true }).click();
+  await page
+    .getByText("Invite to opportunity or request contact", { exact: true })
+    .click();
   await page
     .getByLabel("Purpose or opportunity", { exact: true })
     .fill("We would like to discuss this public interface project.");
   await page
     .getByLabel("Link to your open opportunity (optional)")
     .selectOption("challenge:81000000-0000-4000-8000-000000000004");
-  await page.getByRole("button", { name: "Send contact request" }).click();
+  await page
+    .getByRole("button", { name: "Review invitation or contact request" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Review your invitation" }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Send in-app invitation / contact request" })
+    .click();
   await expect(
     page.getByRole("status").filter({ hasText: "Offline form only:" }),
   ).toContainText("challenge:81000000-0000-4000-8000-000000000004");
@@ -62,4 +72,32 @@ test("real contact workspace requires authentication rather than exposing reques
   await page.goto("/contact-requests?view=outgoing");
   await expect(page).toHaveURL(/\/sign-in/);
   await expect(page.locator("input[name=request_id]")).toHaveCount(0);
+});
+
+test("combined public-evidence search controls preserve server-side filters", async ({
+  page,
+}) => {
+  await page.goto("/test-ui?fixture=employer-discovery");
+  await page.getByText("Illustrative search controls", { exact: true }).click();
+  await page
+    .getByLabel("All requested skills (comma-separated, exact match)")
+    .fill("Solana,React");
+  await page
+    .getByText("Education, experience & evidence filters", { exact: true })
+    .click();
+  await page.getByLabel("Public education", { exact: true }).fill("computing");
+  await page.getByLabel("Public employment experience").fill("frontend");
+  await page.getByLabel("Public project experience").fill("interface");
+  await page.getByLabel("Current credential category").selectOption("course");
+  await page
+    .getByRole("combobox", { name: "Sort", exact: true })
+    .selectOption("relevance");
+  await page.getByRole("button", { name: "Search Passports" }).click();
+  await expect(page).toHaveURL(/\/portal\/company\/directory\?/);
+  const params = new URL(page.url()).searchParams;
+  expect(params.get("skill")).toBe("Solana,React");
+  expect(params.get("education")).toBe("computing");
+  expect(params.get("experience")).toBe("frontend");
+  expect(params.get("category")).toBe("course");
+  expect(params.get("sort")).toBe("relevance");
 });

@@ -14,6 +14,7 @@ export default async function ContactRequests({
     company?: string;
     message?: string;
     page?: string;
+    status?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -56,6 +57,19 @@ export default async function ContactRequests({
   query = outgoing
     ? query.eq("company_id", company!)
     : query.eq("candidate_id", user.id);
+  const statusFilter =
+    params.status &&
+    [
+      "pending",
+      "accepted",
+      "declined",
+      "expired",
+      "closed",
+      "withdrawn",
+    ].includes(params.status)
+      ? params.status
+      : "";
+  if (statusFilter) query = query.eq("status", statusFilter);
   const { data, error, count } = await query;
   if (error) throw new Error("Contact requests could not be loaded.");
   // Read names only through the directory's current consent gate; never cache a
@@ -110,13 +124,36 @@ export default async function ContactRequests({
   );
   const openProjects = new Set((projectsResult.data ?? []).map((p) => p.id));
   const href = (n: number) =>
-    `/contact-requests?${new URLSearchParams({ ...(outgoing ? { view: "outgoing", company: company! } : {}), page: String(n) })}`;
+    `/contact-requests?${new URLSearchParams({ ...(outgoing ? { view: "outgoing", company: company! } : {}), ...(statusFilter ? { status: statusFilter } : {}), page: String(n) })}`;
   return (
     <div className="container page">
       <PageHeading
-        title="Contact requests"
+        title="Contact & opportunity invitations"
         description="Review requests and agree on a next step privately. No email or phone is shared automatically."
       />
+      <form action="/contact-requests" className="button-row">
+        <input type="hidden" name="view" value={outgoing ? "outgoing" : ""} />
+        {outgoing && <input type="hidden" name="company" value={company} />}
+        <label>
+          Status
+          <select name="status" defaultValue={statusFilter}>
+            <option value="">All</option>
+            {[
+              "pending",
+              "accepted",
+              "declined",
+              "expired",
+              "closed",
+              "withdrawn",
+            ].map((s) => (
+              <option key={s} value={s}>
+                {contactStatus(s)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button className="button secondary">Filter invitations</button>
+      </form>
       <div className="button-row">
         <Link className="text-link" href="/contact-requests">
           Incoming requests
@@ -217,7 +254,11 @@ export default async function ContactRequests({
                   Your decision
                   <select name="decision" defaultValue="" required>
                     <option value="">Choose a decision</option>
-                    <option value="accepted">Accept contact request</option>
+                    <option value="accepted">
+                      {r.challenge_id || r.paid_project_id
+                        ? "Accept opportunity invitation"
+                        : "Accept contact request"}
+                    </option>
                     <option value="declined">Decline request</option>
                   </select>
                 </label>
@@ -236,9 +277,9 @@ export default async function ContactRequests({
             </div>
             {r.status === "pending" && (
               <p className="muted">
-                Accepting allows a limited private follow-up with this
-                organization. You can close contact at any time. No email or
-                phone is shared.
+                Accepting does not apply, award work or create a payment. It
+                allows a limited private follow-up with this organization. You
+                can close contact at any time. No email or phone is shared.
               </p>
             )}
           </article>

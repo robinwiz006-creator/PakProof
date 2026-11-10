@@ -1,3 +1,5 @@
+> Task 25 continuation: latest branch is `task-25-talent-matching`, based on Task 24 `4001bbc`. Review target is `task-24-final-integration`, not main. The new migration is `202611100003_talent_evidence_matching.sql`, after Task 23: **23 files total, 14 after the reported nine-file production baseline**. See `docs/TASK-25-TALENT-MATCHING.md`. Advanced server-side evidence search, opportunity-organized shortlists and expiring opportunity invitations reuse the existing directory/contact inbox, permissions and consent. No production operations or email delivery were performed. Use this latest branch for continuation; the Task 24 inventory below remains preserved historical context.
+
 # ProofPak development handover — Task 24
 
 ## Start here
