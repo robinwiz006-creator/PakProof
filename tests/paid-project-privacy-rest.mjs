@@ -3546,3 +3546,146 @@ test("opportunity invitation REST: same inbox, explicit acceptance, duplicate pr
     [],
   );
 });
+
+test("team REST: verified-email acceptance creates scoped membership and cannot escalate or retain removed access", async () => {
+  const company = await issuerRpc(
+    "create_company",
+    {
+      p_name: "Team REST organization",
+      p_description:
+        "Synthetic team management using a real local REST gateway.",
+      p_website: "https://example.test",
+      p_location: "",
+    },
+    60,
+  );
+  assert.equal(company.status, 200, JSON.stringify(company.data));
+  const invite = await issuerRpc(
+    "prepare_team_invitation",
+    {
+      p_company: company.data,
+      p_email: "team-rest-61@example.test",
+      p_role: "credential_manager",
+      p_token_hash: "a".repeat(64),
+    },
+    60,
+  );
+  assert.equal(invite.status, 200, JSON.stringify(invite.data));
+  assert.equal(
+    (
+      await issuerRpc(
+        "decide_team_invitation",
+        { p_invitation: invite.data, p_decision: "accepted" },
+        62,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "decide_team_invitation",
+        { p_invitation: invite.data, p_decision: "accepted" },
+        61,
+      )
+    ).status,
+    200,
+  );
+  const capabilities = await issuerRpc(
+    "company_capability",
+    { p_company: company.data, p_capability: "credentials" },
+    61,
+  );
+  assert.equal(capabilities.data, true);
+  assert.equal(
+    (
+      await issuerRpc(
+        "company_capability",
+        { p_company: company.data, p_capability: "opportunities" },
+        61,
+      )
+    ).data,
+    false,
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "prepare_team_invitation",
+        {
+          p_company: company.data,
+          p_email: "team-rest-62@example.test",
+          p_role: "administrator",
+          p_token_hash: "b".repeat(64),
+        },
+        61,
+      )
+    ).status,
+    400,
+  );
+  const workspace = await issuerRpc(
+    "organization_team_workspace",
+    { p_company: company.data },
+    62,
+  );
+  assert.equal(workspace.status, 400);
+  assert.equal(
+    (await read(`organization_team_invitations?select=token_hash`, 61)).status,
+    403,
+  );
+  const unverified = await issuerRpc(
+    "prepare_team_invitation",
+    {
+      p_company: company.data,
+      p_email: "team-rest-65@example.test",
+      p_role: "submission_reviewer",
+      p_token_hash: "c".repeat(64),
+    },
+    60,
+  );
+  assert.equal(unverified.status, 200);
+  assert.equal(
+    (
+      await issuerRpc(
+        "decide_team_invitation",
+        { p_invitation: unverified.data, p_decision: "accepted" },
+        65,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "manage_team_member",
+        { p_company: company.data, p_member: uid(61), p_role: "remove" },
+        60,
+      )
+    ).status,
+    204,
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "company_capability",
+        { p_company: company.data, p_capability: "credentials" },
+        61,
+      )
+    ).data,
+    false,
+  );
+  assert.equal(
+    (
+      await issuerRpc(
+        "organization_team_workspace",
+        { p_company: company.data },
+        61,
+      )
+    ).status,
+    400,
+  );
+  assert.ok(
+    [401, 403].includes(
+      (await read("organization_team_events?select=*")).status,
+    ),
+  );
+});

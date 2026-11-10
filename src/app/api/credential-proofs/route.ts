@@ -1,3 +1,4 @@
+import { teamCan } from "@/lib/team-permissions";
 import {
   assessmentContextMatches,
   workContext,
@@ -44,7 +45,11 @@ async function authorized(id: string) {
     .eq("company_id", c.organizations?.company_id)
     .eq("user_id", user.id)
     .maybeSingle();
-  if (!member || c.organizations?.issuer_status !== "authorized")
+  if (
+    !member ||
+    !teamCan(member.role, "credentials") ||
+    c.organizations?.issuer_status !== "authorized"
+  )
     throw new Error("Authorized issuer membership required.");
   if (
     c.credential_preferences.acceptance !== "accepted" ||

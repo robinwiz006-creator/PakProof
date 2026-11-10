@@ -1,3 +1,4 @@
+import { teamCan } from "@/lib/team-permissions";
 import Link from "next/link";
 import { credentialWorkspace } from "@/lib/credential-data";
 import { PaidProjectEditor } from "@/components/paid-project-editor";
@@ -12,12 +13,14 @@ export default async function NewProject({
   const { message } = await searchParams;
   const { data } = await db
     .from("company_memberships")
-    .select("company_id,companies(name)")
+    .select("company_id,role,companies(name)")
     .eq("user_id", user.id);
-  const companies = (data ?? []).map((m) => ({
-    id: m.company_id,
-    name: (m.companies as unknown as { name: string }).name,
-  }));
+  const companies = (data ?? [])
+    .filter((m) => teamCan(m.role, "opportunities"))
+    .map((m) => ({
+      id: m.company_id,
+      name: (m.companies as unknown as { name: string }).name,
+    }));
   return (
     <div className="container page narrow">
       <PageHeading
@@ -37,7 +40,7 @@ export default async function NewProject({
         <PaidProjectEditor companies={companies} />
       ) : (
         <p className="notice section-spacer">
-          First{" "}
+          An opportunity-management role is required. You can{" "}
           <Link href="/portal/company/profile">
             create your company profile
           </Link>

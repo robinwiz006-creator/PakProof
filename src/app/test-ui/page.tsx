@@ -1,3 +1,4 @@
+import { TeamInviteForm, TeamMemberForm } from "@/components/team-forms";
 import { InvitationForm } from "@/components/invitation-form";
 import { HistoryForm } from "@/components/history-form";
 import { Task21Fixture } from "@/components/task21-fixture";
@@ -28,6 +29,28 @@ export default async function TestUI({
   // Isolated component fixtures only. Never available with configured Supabase.
   if (process.env.PROOFPAK_E2E !== "1" || isConfigured()) notFound();
   const { fixture } = await searchParams;
+  if (fixture === "team-owner" || fixture === "team-admin")
+    return (
+      <main className="container page narrow">
+        <h1>Offline team controls</h1>
+        <p>
+          Synthetic layout only. Do not create an invitation in this fixture.
+        </p>
+        <TeamInviteForm
+          company="26000000-0000-4000-8000-000000000001"
+          role={fixture === "team-admin" ? "administrator" : "owner"}
+        />
+        <details>
+          <summary>Member access fixture</summary>
+          <TeamMemberForm
+            company="26000000-0000-4000-8000-000000000001"
+            member="26000000-0000-4000-8000-000000000002"
+            actorRole={fixture === "team-admin" ? "administrator" : "owner"}
+            currentRole="credential_manager"
+          />
+        </details>
+      </main>
+    );
   if (fixture === "invitation")
     return (
       <main className="container page narrow">

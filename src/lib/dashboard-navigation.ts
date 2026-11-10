@@ -9,11 +9,13 @@ export const personalNavigation = [
 export const organizationNavigation = [
   ["/portal/company", "Home"],
   ["/organizations", "Organization & credentials"],
+  ["/organization-team", "Organization team"],
   ["/portal/company/challenges", "Challenges"],
   ["/paid-projects?view=company", "Paid projects & applications"],
   ["/portal/company/reviews", "Review challenge work"],
 ] as const;
 export const secondaryNavigation = [
+  ["/team-invitations", "Team invitations"],
   ["/credential-invitations", "Credential invitations"],
   ["/contact-requests", "Contact requests"],
   ["/wallet", "Wallet"],

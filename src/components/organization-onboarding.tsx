@@ -4,9 +4,13 @@ import { organizationSetup } from "@/lib/organization-onboarding";
 export function OrganizationOnboarding({
   organization: o,
   canEdit,
+  canIssue = true,
+  canManageOpportunities = true,
 }: {
   organization: Organization;
   canEdit: boolean;
+  canIssue?: boolean;
+  canManageOpportunities?: boolean;
 }) {
   const setup = organizationSetup(o);
   return (
@@ -37,16 +41,18 @@ export function OrganizationOnboarding({
             Edit organization profile
           </Link>
         )}
-        <Link
-          className="button secondary"
-          href={`/portal/company?company=${o.company_id}`}
-        >
-          Manage opportunities
-        </Link>
+        {canManageOpportunities && (
+          <Link
+            className="button secondary"
+            href={`/portal/company?company=${o.company_id}`}
+          >
+            Manage opportunities
+          </Link>
+        )}
         <Link className="text-link" href={`#verification-${o.id}`}>
           View verification and requests
         </Link>
-        {setup.canIssue && (
+        {setup.canIssue && canIssue && (
           <Link className="button" href="/organizations?view=issue">
             Issue a credential
           </Link>
