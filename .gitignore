@@ -54,3 +54,7 @@ __pycache__/
 *.sql.gz
 /backups/
 /recovery-output/
+
+# Solana build output; never commit deploy authority keypairs
+/programs/**/target/
+/programs/**/*-keypair.json

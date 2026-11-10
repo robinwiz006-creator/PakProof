@@ -6,3 +6,6 @@ recovery-output
 scripts/recovery
 tests
 docs
+
+# Solana program source/tooling are not part of the Next.js runtime.
+programs
