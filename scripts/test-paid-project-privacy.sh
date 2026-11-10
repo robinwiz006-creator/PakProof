@@ -9,8 +9,11 @@ docker network create "$name" >/dev/null
 docker run -d --name "$name-db" --network "$name" -e POSTGRES_PASSWORD=local-fixture-only postgres:17-alpine >/dev/null
 for i in {1..30}; do if docker exec "$name-db" pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; then break; fi; sleep 1; done
 for sql in tests/database-bootstrap.sql supabase/migrations/*.sql; do
- if [[ "$sql" != *202611050001* ]]; then
+ if [[ "$sql" != *202611050001* && "$sql" != *202611090001* ]]; then
   docker exec -i "$name-db" psql -U postgres -v ON_ERROR_STOP=1 < "$sql" >/dev/null
+ fi
+ if [[ "$sql" == tests/database-bootstrap.sql ]]; then
+  docker exec -i "$name-db" psql -U postgres -v ON_ERROR_STOP=1 < tests/supabase-legacy-defaults.sql >/dev/null
  fi
 done
 # Seed before the forward migration and prove every seeded record is unchanged.
@@ -33,6 +36,7 @@ docker exec -i "$name-db" psql -U postgres -v ON_ERROR_STOP=1 < supabase/migrati
 after_hash=$(docker exec "$name-db" psql -U postgres -Atc "$fingerprint_sql")
 [[ "$before_hash" == "$after_hash" ]] || { echo 'Migration changed existing records' >&2; exit 1; }
 echo 'PASS: populated paid project migration preserves all fixture records'
+docker exec -i "$name-db" psql -U postgres -v ON_ERROR_STOP=1 < supabase/migrations/202611090001_legacy_client_permissions.sql >/dev/null
 docker exec -i "$name-db" psql -U postgres -v ON_ERROR_STOP=1 < tests/paid-project-privacy-grants.sql >/dev/null
 docker exec -i "$name-db" psql -U postgres -v ON_ERROR_STOP=1 < tests/issuer-trust-rest-fixtures.sql >/dev/null
 docker exec -i "$name-db" psql -U postgres -v ON_ERROR_STOP=1 < tests/challenge-assessments-rest-fixtures.sql >/dev/null

@@ -1,0 +1,8 @@
+# Tooling and documentation are preserved in Git, not uploaded as runtime assets.
+.git
+.env*
+backups
+recovery-output
+scripts/recovery
+tests
+docs

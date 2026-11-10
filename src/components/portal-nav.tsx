@@ -56,7 +56,9 @@ export function useDashboardRole(): DashboardRole {
   const explicit =
     path.startsWith("/portal/company") || path.startsWith("/organizations")
       ? "company"
-      : path.startsWith("/portal/talent") || path.startsWith("/my-credentials")
+      : path.startsWith("/portal/talent") ||
+          path.startsWith("/my-credentials") ||
+          path === "/profile-history"
         ? "talent"
         : null;
   useEffect(() => {

@@ -215,14 +215,23 @@ export async function loadDashboardAttention(
       },
     ]);
   const member = c.memberships.find((m) => m.company_id === c.companyId);
-  if (!member || !c.companyId)
+  if (!member || !c.companyId) {
+    if (c.companyId)
+      return {
+        items: [],
+        unavailable: ["Organization access"],
+        context: "Organization workspace",
+      };
+    const recipient = await collectAttention(
+      [invitationJob],
+      "Your credential invitations",
+    );
     return {
-      items: [],
-      unavailable: c.companyId ? ["Organization access"] : [],
-      context: "Organization workspace",
+      ...recipient,
       emptyMessage:
         "Choose or create an organization to check its pending actions.",
     };
+  }
   const company = c.companyId;
   const jobs: Job[] = [
     invitationJob,

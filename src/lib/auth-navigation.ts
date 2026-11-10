@@ -3,7 +3,7 @@ import { safeReturnPath } from "./passport";
 export type AuthUser = { user_metadata?: { preferred_role?: unknown } };
 export type AuthPage = "/sign-in" | "/sign-up" | "/resend-confirmation";
 
-/** Only a canonical opportunity destination travels through authentication. */
+/** Only an explicitly allowed internal destination travels through authentication. */
 export function authHref(page: AuthPage, value: unknown, role?: unknown) {
   const next = safeReturnPath(value);
   const params = new URLSearchParams();
@@ -21,11 +21,13 @@ export function signedInDestination(user: AuthUser, value: unknown) {
 
 export function opportunityAuthMessage(value: unknown) {
   const next = safeReturnPath(value);
-  return next?.startsWith("/credential-invitations")
-    ? "Sign in with the invited email to review your credential privately."
-    : next
-      ? `Continue to your selected ${next.startsWith("/challenges/") ? "challenge" : "project"} after signing in. You can review it before taking any action.`
-      : null;
+  return next === "/profile-history"
+    ? "Sign in to manage your education and work experience."
+    : next?.startsWith("/credential-invitations")
+      ? "Sign in with the invited email to review your credential privately."
+      : next
+        ? `Continue to your selected ${next.startsWith("/challenges/") ? "challenge" : "project"} after signing in. You can review it before taking any action.`
+        : null;
 }
 
 export function confirmationCallbackUrl(siteUrl: string, value: unknown) {

@@ -3233,3 +3233,161 @@ test("lifecycle REST: publishing a replacement preserves revocation and original
   assert.ok(JSON.stringify(original).includes(lifecycleReplacement));
   assert.ok(!JSON.stringify(original).includes("PRIVATE correction"));
 });
+
+test("legacy ACL REST: anonymous mutation RPCs fail at the execute privilege boundary", async () => {
+  for (const [name, args] of [
+    [
+      "create_company",
+      {
+        p_name: "Forbidden anonymous company",
+        p_description: "Synthetic privilege test",
+        p_website: "https://example.com",
+        p_location: "Karachi",
+      },
+    ],
+    [
+      "submit_work",
+      {
+        p_challenge_id: uid(900),
+        p_project_url: "https://example.com",
+        p_github_url: "",
+        p_explanation: "Anonymous mutation must never execute.",
+      },
+    ],
+    [
+      "review_submission",
+      {
+        p_submission_id: uid(901),
+        p_decision: "approved",
+        p_feedback: "Anonymous mutation must never execute.",
+      },
+    ],
+  ]) {
+    const r = await fetch(`${base}/rpc/${name}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(args),
+    });
+    const data = await r.json();
+    assert.equal(r.status, 401, JSON.stringify(data));
+    assert.equal(data.code, "42501");
+  }
+});
+test("legacy ACL REST: legitimate profile/project writes work while cross-owner updates remain invisible", async () => {
+  const original = (await read(`profiles?id=eq.${uid(2)}&select=headline`, 2))
+    .data[0].headline;
+  async function mutate(path, method, body, role) {
+    const r = await fetch(`${base}/${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${jwt(role)}`,
+        "Content-Type": "application/json",
+        Prefer: "return=representation",
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+    return { status: r.status, data: await r.json().catch(() => null) };
+  }
+  assert.equal(
+    (
+      await mutate(
+        `profiles?id=eq.${uid(2)}`,
+        "PATCH",
+        { headline: "Synthetic permission regression" },
+        2,
+      )
+    ).status,
+    200,
+  );
+  const denied = await mutate(
+    `profiles?id=eq.${uid(2)}`,
+    "PATCH",
+    { headline: "Unauthorized overwrite" },
+    3,
+  );
+  assert.equal(denied.status, 200);
+  assert.deepEqual(denied.data, []);
+  assert.equal(
+    (await read(`profiles?id=eq.${uid(2)}&select=headline`, 2)).data[0]
+      .headline,
+    "Synthetic permission regression",
+  );
+  const project = await mutate(
+    "projects",
+    "POST",
+    {
+      talent_id: uid(2),
+      title: "ACL regression project",
+      description: "Synthetic owned project for permission regression",
+      github_url: "",
+      demo_url: "https://example.com/acl-project",
+      evidence_url: "",
+      skills: ["SQL"],
+    },
+    2,
+  );
+  assert.equal(project.status, 201, JSON.stringify(project));
+  const id = project.data[0].id;
+  assert.equal(
+    (
+      await mutate(
+        `projects?id=eq.${id}`,
+        "PATCH",
+        { title: "Edited ACL regression project" },
+        2,
+      )
+    ).status,
+    200,
+  );
+  assert.deepEqual(
+    (await mutate(`projects?id=eq.${id}`, "DELETE", null, 3)).data,
+    [],
+  );
+  assert.equal(
+    (await mutate(`projects?id=eq.${id}`, "DELETE", null, 2)).data.length,
+    1,
+  );
+  assert.equal(
+    (
+      await mutate(
+        `profiles?id=eq.${uid(2)}`,
+        "PATCH",
+        { headline: original },
+        2,
+      )
+    ).status,
+    200,
+  );
+});
+test("legacy ACL REST: anonymous and unrelated authenticated direct achievement creation remain forbidden", async () => {
+  for (const role of [undefined, 3]) {
+    const r = await fetch(`${base}/achievements`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(role ? { Authorization: `Bearer ${jwt(role)}` } : {}),
+      },
+      body: JSON.stringify({
+        submission_id: uid(900),
+        challenge_id: uid(901),
+        talent_id: uid(2),
+        company_id: uid(902),
+        title: "Forbidden direct credential-like award",
+      }),
+    });
+    assert.ok([401, 403].includes(r.status));
+    assert.equal((await r.json()).code, "42501");
+  }
+});
+test("legacy ACL REST: intended public Passport and safe paid opportunity reads are retained", async () => {
+  const profiles = await read(
+    "profiles?select=slug,full_name&is_public=eq.true",
+  );
+  assert.equal(profiles.status, 200);
+  assert.ok(profiles.data.length > 0);
+  const projects = await read("public_paid_projects?select=id,title");
+  assert.equal(projects.status, 200);
+  const forbidden = await read("public_paid_projects?select=worker_id");
+  assert.ok(forbidden.status >= 400);
+  assert.notEqual(forbidden.data.code, "PGRST205");
+});

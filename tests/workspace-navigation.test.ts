@@ -1,16 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createElement } from "react";
+import { createElement, cloneElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { PathnameContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
 import { WorkspaceFrame } from "../src/components/workspace-frame";
 import { IssuerQueue } from "../src/components/issuer-queue";
-function frame(path: string) {
+function frame(path: string, signedIn = false) {
   return renderToStaticMarkup(
     createElement(
       PathnameContext.Provider,
       { value: path },
-      createElement(WorkspaceFrame, null, "Isolated presentation fixture"),
+      cloneElement(
+        createElement(WorkspaceFrame, null, "Isolated presentation fixture"),
+        { signedIn },
+      ),
     ),
   );
 }
@@ -84,4 +87,22 @@ test("client project listings strip private references even if a source row cont
     ].sort(),
   );
   assert.ok(!JSON.stringify(result).includes("private-"));
+});
+
+test("history and invitation screens retain workspace navigation without framing anonymous invite links", () => {
+  assert.ok(
+    frame("/profile-history", true).includes(
+      'aria-label="Workspace navigation"',
+    ),
+  );
+  assert.ok(
+    frame("/credential-invitations", true).includes(
+      'href="/credential-invitations"',
+    ),
+  );
+  assert.ok(
+    !frame("/credential-invitations/" + "a".repeat(64), false).includes(
+      'aria-label="Workspace navigation"',
+    ),
+  );
 });

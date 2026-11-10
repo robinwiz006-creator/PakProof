@@ -237,3 +237,23 @@ test("header Auth links preserve intent on opportunity and Auth pages", async ({
     `/sign-up?${new URLSearchParams({ next: project })}`,
   );
 });
+
+test("education and employment editing keeps its safe destination through authentication", async ({
+  page,
+}) => {
+  const next = "/profile-history";
+  await page.goto(`/sign-in?${new URLSearchParams({ next })}`);
+  await expect(
+    page.getByText("Sign in to manage your education and work experience."),
+  ).toBeVisible();
+  await page
+    .getByRole("link", { name: "Create an account", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/sign-up\?/);
+  await expect(page.locator('input[name="next"]')).toHaveValue(next);
+  await page.reload();
+  await expect(page.locator('input[name="next"]')).toHaveValue(next);
+  await page.getByRole("link", { name: "Sign in", exact: true }).click();
+  await expect(page).toHaveURL(/\/sign-in\?/);
+  await expect(page.locator('input[name="next"]')).toHaveValue(next);
+});
