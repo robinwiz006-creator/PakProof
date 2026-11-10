@@ -526,6 +526,9 @@ export default async function Portal({
                 <ButtonLink secondary href="/portal/talent/preview">
                   Preview my Skill Passport
                 </ButtonLink>
+                <ButtonLink secondary href="/profile-history">
+                  Education & work experience
+                </ButtonLink>
                 {profile.is_public && <SharePassport slug={profile.slug} />}
               </>
             ) : (
@@ -769,6 +772,9 @@ export default async function Portal({
                 <ButtonLink secondary href="/portal/talent/projects">
                   Manage projects
                 </ButtonLink>
+                <ButtonLink secondary href="/profile-history">
+                  Education & work experience
+                </ButtonLink>
                 {profile.is_public && <SharePassport slug={profile.slug} />}
               </div>
             </div>
@@ -853,6 +859,9 @@ export default async function Portal({
               Keep adding projects. Company challenges are an optional way to
               earn recognition.{" "}
               <Link href="/portal/talent/passport">Open my passport</Link>
+              <Link className="button secondary" href="/profile-history">
+                Education & work experience
+              </Link>
             </Empty>
           )}
         </>
