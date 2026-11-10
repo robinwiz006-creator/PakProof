@@ -1,3 +1,4 @@
+import { loadSection } from "./section-result";
 import { z } from "zod";
 import { demoChallenges, demoProfile, demoProjects } from "./demo";
 import { isConfigured, supabase } from "./supabase/server";
@@ -32,6 +33,7 @@ export async function publicPassport(slug: string): Promise<{
   profile: Profile;
   projects: Project[];
   achievements: Achievement[];
+  sectionErrors?: { projects?: boolean; achievements?: boolean };
 } | null> {
   if (!isConfigured())
     return slug === demoProfile.slug
@@ -43,21 +45,37 @@ export async function publicPassport(slug: string): Promise<{
     .select("*")
     .eq("slug", slug)
     .eq("is_public", true)
+    .abortSignal(AbortSignal.timeout(8000))
     .maybeSingle();
   if (error) throw new Error("Profile could not be loaded.");
   if (!profile) return null;
   const [p, a] = await Promise.all([
-    db.from("projects").select("*").eq("talent_id", profile.id),
-    db
-      .from("achievements")
-      .select(
-        "*, companies(name), blockchain_proofs(*), achievement_claims(*), achievement_evidence(*), achievement_sharing(*)",
-      )
-      .eq("talent_id", profile.id),
+    loadSection<Project>(() =>
+      db
+        .from("projects")
+        .select("*")
+        .eq("talent_id", profile.id)
+        .abortSignal(AbortSignal.timeout(8000)),
+    ),
+    loadSection<Achievement>(() =>
+      db
+        .from("achievements")
+        .select(
+          "*, companies(name), blockchain_proofs(*), achievement_claims(*), achievement_evidence(*), achievement_sharing(*)",
+        )
+        .eq("talent_id", profile.id)
+        .abortSignal(AbortSignal.timeout(8000)),
+    ),
   ]);
-  if (p.error || a.error)
-    throw new Error("Passport evidence could not be loaded.");
-  return { profile, projects: p.data ?? [], achievements: a.data ?? [] };
+  return {
+    profile,
+    projects: p.items,
+    achievements: a.items,
+    sectionErrors: {
+      projects: p.state === "unavailable",
+      achievements: a.state === "unavailable",
+    },
+  };
 }
 export async function achievement(id: string): Promise<Achievement | null> {
   if (!isConfigured() || !z.string().uuid().safeParse(id).success) return null;

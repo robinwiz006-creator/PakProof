@@ -4018,3 +4018,23 @@ summary {
 .attention-section header p {
   overflow-wrap: anywhere;
 }
+
+.passport-section-state .notice {
+  margin-block: 0.75rem;
+}
+.organization-steps {
+  padding-left: 1.25rem;
+  margin-block: 1rem;
+}
+.organization-steps li {
+  padding-block: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.organization-steps .tag {
+  margin-left: 0.5rem;
+  white-space: normal;
+}
+.organization-setup p,
+.organization-setup h3 {
+  overflow-wrap: anywhere;
+}

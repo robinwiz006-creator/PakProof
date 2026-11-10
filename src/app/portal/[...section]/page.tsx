@@ -113,6 +113,7 @@ export default async function Portal({
   let attentionContext: AttentionContext | null = null;
   let homeProjectsUnavailable = false;
   let homeProjectCount = 0;
+  let passportSectionErrors = {};
   if (live) {
     const db = await supabase();
     const user = await currentUser();
@@ -197,11 +198,18 @@ export default async function Portal({
       section === "" &&
       (Boolean(pr.error) || ("count" in pr && pr.count === null));
     homeProjectCount = "count" in pr ? (pr.count ?? 0) : 0;
-    if ((pr.error && section !== "") || ac.error || su.error)
+    if (
+      ((pr.error && section !== "") || ac.error || su.error) &&
+      !["passport", "preview"].includes(section)
+    )
       throw new Error("Passport data could not be loaded.");
+    passportSectionErrors = {
+      projects: Boolean(pr.error),
+      achievements: Boolean(ac.error),
+    };
     projects = pr.data ?? [];
-    achievements = (ac.data ?? []) as Achievement[];
-    submissions = (su.data ?? []) as Submission[];
+    achievements = (ac.data ?? []) as unknown as Achievement[];
+    submissions = (su.data ?? []) as unknown as Submission[];
     if (
       role === "company" &&
       membershipIds.length &&
@@ -250,7 +258,7 @@ export default async function Portal({
       if (ch.error || su.error || ah.error)
         throw new Error("Company workflow could not be loaded.");
       ownChallenges = (ch.data ?? []) as Challenge[];
-      submissions = (su.data ?? []) as Submission[];
+      submissions = (su.data ?? []) as unknown as Submission[];
       achievements = ah.data ?? [];
     }
   }
@@ -411,17 +419,18 @@ export default async function Portal({
           <section className="dashboard-welcome">
             <h2>What would you like to do?</h2>
             <p>
-              Use one organization profile to issue credentials and create
-              opportunities. Organization approval is required for issuing
-              credentials, not for creating your personal passport.
+              Use one organization profile for opportunities and credentials.
+              You can post challenges and paid projects without issuer approval.
+              Credentials need approved categories; identity verification is a
+              separate review.
             </p>
           </section>
           <div className="dashboard-actions">
             <Link href="/organizations">
               <h2>Organization & credentials</h2>
               <p>
-                Check your approval status, issue credentials when approved, and
-                manage existing records.
+                Check registration, identity verification and
+                credential-category permissions, then choose your next step.
               </p>
               <span className="text-link">Open organization →</span>
             </Link>
@@ -768,6 +777,7 @@ export default async function Portal({
                 profile={profile}
                 projects={projects}
                 achievements={achievements}
+                sectionErrors={passportSectionErrors}
                 preview
               />
             </section>

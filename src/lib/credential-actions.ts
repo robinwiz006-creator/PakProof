@@ -64,7 +64,7 @@ export async function registerOrganization(form: FormData) {
   result(error, path);
   go(
     "/organizations?view=overview",
-    "Organization created. An administrator must review your identity before credential issuance is enabled.",
+    "Organization registered. You can create opportunities. Credential issuance needs separate category approval; institutional verification is a different review.",
   );
 }
 export async function issueCredential(form: FormData) {
