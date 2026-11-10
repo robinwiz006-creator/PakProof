@@ -1,5 +1,9 @@
 > Task 25 continuation: latest branch is `task-25-talent-matching`, based on Task 24 `4001bbc`. Review target is `task-24-final-integration`, not main. The new migration is `202611100003_talent_evidence_matching.sql`, after Task 23: **23 files total, 14 after the reported nine-file production baseline**. See `docs/TASK-25-TALENT-MATCHING.md`. Advanced server-side evidence search, opportunity-organized shortlists and expiring opportunity invitations reuse the existing directory/contact inbox, permissions and consent. No production operations or email delivery were performed. Use this latest branch for continuation; the Task 24 inventory below remains preserved historical context.
 
+Task 25 local evidence: implementation `3d94ddc`; 148 unit tests, 83 direct local REST tests, 40 desktop/mobile browser tests, focused SQL suites and full database/legacy chain passed. Lint, TypeScript, formatting and ordinary production build passed. See its focused report for initial failures and corrected test fixtures. Resume from `task-25-talent-matching` (not the historical Task 24 branch named below). PR comparison: https://github.com/robinwiz006-creator/PakProof/compare/task-24-final-integration...task-25-talent-matching?expand=1
+
+Additional commands: `bash scripts/test-talent-matching.sh`; `npm run test:e2e -- tests/e2e/employer-discovery.spec.ts tests/e2e/contact-handoff.spec.ts tests/e2e/dashboard-attention.spec.ts tests/e2e/paid-lifecycle.spec.ts --workers=1`. Source and all prior preparation are preserved on this branch. Hosted testing remains blocked by the paused backup/migration release.
+
 # ProofPak development handover — Task 24
 
 ## Start here
