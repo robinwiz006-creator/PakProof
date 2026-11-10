@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+import { AttentionLoading } from "@/components/dashboard-attention";
+import { DashboardAttentionData } from "@/components/dashboard-attention-data";
+import type { AttentionContext } from "@/lib/dashboard-attention";
 import { AssessmentDetailsView } from "@/components/assessment-details-view";
 import { AssessmentDetailFields } from "@/components/assessment-detail-fields";
 import { EmployerDirectory } from "@/components/employer-directory";
@@ -106,6 +110,9 @@ export default async function Portal({
     achievements: Achievement[] = [],
     membershipIds: string[] = [],
     canManageCompany = false;
+  let attentionContext: AttentionContext | null = null;
+  let homeProjectsUnavailable = false;
+  let homeProjectCount = 0;
   if (live) {
     const db = await supabase();
     const user = await currentUser();
@@ -120,12 +127,17 @@ export default async function Portal({
             .eq("user_id", user.id)
         : Promise.resolve({ data: [], error: null }),
       needs.projects
-        ? db
-            .from("projects")
-            .select("*")
-            .eq("talent_id", user.id)
-            .order("created_at", { ascending: false })
-        : Promise.resolve({ data: [], error: null }),
+        ? section === ""
+          ? db
+              .from("projects")
+              .select("id", { count: "exact", head: true })
+              .eq("talent_id", user.id)
+          : db
+              .from("projects")
+              .select("*")
+              .eq("talent_id", user.id)
+              .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [], error: null, count: 0 }),
       needs.achievements
         ? db
             .from("achievements")
@@ -166,7 +178,26 @@ export default async function Portal({
     const first = selectedMember?.companies;
     company = (Array.isArray(first) ? first[0] : first) as Company | null;
     canManageCompany = selectedMember?.role === "owner";
-    if (pr.error || ac.error || su.error)
+    attentionContext = {
+      userId: user.id,
+      role: role as "talent" | "company",
+      memberships: members.map((m) => ({
+        company_id: m.company_id,
+        role: m.role,
+        name: (
+          (Array.isArray(m.companies)
+            ? m.companies[0]
+            : m.companies) as Company | null
+        )?.name,
+      })),
+      companyId: selectedMember?.company_id,
+      companyName: company?.name,
+    };
+    homeProjectsUnavailable =
+      section === "" &&
+      (Boolean(pr.error) || ("count" in pr && pr.count === null));
+    homeProjectCount = "count" in pr ? (pr.count ?? 0) : 0;
+    if ((pr.error && section !== "") || ac.error || su.error)
       throw new Error("Passport data could not be loaded.");
     projects = pr.data ?? [];
     achievements = (ac.data ?? []) as Achievement[];
@@ -174,7 +205,7 @@ export default async function Portal({
     if (
       role === "company" &&
       membershipIds.length &&
-      ["", "challenges", "reviews"].includes(section)
+      ["challenges", "reviews"].includes(section)
     ) {
       const [ch, su, ah] = await Promise.all([
         section !== "reviews"
@@ -183,7 +214,10 @@ export default async function Portal({
               .select(
                 section === "" ? "id,status,deadline" : "*,companies(name)",
               )
-              .in("company_id", membershipIds)
+              .in(
+                "company_id",
+                requestedCompany ? [requestedCompany] : membershipIds,
+              )
               .order("created_at", { ascending: false })
           : Promise.resolve({ data: [], error: null }),
         section !== "challenges"
@@ -194,7 +228,10 @@ export default async function Portal({
                   ? "id,talent_id,status,challenges!inner(company_id)"
                   : "*,challenges!inner(*),profiles(*),submission_reviews(*),challenge_assessments(review_id,criteria,outcomes,details)",
               )
-              .in("challenges.company_id", membershipIds)
+              .in(
+                "challenges.company_id",
+                requestedCompany ? [requestedCompany] : membershipIds,
+              )
               .order("created_at", { ascending: false })
           : Promise.resolve({ data: [], error: null }),
         section === "reviews"
@@ -203,7 +240,10 @@ export default async function Portal({
               .select(
                 "*,companies(name),blockchain_proofs(*),achievement_claims(*),achievement_evidence(*),achievement_sharing(*)",
               )
-              .in("company_id", membershipIds)
+              .in(
+                "company_id",
+                requestedCompany ? [requestedCompany] : membershipIds,
+              )
               .order("issued_at", { ascending: false })
           : Promise.resolve({ data: [], error: null }),
       ]);
@@ -241,7 +281,6 @@ export default async function Portal({
     rubrics = data ?? [];
   }
   const canWrite = live;
-  const approved = submissions.filter((s) => s.status === "approved");
   return (
     <div>
       <PageHeading
@@ -273,6 +312,29 @@ export default async function Portal({
         <div className="message" role="status">
           {message}
         </div>
+      )}
+      {role === "company" &&
+        section === "" &&
+        attentionContext &&
+        attentionContext.memberships.length > 1 && (
+          <form action="/portal/company" className="form section-spacer">
+            <label className="field">
+              Organization
+              <select name="company" defaultValue={attentionContext.companyId}>
+                {attentionContext.memberships.map((m) => (
+                  <option key={m.company_id} value={m.company_id}>
+                    {m.name ?? "Organization name unavailable"}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button className="button secondary">Switch organization</button>
+          </form>
+        )}
+      {section === "" && attentionContext && (
+        <Suspense fallback={<AttentionLoading />}>
+          <DashboardAttentionData context={attentionContext} />
+        </Suspense>
       )}
       {role === "talent" && section === "" && (
         <>
@@ -328,8 +390,11 @@ export default async function Portal({
             <div>
               <h2>Your profile at a glance</h2>
               <p>
-                {profile.skills.length} skills · {projects.length} projects. Add
-                what is useful now; you can return later.
+                {profile.skills.length} skills ·{" "}
+                {homeProjectsUnavailable
+                  ? "Projects could not be loaded"
+                  : `${live ? homeProjectCount : projects.length} projects`}
+                . Add what is useful now; you can return later.
               </p>
             </div>
             <div className="button-row">
@@ -381,18 +446,8 @@ export default async function Portal({
             <div>
               <h2>Review and manage work</h2>
               <p>
-                {submissions.filter((s) => s.status === "pending").length}{" "}
-                challenge submissions waiting for review ·{" "}
-                {
-                  ownChallenges.filter(
-                    (c) =>
-                      c.status === "published" &&
-                      new Date(c.deadline + "T23:59:59Z") > new Date(),
-                  ).length
-                }{" "}
-                active challenges ·{" "}
-                {new Set(approved.map((s) => s.talent_id)).size} approved
-                participants.
+                Choose a workflow below. Pending reviews and applications for
+                your selected organization appear above.
               </p>
             </div>
             <div className="button-row">

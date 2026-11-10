@@ -3958,3 +3958,63 @@ summary {
     width: calc(100% - 36px);
   }
 }
+
+/* Small actionable rows, shared by personal, organization and admin homes. */
+.attention-section {
+  margin-block: 1.5rem;
+  border-block: 1px solid var(--border);
+  padding-block: 1.25rem;
+}
+.attention-section header {
+  margin-bottom: 1rem;
+}
+.attention-section h2 {
+  margin: 0 0 0.4rem;
+}
+.attention-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.attention-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding-block: 1rem;
+  border-top: 1px solid var(--border);
+}
+.attention-list li > div {
+  min-width: 0;
+}
+.attention-list h3 {
+  font-size: 1.05rem;
+  margin: 0 0 0.5rem;
+}
+.attention-list p {
+  margin: 0.5rem 0 0;
+  max-width: 62ch;
+  overflow-wrap: anywhere;
+}
+.attention-list .button {
+  flex-shrink: 0;
+}
+.attention-count {
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--accent);
+}
+@media (max-width: 600px) {
+  .attention-list li {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .attention-list .button {
+    max-width: 100%;
+    white-space: normal;
+  }
+}
+.attention-section header p {
+  overflow-wrap: anywhere;
+}

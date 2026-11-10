@@ -15,10 +15,19 @@ for (const next of [challenge, project]) {
     await page
       .getByRole("link", { name: "Create an account", exact: true })
       .click();
+    // Both forms contain the same hidden next field; wait for the route before reload.
+    await expect(page).toHaveURL(/\/sign-up\?/);
+    await expect(
+      page.getByRole("heading", { name: "Create your account." }),
+    ).toBeVisible();
     await expect(page.locator('input[name="next"]')).toHaveValue(next);
     await page.reload();
     await expect(page.locator('input[name="next"]')).toHaveValue(next);
     await page.getByRole("link", { name: "Sign in", exact: true }).click();
+    await expect(page).toHaveURL(/\/sign-in\?/);
+    await expect(
+      page.getByRole("heading", { name: "Your next chapter starts here." }),
+    ).toBeVisible();
     await page.getByLabel("Email address").fill("fixture@example.invalid");
     await page
       .getByLabel("Password", { exact: true })
@@ -35,6 +44,10 @@ for (const next of [challenge, project]) {
     await page
       .getByRole("link", { name: "Resend confirmation", exact: true })
       .click();
+    await expect(page).toHaveURL(/\/resend-confirmation\?/);
+    await expect(
+      page.getByRole("heading", { name: "Confirm your email." }),
+    ).toBeVisible();
     await expect(page.locator('input[name="next"]')).toHaveValue(next);
     await page.getByLabel("Email address").fill("fixture@example.invalid");
     await page
@@ -46,6 +59,7 @@ for (const next of [challenge, project]) {
     await page
       .getByRole("link", { name: "Back to sign in", exact: true })
       .click();
+    await expect(page).toHaveURL(/\/sign-in\?/);
     await expect(page.locator('input[name="next"]')).toHaveValue(next);
   });
 }
