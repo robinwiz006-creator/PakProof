@@ -38,11 +38,16 @@ test("private invitation keeps context across registration and login without lea
   await page
     .getByRole("link", { name: "Create an account", exact: true })
     .click();
-  expect(new URL(page.url()).searchParams.get("next")).toBe(path);
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("next"))
+    .toBe(path);
   await expect(page.locator('input[name="next"]')).toHaveValue(path);
   const login = page.getByRole("link", { name: "Sign in", exact: true });
   await login.click();
-  expect(new URL(page.url()).searchParams.get("next")).toBe(path);
+  await expect(page).toHaveURL(/\/sign-in\?/);
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("next"))
+    .toBe(path);
   await page.reload();
   await expect(page.locator('input[name="next"]')).toHaveValue(path);
 });

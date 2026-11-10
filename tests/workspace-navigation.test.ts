@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createElement } from "react";
+import { createElement, cloneElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { PathnameContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
 import { WorkspaceFrame } from "../src/components/workspace-frame";
@@ -10,10 +10,10 @@ function frame(path: string, signedIn = false) {
     createElement(
       PathnameContext.Provider,
       { value: path },
-      createElement(WorkspaceFrame, {
-        signedIn,
-        children: "Isolated presentation fixture",
-      }),
+      cloneElement(
+        createElement(WorkspaceFrame, null, "Isolated presentation fixture"),
+        { signedIn },
+      ),
     ),
   );
 }
