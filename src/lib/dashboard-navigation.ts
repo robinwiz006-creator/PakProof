@@ -14,12 +14,15 @@ export const organizationNavigation = [
   ["/portal/company/reviews", "Review challenge work"],
 ] as const;
 export const secondaryNavigation = [
+  ["/credential-invitations", "Credential invitations"],
   ["/contact-requests", "Contact requests"],
   ["/wallet", "Wallet"],
   ["/payments", "Payments"],
   ["/portal/talent/settings", "Account Settings"],
 ] as const;
 export function personalSection(path: string) {
+  if (path === "/profile-history") return "/portal/talent/passport";
+  if (path.startsWith("/credential-invitations")) return "/my-credentials";
   if (/^\/portal\/talent\/(profile|projects|preview)$/.test(path))
     return "/portal/talent/passport";
   if (

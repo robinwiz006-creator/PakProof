@@ -253,7 +253,7 @@ test("switching organizations selects the correct membership and removes owner-o
   );
   assert.equal(result.context, "Other organization");
 });
-test("unrelated or missing organization context and anonymous users never query private sources", async () => {
+test("unrelated organizations and anonymous users cannot query organization sources", async () => {
   const { db, calls } = fixture();
   const denied = await loadDashboardAttention(db, {
     ...context,
@@ -261,12 +261,6 @@ test("unrelated or missing organization context and anonymous users never query 
   });
   assert.equal(denied.items.length, 0);
   assert.deepEqual(denied.unavailable, ["Organization access"]);
-  const fresh = await loadDashboardAttention(db, {
-    ...context,
-    companyId: undefined,
-  });
-  assert.equal(fresh.items.length, 0);
-  assert.equal(fresh.unavailable.length, 0);
   await loadDashboardAttention(db, { ...talent, userId: "" });
   await loadAdministratorAttention(db, false, user);
   assert.equal(calls.length, 0);
@@ -444,4 +438,18 @@ test("invitation attention uses a recipient-only database projection", async () 
   assert.equal(query?.params.get("status"), "eq.pending");
   assert.ok(query?.params.get("expires_at")?.startsWith("gt."));
   assert.ok(!calls.some((q) => q.table === "credential_invitations"));
+});
+
+test("company users without an organization still see only their own invitation attention", async () => {
+  const { db, calls } = fixture({ counts: { credential_invitation_inbox: 1 } });
+  const result = await loadDashboardAttention(db, {
+    ...context,
+    companyId: undefined,
+    memberships: [],
+  });
+  assert.equal(result.items[0]?.key, "credential-invitations");
+  assert.deepEqual(
+    calls.map((c) => c.table),
+    ["credential_invitation_inbox"],
+  );
 });

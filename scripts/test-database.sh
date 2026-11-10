@@ -40,6 +40,11 @@ docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < docs/check-org
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < docs/check-assessment-transparency.sql
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < supabase/migrations/202611070003_assessment_transparency.sql
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < docs/check-assessment-transparency.sql
+docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < supabase/migrations/202611090001_legacy_client_permissions.sql
+docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < tests/legacy-permissions-database.sql
+for sql in supabase/migrations/202611100*.sql tests/passport-history-database.sql tests/credential-invitations-database.sql; do
+ docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < "$sql"
+done
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < tests/assessment-transparency-database.sql
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < tests/organization-verification-database.sql
 docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < tests/contact-handoff-database.sql
@@ -56,25 +61,25 @@ docker exec -i "$container" psql -U postgres -v ON_ERROR_STOP=1 < tests/employer
 
 # A separate local DB proves upgrading a populated v1 schema retains its data.
 docker exec "$container" createdb -U postgres proofpak_legacy_test
-for sql in tests/database-bootstrap.sql supabase/migrations/202610110001_initial.sql tests/legacy-before.sql supabase/migrations/202610120001_passport_foundation.sql supabase/migrations/202610120002_organizations_credentials.sql supabase/migrations/202610120003_credential_proofs.sql supabase/migrations/202610120004_wallet_ownership.sql supabase/migrations/202610120005_paid_projects.sql supabase/migrations/202610120006_milestone_payments.sql supabase/migrations/202610120007_paid_work_history.sql supabase/migrations/202610120008_payment_workflow_guards.sql supabase/migrations/202611050001_paid_project_public_privacy.sql supabase/migrations/202611050002_issuer_trust.sql supabase/migrations/202611050003_challenge_assessments.sql supabase/migrations/202611050004_employer_discovery.sql supabase/migrations/202611050005_paid_project_lifecycle.sql supabase/migrations/202611060001_credential_revocation_privacy.sql supabase/migrations/202611060002_credential_corrections.sql supabase/migrations/202611070001_contact_handoff.sql supabase/migrations/202611070002_organization_verification.sql supabase/migrations/202611070003_assessment_transparency.sql tests/legacy-after.sql; do
+for sql in tests/database-bootstrap.sql supabase/migrations/202610110001_initial.sql tests/legacy-before.sql supabase/migrations/202610120001_passport_foundation.sql supabase/migrations/202610120002_organizations_credentials.sql supabase/migrations/202610120003_credential_proofs.sql supabase/migrations/202610120004_wallet_ownership.sql supabase/migrations/202610120005_paid_projects.sql supabase/migrations/202610120006_milestone_payments.sql supabase/migrations/202610120007_paid_work_history.sql supabase/migrations/202610120008_payment_workflow_guards.sql supabase/migrations/202611050001_paid_project_public_privacy.sql supabase/migrations/202611050002_issuer_trust.sql supabase/migrations/202611050003_challenge_assessments.sql supabase/migrations/202611050004_employer_discovery.sql supabase/migrations/202611050005_paid_project_lifecycle.sql supabase/migrations/202611060001_credential_revocation_privacy.sql supabase/migrations/202611060002_credential_corrections.sql supabase/migrations/202611070001_contact_handoff.sql supabase/migrations/202611070002_organization_verification.sql supabase/migrations/202611070003_assessment_transparency.sql supabase/migrations/202611090001_legacy_client_permissions.sql supabase/migrations/202611100001_passport_history.sql supabase/migrations/202611100002_credential_invitations.sql tests/legacy-after.sql; do
  docker exec -i "$container" psql -U postgres -d proofpak_legacy_test -v ON_ERROR_STOP=1 < "$sql"
 done
 
 # A populated pre-trust schema proves existing v3 claims/proofs remain unchanged.
 docker exec "$container" createdb -U postgres proofpak_issuer_legacy_test
 for sql in tests/database-bootstrap.sql supabase/migrations/*.sql; do
- if [[ "$sql" != *202611050002* && "$sql" != *202611050003* && "$sql" != *202611050004* && "$sql" != *202611060001* && "$sql" != *202611060002* && "$sql" != *202611070001* && "$sql" != *202611070002* && "$sql" != *202611070003* ]]; then
+ if [[ "$sql" != *202611050002* && "$sql" != *202611050003* && "$sql" != *202611050004* && "$sql" != *202611060001* && "$sql" != *202611060002* && "$sql" != *202611070001* && "$sql" != *202611070002* && "$sql" != *202611070003* && "$sql" != *202611090001* && "$sql" != *202611100* ]]; then
   docker exec -i "$container" psql -U postgres -d proofpak_issuer_legacy_test -v ON_ERROR_STOP=1 < "$sql"
  fi
 done
-for sql in tests/issuer-trust-legacy-before.sql supabase/migrations/202611050002_issuer_trust.sql supabase/migrations/202611050003_challenge_assessments.sql supabase/migrations/202611050004_employer_discovery.sql supabase/migrations/202611060001_credential_revocation_privacy.sql supabase/migrations/202611060002_credential_corrections.sql supabase/migrations/202611070001_contact_handoff.sql supabase/migrations/202611070002_organization_verification.sql supabase/migrations/202611070003_assessment_transparency.sql tests/issuer-trust-legacy-after.sql; do
+for sql in tests/issuer-trust-legacy-before.sql supabase/migrations/202611050002_issuer_trust.sql supabase/migrations/202611050003_challenge_assessments.sql supabase/migrations/202611050004_employer_discovery.sql supabase/migrations/202611060001_credential_revocation_privacy.sql supabase/migrations/202611060002_credential_corrections.sql supabase/migrations/202611070001_contact_handoff.sql supabase/migrations/202611070002_organization_verification.sql supabase/migrations/202611070003_assessment_transparency.sql supabase/migrations/202611090001_legacy_client_permissions.sql supabase/migrations/202611100001_passport_history.sql supabase/migrations/202611100002_credential_invitations.sql tests/issuer-trust-legacy-after.sql; do
  docker exec -i "$container" psql -U postgres -d proofpak_issuer_legacy_test -v ON_ERROR_STOP=1 < "$sql"
 done
 
 # Preserve a populated revoked credential and private audit through the boundary.
 docker exec "$container" createdb -U postgres proofpak_revocation_test
 for sql in tests/database-bootstrap.sql supabase/migrations/*.sql; do
- if [[ "$sql" != *202611060001* && "$sql" != *202611060002* && "$sql" != *202611070001* && "$sql" != *202611070002* && "$sql" != *202611070003* ]]; then
+ if [[ "$sql" != *202611060001* && "$sql" != *202611060002* && "$sql" != *202611070001* && "$sql" != *202611070002* && "$sql" != *202611070003* && "$sql" != *202611090001* && "$sql" != *202611100* ]]; then
   docker exec -i "$container" psql -U postgres -d proofpak_revocation_test -v ON_ERROR_STOP=1 < "$sql"
  fi
 done
@@ -94,28 +99,28 @@ if docker exec -i "$container" psql -U postgres -d proofpak_revocation_test -v O
  echo 'Revocation migration accepted a drifted non-SELECT baseline policy' >&2; exit 1
 fi
 docker exec "$container" psql -U postgres -d proofpak_revocation_test -v ON_ERROR_STOP=1 -c 'drop policy credential_events_read on public.credential_events; create policy credential_events_read on public.credential_events for select using(public.visible_credential(credential_id))' >/dev/null
-for sql in supabase/migrations/202611060001_credential_revocation_privacy.sql supabase/migrations/202611060002_credential_corrections.sql supabase/migrations/202611070001_contact_handoff.sql supabase/migrations/202611070002_organization_verification.sql supabase/migrations/202611070003_assessment_transparency.sql tests/revocation-privacy-database.sql; do
+for sql in supabase/migrations/202611060001_credential_revocation_privacy.sql supabase/migrations/202611060002_credential_corrections.sql supabase/migrations/202611070001_contact_handoff.sql supabase/migrations/202611070002_organization_verification.sql supabase/migrations/202611070003_assessment_transparency.sql supabase/migrations/202611090001_legacy_client_permissions.sql supabase/migrations/202611100001_passport_history.sql supabase/migrations/202611100002_credential_invitations.sql tests/revocation-privacy-database.sql; do
  docker exec -i "$container" psql -U postgres -d proofpak_revocation_test -v ON_ERROR_STOP=1 < "$sql"
 done
 
 # Existing accepted and declined requests must survive the additive handoff.
 docker exec "$container" createdb -U postgres proofpak_handoff_legacy_test
 for sql in tests/database-bootstrap.sql supabase/migrations/*.sql; do
- if [[ "$sql" != *202611070001* && "$sql" != *202611070002* && "$sql" != *202611070003* ]]; then
+ if [[ "$sql" != *202611070001* && "$sql" != *202611070002* && "$sql" != *202611070003* && "$sql" != *202611090001* && "$sql" != *202611100* ]]; then
   docker exec -i "$container" psql -U postgres -d proofpak_handoff_legacy_test -v ON_ERROR_STOP=1 < "$sql"
  fi
 done
-for sql in tests/contact-handoff-legacy-before.sql docs/check-contact-handoff.sql supabase/migrations/202611070001_contact_handoff.sql supabase/migrations/202611070002_organization_verification.sql supabase/migrations/202611070003_assessment_transparency.sql docs/check-contact-handoff.sql tests/contact-handoff-legacy-after.sql; do
+for sql in tests/contact-handoff-legacy-before.sql docs/check-contact-handoff.sql supabase/migrations/202611070001_contact_handoff.sql supabase/migrations/202611070002_organization_verification.sql supabase/migrations/202611070003_assessment_transparency.sql supabase/migrations/202611090001_legacy_client_permissions.sql supabase/migrations/202611100001_passport_history.sql supabase/migrations/202611100002_credential_invitations.sql docs/check-contact-handoff.sql tests/contact-handoff-legacy-after.sql; do
  docker exec -i "$container" psql -U postgres -d proofpak_handoff_legacy_test -v ON_ERROR_STOP=1 < "$sql"
 done
 
 # Populated schema-1 assessment commitments must survive the optional details.
 docker exec "$container" createdb -U postgres proofpak_assessment_legacy_test
 for sql in tests/database-bootstrap.sql supabase/migrations/*.sql; do
- if [[ "$sql" != *202611070003* ]]; then
+ if [[ "$sql" != *202611070003* && "$sql" != *202611090001* && "$sql" != *202611100* ]]; then
   docker exec -i "$container" psql -U postgres -d proofpak_assessment_legacy_test -v ON_ERROR_STOP=1 < "$sql"
  fi
 done
-for sql in tests/assessment-transparency-legacy-before.sql docs/check-assessment-transparency.sql supabase/migrations/202611070003_assessment_transparency.sql docs/check-assessment-transparency.sql tests/assessment-transparency-legacy-after.sql; do
+for sql in tests/assessment-transparency-legacy-before.sql docs/check-assessment-transparency.sql supabase/migrations/202611070003_assessment_transparency.sql supabase/migrations/202611090001_legacy_client_permissions.sql supabase/migrations/202611100001_passport_history.sql supabase/migrations/202611100002_credential_invitations.sql docs/check-assessment-transparency.sql tests/assessment-transparency-legacy-after.sql; do
  docker exec -i "$container" psql -U postgres -d proofpak_assessment_legacy_test -v ON_ERROR_STOP=1 < "$sql"
 done

@@ -45,3 +45,12 @@ next-env.d.ts
 /playwright-report/
 
 /.next-e2e/
+
+# Local recovery output and Python caches (never publish user records)
+__pycache__/
+*.py[cod]
+*.dump
+*.backup
+*.sql.gz
+/backups/
+/recovery-output/

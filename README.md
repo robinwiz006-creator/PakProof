@@ -8,7 +8,13 @@ ProofPak brings a professional Skill Passport, evidence-based assessments, organ
 
 The implementation includes Tasks 14–16, merged in PR #9 at `00fa9830e3444f35e8ed6a323fc2933a2d0e9970`. This describes source code, **not a verified production deployment**. Hosted account journeys, current production migration state and physical-wallet transactions require acceptance testing. Current payments use **Solana devnet test USDC with no monetary value**.
 
+The prepared [Task 17D permission patch and local rehearsal](docs/TASK-17D-PERMISSION-REHEARSAL.md) adds a twentieth, forward-only migration after the ten pending schema migrations. It remains unapplied to hosted Supabase.
+
 Start with the [Task 17 readiness report](docs/TASK-17-RELEASE-READINESS.md) and [hosted testing guide](docs/PROOFPAK_HOSTED_TESTING_GUIDE.md). Earlier task reports are historical snapshots; their test totals and statements about unapplied migrations do not establish today's hosted state.
+
+## Development continuation
+
+Tasks 19–24 add safe authentication context, pending actions, independent Passport error handling, clearer organization setup, private-by-default education/employment history and verified-email credential invitations. Invitation email delivery is not configured: issuers share private links manually. These features are **not hosted verified** and require the pending schema. Use [the current development handover](docs/PROOFPAK_DEVELOPMENT_HANDOVER.md) for branch, migration order and continuation commands. Historical audits are preserved as dated evidence, not current feature inventories.
 
 ## The four pillars
 
@@ -112,7 +118,7 @@ npm run dev
 
 PowerShell: use `Copy-Item .env.example .env.local`. Open the URL printed by Next.js. With Supabase unset, labeled demonstration routes are read-only; they do not prove account, credential or payment workflows work. No fake live opportunities or blockchain success should replace missing services.
 
-For saving real local-development accounts, use an explicitly designated development database. On a **fresh empty** Supabase database, review and apply all 19 migration files in filename order. On an existing database, inspect history and objects and apply **only verified outstanding migrations**. Never rerun the initial migration, run fixture/bootstrap SQL in hosted Supabase, or assume a CLI push is safe. See the readiness report for order and cutover risks.
+For saving real local-development accounts, use an explicitly designated development database. On a **fresh empty** Supabase database, review and apply all 22 migration files in filename order. On an existing database, inspect history and objects and apply **only verified outstanding migrations**. Never rerun the initial migration, run fixture/bootstrap SQL in hosted Supabase, or assume a CLI push is safe. See the readiness report for order and cutover risks.
 
 ### Configuration
 
@@ -137,6 +143,7 @@ Supabase Email Auth must be enabled. Configure Site URL, `/auth/callback` and re
 npm test
 npm run test:db
 npm run test:privacy
+npm run test:upgrade  # Populated synthetic legacy upgrade; Docker only
 npm run test:e2e -- --workers=1
 npm run lint
 npm run typecheck
@@ -146,7 +153,7 @@ npm run build
 
 Install Playwright Chromium if needed with `npx playwright install chromium`. An existing system Chromium can be selected with `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/chromium` (shell syntax varies on Windows).
 
-Database/REST commands create disposable local Docker PostgreSQL/PostgREST with synthetic users and remove them on exit. They must never be pointed at hosted data. Browser tests build `.next-e2e` with blank hosted credentials and explicit offline fixtures; real wallet approval/email/hosted RLS are not established by those tests. Use [the hosted guide](docs/PROOFPAK_HOSTED_TESTING_GUIDE.md) to record actual acceptance evidence.
+Database/REST commands create disposable local Docker PostgreSQL/PostgREST with synthetic users and remove them on exit. They must never be pointed at hosted data. Browser tests build the configured local Next.js output with blank hosted credentials and explicit offline fixtures; real wallet approval/email/hosted RLS are not established by those tests. Use [the hosted guide](docs/PROOFPAK_HOSTED_TESTING_GUIDE.md) to record actual acceptance evidence.
 
 `npm run doctor` is read-only but uses the currently configured project and checks only part of the schema; it does not prove the full migration ledger or current production policies. Confirm the target first and do not publish its credentials or user data.
 

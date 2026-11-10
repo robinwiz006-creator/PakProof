@@ -22,6 +22,8 @@ export function WorkspaceFrame({
   const workspace = [
     "/organizations",
     "/my-credentials",
+    "/profile-history",
+    "/credential-invitations",
     "/contact-requests",
     "/wallet",
     "/payments",
@@ -32,7 +34,11 @@ export function WorkspaceFrame({
     ["/opportunities", "/paid-projects", "/challenges"].some(
       (p) => path === p || path.startsWith(p + "/"),
     );
-  if (!workspace && !opportunityWorkspace) return children;
+  if (
+    (!workspace && !opportunityWorkspace) ||
+    (!signedIn && path.startsWith("/credential-invitations"))
+  )
+    return children;
   const admin = path.startsWith("/issuer-admin");
   const links = admin
     ? [

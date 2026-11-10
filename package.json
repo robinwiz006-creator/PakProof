@@ -13,7 +13,8 @@
     "test:e2e": "playwright test",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"*.{ts,json,mjs}\"",
     "doctor": "node --use-env-proxy scripts/check-services.mjs",
-    "test:privacy": "bash scripts/test-paid-project-privacy.sh"
+    "test:privacy": "bash scripts/test-paid-project-privacy.sh",
+    "test:upgrade": "bash scripts/rehearse-legacy-upgrade.sh"
   },
   "dependencies": {
     "@reown/appkit": "1.8.24",
