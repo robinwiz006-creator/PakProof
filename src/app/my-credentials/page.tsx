@@ -48,6 +48,10 @@ export default async function MyCredentials({
         title="My Credentials"
         description="View your credentials and choose what to share."
       />
+      <Link className="button secondary" href="/credential-invitations">
+        Credential invitations
+      </Link>
+
       {message && (
         <p className="notice section-spacer" role="status">
           {message}

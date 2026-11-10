@@ -21,9 +21,11 @@ export function signedInDestination(user: AuthUser, value: unknown) {
 
 export function opportunityAuthMessage(value: unknown) {
   const next = safeReturnPath(value);
-  return next
-    ? `Continue to your selected ${next.startsWith("/challenges/") ? "challenge" : "project"} after signing in. You can review it before taking any action.`
-    : null;
+  return next?.startsWith("/credential-invitations")
+    ? "Sign in with the invited email to review your credential privately."
+    : next
+      ? `Continue to your selected ${next.startsWith("/challenges/") ? "challenge" : "project"} after signing in. You can review it before taking any action.`
+      : null;
 }
 
 export function confirmationCallbackUrl(siteUrl: string, value: unknown) {

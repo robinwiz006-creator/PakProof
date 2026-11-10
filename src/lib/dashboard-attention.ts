@@ -89,8 +89,29 @@ export async function loadDashboardAttention(
 ): Promise<AttentionResult> {
   if (!c.userId) return { items: [], unavailable: ["Account access"] };
   const timeout = () => AbortSignal.timeout(8000);
+  const invitationJob: Job = {
+    key: "credential-invitations",
+    source: "Credential invitations",
+    title: "Review credential invitations",
+    explanation:
+      "Review credentials sent to your verified email. Acceptance keeps them private.",
+    status: "Your decision needed",
+    href: "/credential-invitations",
+    action: "Review invitations",
+    priority: 19,
+    read: () =>
+      count(
+        db
+          .from("credential_invitation_inbox")
+          .select("id", options)
+          .eq("status", "pending")
+          .gt("expires_at", new Date().toISOString())
+          .abortSignal(timeout()),
+      ),
+  };
   if (c.role === "talent")
     return collectAttention([
+      invitationJob,
       {
         key: "milestone-work",
         source: "Milestone work",
@@ -204,6 +225,7 @@ export async function loadDashboardAttention(
     };
   const company = c.companyId;
   const jobs: Job[] = [
+    invitationJob,
     {
       key: "challenge-reviews",
       source: "Challenge reviews",
