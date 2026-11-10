@@ -21,13 +21,15 @@ export function signedInDestination(user: AuthUser, value: unknown) {
 
 export function opportunityAuthMessage(value: unknown) {
   const next = safeReturnPath(value);
-  return next === "/profile-history"
-    ? "Sign in to manage your education and work experience."
-    : next?.startsWith("/credential-invitations")
-      ? "Sign in with the invited email to review your credential privately."
-      : next
-        ? `Continue to your selected ${next.startsWith("/challenges/") ? "challenge" : "project"} after signing in. You can review it before taking any action.`
-        : null;
+  return next?.startsWith("/team-invitations")
+    ? "Sign in with the invited verified email to review your team role."
+    : next === "/profile-history"
+      ? "Sign in to manage your education and work experience."
+      : next?.startsWith("/credential-invitations")
+        ? "Sign in with the invited email to review your credential privately."
+        : next
+          ? `Continue to your selected ${next.startsWith("/challenges/") ? "challenge" : "project"} after signing in. You can review it before taking any action.`
+          : null;
 }
 
 export function confirmationCallbackUrl(siteUrl: string, value: unknown) {

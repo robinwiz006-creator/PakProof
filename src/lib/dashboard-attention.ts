@@ -1,3 +1,4 @@
+import { teamCan } from "./team-permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type AttentionItem = {
@@ -109,8 +110,28 @@ export async function loadDashboardAttention(
           .abortSignal(timeout()),
       ),
   };
+  const teamInvitationJob: Job = {
+    key: "team-invitations",
+    source: "Team invitations",
+    title: "Review team invitations",
+    explanation:
+      "Review the organization and proposed access before joining. Your verified email must match.",
+    status: "Your decision needed",
+    href: "/team-invitations",
+    action: "Review team role",
+    priority: 18,
+    read: () =>
+      count(
+        db
+          .from("my_team_invitations")
+          .select("id", options)
+          .eq("status", "pending")
+          .abortSignal(timeout()),
+      ),
+  };
   if (c.role === "talent")
     return collectAttention([
+      teamInvitationJob,
       invitationJob,
       {
         key: "milestone-work",
@@ -223,8 +244,8 @@ export async function loadDashboardAttention(
         context: "Organization workspace",
       };
     const recipient = await collectAttention(
-      [invitationJob],
-      "Your credential invitations",
+      [invitationJob, teamInvitationJob],
+      "Your invitations",
     );
     return {
       ...recipient,
@@ -234,6 +255,7 @@ export async function loadDashboardAttention(
   }
   const company = c.companyId;
   const jobs: Job[] = [
+    teamInvitationJob,
     invitationJob,
     {
       key: "accepted-invitations",
@@ -357,6 +379,20 @@ export async function loadDashboardAttention(
       },
     },
   ];
+  const capabilityJobs: Record<
+    string,
+    import("./team-permissions").TeamCapability
+  > = {
+    "accepted-invitations": "discovery",
+    "challenge-reviews": "review",
+    "milestone-reviews": "opportunities",
+    applications: "opportunities",
+    qualifications: "credentials",
+  };
+  for (let i = jobs.length - 1; i >= 0; i--) {
+    const cap = capabilityJobs[jobs[i].key];
+    if (cap && !teamCan(member.role, cap)) jobs.splice(i, 1);
+  }
   if (member.role === "owner")
     jobs.push({
       key: "payment-checks",

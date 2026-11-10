@@ -1,3 +1,4 @@
+import { teamCan } from "@/lib/team-permissions";
 import { Suspense } from "react";
 import { AttentionLoading } from "@/components/dashboard-attention";
 import { DashboardAttentionData } from "@/components/dashboard-attention-data";
@@ -110,6 +111,7 @@ export default async function Portal({
     achievements: Achievement[] = [],
     membershipIds: string[] = [],
     canManageCompany = false;
+  let selectedTeamRole: string | undefined;
   let attentionContext: AttentionContext | null = null;
   let homeProjectsUnavailable = false;
   let homeProjectCount = 0;
@@ -178,6 +180,7 @@ export default async function Portal({
       members.find((m) => m.company_id === requestedCompany) ?? members[0];
     const first = selectedMember?.companies;
     company = (Array.isArray(first) ? first[0] : first) as Company | null;
+    selectedTeamRole = selectedMember?.role;
     canManageCompany = selectedMember?.role === "owner";
     attentionContext = {
       userId: user.id,
@@ -288,6 +291,38 @@ export default async function Portal({
     if (error) throw new Error("Assessment criteria could not be loaded.");
     rubrics = data ?? [];
   }
+  const companyCan = (cap: import("@/lib/team-permissions").TeamCapability) =>
+    !live || teamCan(selectedTeamRole, cap);
+  const sectionCapability: Record<
+    string,
+    import("@/lib/team-permissions").TeamCapability
+  > = {
+    create: "opportunities",
+    challenges: "opportunities",
+    reviews: "review",
+    directory: "discovery",
+  };
+  if (
+    live &&
+    role === "company" &&
+    sectionCapability[section] &&
+    !companyCan(sectionCapability[section])
+  )
+    return (
+      <div className="container page">
+        <h1>Organization permission required</h1>
+        <p>
+          Your current team role cannot use this workflow. Ask an owner or
+          administrator to review your access.
+        </p>
+        <Link
+          className="button secondary"
+          href={`/organization-team?company=${company?.id ?? ""}`}
+        >
+          View team access
+        </Link>
+      </div>
+    );
   const canWrite = live;
   return (
     <div>
@@ -434,22 +469,26 @@ export default async function Portal({
               </p>
               <span className="text-link">Open organization →</span>
             </Link>
-            <Link href="/portal/company/create">
-              <h2>Create a challenge</h2>
-              <p>
-                An unpaid skill assessment that multiple people can complete.
-                Review work and recognize successful submissions.
-              </p>
-              <span className="text-link">Create challenge →</span>
-            </Link>
-            <Link href="/paid-projects/new">
-              <h2>Post a paid project</h2>
-              <p>
-                Select one worker, agree on milestones and review their work.
-                Payments currently use devnet test tokens, not real money.
-              </p>
-              <span className="text-link">Create paid project →</span>
-            </Link>
+            {companyCan("opportunities") && (
+              <Link href="/portal/company/create">
+                <h2>Create a challenge</h2>
+                <p>
+                  An unpaid skill assessment that multiple people can complete.
+                  Review work and recognize successful submissions.
+                </p>
+                <span className="text-link">Create challenge →</span>
+              </Link>
+            )}
+            {companyCan("opportunities") && (
+              <Link href="/paid-projects/new">
+                <h2>Post a paid project</h2>
+                <p>
+                  Select one worker, agree on milestones and review their work.
+                  Payments currently use devnet test tokens, not real money.
+                </p>
+                <span className="text-link">Create paid project →</span>
+              </Link>
+            )}
           </div>
           <section className="dashboard-next">
             <div>
@@ -460,15 +499,26 @@ export default async function Portal({
               </p>
             </div>
             <div className="button-row">
-              <ButtonLink href="/portal/company/reviews">
-                Review challenge work
-              </ButtonLink>
-              <ButtonLink secondary href="/paid-projects?view=company">
-                Paid projects & applications
-              </ButtonLink>
-              <Link href="/portal/company/challenges">Manage challenges</Link>
-              <Link href="/portal/company/directory">
-                Browse public profiles
+              {companyCan("review") && (
+                <ButtonLink href="/portal/company/reviews">
+                  Review challenge work
+                </ButtonLink>
+              )}
+              {companyCan("opportunities") && (
+                <ButtonLink secondary href="/paid-projects?view=company">
+                  Paid projects & applications
+                </ButtonLink>
+              )}
+              {companyCan("opportunities") && (
+                <Link href="/portal/company/challenges">Manage challenges</Link>
+              )}
+              {companyCan("discovery") && (
+                <Link href="/portal/company/directory">
+                  Browse public profiles
+                </Link>
+              )}
+              <Link href={`/organization-team?company=${company?.id ?? ""}`}>
+                {companyCan("team") ? "Manage team" : "View team access"}
               </Link>
             </div>
           </section>
@@ -1149,12 +1199,14 @@ export default async function Portal({
                         credential is a separate decision by an organization
                         with category permission.
                       </p>
-                      <Link
-                        className="button secondary"
-                        href={`/organizations?view=issue&submission=${s.id}`}
-                      >
-                        Issue credential for this work
-                      </Link>
+                      {companyCan("credentials") && (
+                        <Link
+                          className="button secondary"
+                          href={`/organizations?view=issue&submission=${s.id}`}
+                        >
+                          Issue credential for this work
+                        </Link>
+                      )}
                       {!a.blockchain_proofs?.length && (
                         <ProofAnchor achievementId={a.id} />
                       )}

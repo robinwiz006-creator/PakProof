@@ -1,3 +1,4 @@
+import { teamCan } from "@/lib/team-permissions";
 import { sameRequestOrigin, requestSiteOrigin } from "@/lib/request-origin";
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
@@ -48,7 +49,8 @@ export async function POST(request: Request) {
           !m ||
           (v.purpose === "company_payer" && m.role !== "owner") ||
           (v.purpose === "credential_issuer" &&
-            o?.issuer_status !== "authorized")
+            (o?.issuer_status !== "authorized" ||
+              !teamCan(m.role, "credentials")))
         )
           throw new Error(
             "You do not have permission to link a wallet for this purpose.",

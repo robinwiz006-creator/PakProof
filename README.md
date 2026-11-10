@@ -118,7 +118,7 @@ npm run dev
 
 PowerShell: use `Copy-Item .env.example .env.local`. Open the URL printed by Next.js. With Supabase unset, labeled demonstration routes are read-only; they do not prove account, credential or payment workflows work. No fake live opportunities or blockchain success should replace missing services.
 
-For saving real local-development accounts, use an explicitly designated development database. On a **fresh empty** Supabase database, review and apply all 23 migration files in filename order. On an existing database, inspect history and objects and apply **only verified outstanding migrations**. Never rerun the initial migration, run fixture/bootstrap SQL in hosted Supabase, or assume a CLI push is safe. See the readiness report for order and cutover risks.
+For saving real local-development accounts, use an explicitly designated development database. On a **fresh empty** Supabase database, review and apply all 24 migration files in filename order. On an existing database, inspect history and objects and apply **only verified outstanding migrations**. Never rerun the initial migration, run fixture/bootstrap SQL in hosted Supabase, or assume a CLI push is safe. See the readiness report for order and cutover risks.
 
 ### Configuration
 

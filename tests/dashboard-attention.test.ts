@@ -450,7 +450,7 @@ test("company users without an organization still see only their own invitation 
   assert.equal(result.items[0]?.key, "credential-invitations");
   assert.deepEqual(
     calls.map((c) => c.table),
-    ["credential_invitation_inbox"],
+    ["credential_invitation_inbox", "my_team_invitations"],
   );
 });
 
@@ -463,4 +463,43 @@ test("accepted opportunity contact is scoped to the selected company", async () 
   const query = calls.find((q) => q.table === "visible_contact_requests");
   assert.equal(query?.params.get("company_id"), "eq." + company);
   assert.equal(query?.params.get("status"), "eq.accepted");
+});
+
+test("scoped team roles receive only authorized organization attention", async () => {
+  for (const [role, allowed] of [
+    ["credential_manager", ["qualifications"]],
+    ["submission_reviewer", ["challenge-reviews"]],
+    [
+      "opportunity_manager",
+      [
+        "challenge-reviews",
+        "milestone-reviews",
+        "applications",
+        "accepted-invitations",
+      ],
+    ],
+  ] as const) {
+    const { db, calls } = fixture({
+      counts: {
+        challenge_submissions: 1,
+        paid_milestones: 1,
+        paid_project_applications: 1,
+        qualification_requests: 1,
+        visible_contact_requests: 1,
+      },
+      organization: {
+        id: "org",
+        issuer_status: "authorized",
+        organization_type: "university",
+        allowed_credential_types: ["degree"],
+      },
+    });
+    const result = await loadDashboardAttention(db, {
+      ...context,
+      memberships: [{ company_id: company, role }],
+    });
+    for (const item of result.items)
+      assert.ok((allowed as readonly string[]).includes(item.key));
+    assert.ok(!calls.some((c) => c.table === "payment_intents"));
+  }
 });

@@ -105,7 +105,7 @@ export function InvitationForm({
     </form>
   );
 }
-function InvitationLink({ path }: { path: string }) {
+export function InvitationLink({ path }: { path: string }) {
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
   return (

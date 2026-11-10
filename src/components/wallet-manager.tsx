@@ -1,4 +1,5 @@
 "use client";
+import { teamCan } from "@/lib/team-permissions";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Buffer } from "buffer";
@@ -50,7 +51,7 @@ export function WalletManager({
   const eligible = organizations.filter((o) =>
     purpose === "company_payer"
       ? o.role === "owner"
-      : o.issuerStatus === "authorized",
+      : o.issuerStatus === "authorized" && teamCan(o.role, "credentials"),
   );
   const activePurpose = purpose;
   const activeOrg = eligible.some((o) => o.id === org) ? org : "";

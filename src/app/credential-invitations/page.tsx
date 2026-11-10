@@ -1,3 +1,4 @@
+import { teamCan } from "@/lib/team-permissions";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { supabase } from "@/lib/supabase/server";
@@ -28,7 +29,10 @@ export default async function Invitations({
     Math.min(10000, Number.parseInt(params.page ?? "0") || 0),
   );
   const [members, result] = await Promise.all([
-    db.from("company_memberships").select("company_id").eq("user_id", user.id),
+    db
+      .from("company_memberships")
+      .select("company_id,role")
+      .eq("user_id", user.id),
     db
       .from("credential_invitations")
       .select(invitationColumns)
@@ -49,7 +53,12 @@ export default async function Invitations({
   const allowed = (orgs.data ?? [])
     .filter(
       (o) =>
-        o.issuer_status === "authorized" && o.allowed_credential_types?.length,
+        o.issuer_status === "authorized" &&
+        o.allowed_credential_types?.length &&
+        teamCan(
+          members.data?.find((m) => m.company_id === o.company_id)?.role,
+          "credentials",
+        ),
     )
     .map((o) => ({
       id: o.id,
@@ -98,9 +107,15 @@ export default async function Invitations({
                 Review invitation
               </Link>
               {invitationStatus(i) === "pending" &&
-                orgs.data?.some((o) => o.id === i.organization_id) && (
-                  <InvitationDecision id={i.id} cancel />
-                )}
+                orgs.data?.some(
+                  (o) =>
+                    o.id === i.organization_id &&
+                    teamCan(
+                      members.data?.find((m) => m.company_id === o.company_id)
+                        ?.role,
+                      "credentials",
+                    ),
+                ) && <InvitationDecision id={i.id} cancel />}
             </article>
           ))}
           <nav className="button-row" aria-label="Invitation pages">

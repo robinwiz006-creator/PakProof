@@ -54,7 +54,9 @@ export function useDashboardRole(): DashboardRole {
     () => "talent" as const,
   );
   const explicit =
-    path.startsWith("/portal/company") || path.startsWith("/organizations")
+    path.startsWith("/portal/company") ||
+    path.startsWith("/organizations") ||
+    path.startsWith("/organization-team")
       ? "company"
       : path.startsWith("/portal/talent") ||
           path.startsWith("/my-credentials") ||

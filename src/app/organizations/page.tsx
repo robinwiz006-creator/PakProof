@@ -1,3 +1,4 @@
+import { teamCan } from "@/lib/team-permissions";
 import { Suspense } from "react";
 import { OrganizationOnboarding } from "@/components/organization-onboarding";
 import { PassportSectionState } from "@/components/passport-section-state";
@@ -58,7 +59,14 @@ export default async function Organizations({
         .in("company_id", ids)
     : { data: [], error: null };
   const organizations = (orgs ?? []) as unknown as Organization[];
-  const orgIds = organizations.map((o) => o.id);
+  const orgIds = organizations
+    .filter((o) =>
+      teamCan(
+        members?.find((m) => m.company_id === o.company_id)?.role,
+        "credentials",
+      ),
+    )
+    .map((o) => o.id);
   const [credentialResult, requestResult, auditResult, correctionAudit] =
     await Promise.all([
       orgIds.length
@@ -134,6 +142,10 @@ export default async function Organizations({
   }
   const eligible = organizations.filter(
     (o) =>
+      teamCan(
+        members?.find((m) => m.company_id === o.company_id)?.role,
+        "credentials",
+      ) &&
       o.issuer_status === "authorized" &&
       (o.allowed_credential_types?.length ?? 0) > 0 &&
       (!submission ||
@@ -163,6 +175,9 @@ export default async function Organizations({
         Credential invitations
       </Link>
 
+      <Link className="button secondary" href="/organization-team">
+        Organization team & access
+      </Link>
       <nav className="workspace-tabs" aria-label="Organization sections">
         {[
           ["overview", "Overview"],
@@ -239,6 +254,14 @@ export default async function Organizations({
                 <article className="panel section-spacer" key={o.id}>
                   <OrganizationOnboarding
                     organization={o}
+                    canIssue={teamCan(
+                      members?.find((m) => m.company_id === o.company_id)?.role,
+                      "credentials",
+                    )}
+                    canManageOpportunities={teamCan(
+                      members?.find((m) => m.company_id === o.company_id)?.role,
+                      "opportunities",
+                    )}
                     canEdit={(members ?? []).some(
                       (m) =>
                         m.company_id === o.company_id && m.role === "owner",
@@ -259,7 +282,19 @@ export default async function Organizations({
                         />
                       }
                     >
-                      <OrganizationVerificationWorkspace organization={o} />
+                      {teamCan(
+                        members?.find((m) => m.company_id === o.company_id)
+                          ?.role,
+                        "settings",
+                      ) ? (
+                        <OrganizationVerificationWorkspace organization={o} />
+                      ) : (
+                        <p className="muted">
+                          Organization identity review is managed by an owner or
+                          authorized administrator. Your workflow role does not
+                          grant access to private verification evidence.
+                        </p>
+                      )}
                     </Suspense>
                   </details>
                 </article>

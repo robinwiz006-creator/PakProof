@@ -1,3 +1,4 @@
+import { teamCan } from "@/lib/team-permissions";
 import { sameRequestOrigin } from "@/lib/request-origin";
 import { canRecoverLegacy } from "@/lib/proof-record";
 import { NextResponse } from "next/server";
@@ -31,7 +32,7 @@ async function authorized(id: string) {
     .eq("company_id", a.company_id)
     .eq("user_id", user.id)
     .maybeSingle();
-  if (!m)
+  if (!m || !teamCan(m.role, "review"))
     throw new Error(
       "Only this company’s reviewers can anchor the achievement.",
     );
